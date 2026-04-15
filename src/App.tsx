@@ -168,14 +168,27 @@ export default function App() {
 
   if (isLoading) {
     return (
-      <div className="fixed inset-0 bg-bg-primary flex flex-col items-center justify-center gap-6 z-[300]">
-        <div className="relative">
-          <div className="w-16 h-16 border-4 border-brand-accent/20 rounded-full" />
-          <div className="w-16 h-16 border-4 border-brand-accent border-t-transparent rounded-full animate-spin absolute inset-0" />
+      <div className="fixed inset-0 bg-bg-primary flex flex-col items-center justify-center gap-8 z-[300]">
+        <div className="relative w-24 h-24 animate-pulse">
+          {appData.settings.logo ? (
+            <img src={appData.settings.logo} alt="Logo" className="w-full h-full object-contain rounded-xl" referrerPolicy="no-referrer" />
+          ) : (
+            <svg viewBox="0 0 100 100" className="w-full h-full drop-shadow-2xl">
+              <path d="M50 0 A50 50 0 0 0 50 100 L50 0" fill="#1B4384" />
+              <path d="M50 0 A50 50 0 0 1 50 100 L50 0" fill="#27A745" />
+              <path d="M30 30 L70 30 L30 70 L70 70" fill="none" stroke="white" strokeWidth="12" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          )}
+          <div className="absolute inset-0 border-4 border-brand-accent/30 rounded-full animate-ping" style={{ animationDuration: '2s' }} />
         </div>
-        <div className="flex flex-col items-center gap-2">
-          <h2 className="text-text-primary font-serif text-xl tracking-[4px] uppercase">Nexus HR</h2>
-          <p className="text-text-secondary text-[10px] uppercase tracking-[2px]">Synchronizing with Cloud...</p>
+        <div className="flex flex-col items-center gap-3">
+          <h2 className="text-text-primary font-serif text-2xl tracking-[6px] uppercase">{appData.settings.companyName || 'Nexus HR'}</h2>
+          <div className="flex items-center gap-2">
+            <div className="w-1.5 h-1.5 bg-brand-accent rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+            <div className="w-1.5 h-1.5 bg-brand-accent rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+            <div className="w-1.5 h-1.5 bg-brand-accent rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+          </div>
+          <p className="text-text-secondary text-[10px] uppercase tracking-[3px] mt-2">Synchronizing with Cloud...</p>
         </div>
       </div>
     );
