@@ -1,0 +1,146 @@
+{
+  "entities": {
+    "Employee": {
+      "title": "Employee",
+      "description": "Staff member profile and salary details",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "role": { "type": "string" },
+        "department": { "type": "string" },
+        "branch": { "type": "string" },
+        "baseSalary": { "type": "number" },
+        "travelingAllowance": { "type": "number" },
+        "vehicleAllowance": { "type": "number" },
+        "performanceAllowance": { "type": "number" },
+        "petrolLitres": { "type": "number" },
+        "attendanceBonus": { "type": "number" },
+        "overtime": { "type": "number" },
+        "bikeInstallment": { "type": "number" },
+        "staffLoan": { "type": "number" },
+        "bankName": { "type": "string" },
+        "bankBranch": { "type": "string" },
+        "accountNo": { "type": "string" },
+        "hasEPF": { "type": "boolean" }
+      },
+      "required": ["id", "name", "role", "branch"]
+    },
+    "Attendance": {
+      "title": "Attendance",
+      "description": "Daily attendance record",
+      "type": "object",
+      "properties": {
+        "id": { "type": "number" },
+        "empId": { "type": "string" },
+        "date": { "type": "string", "format": "date" },
+        "status": { "type": "string", "enum": ["Present", "Absent", "Late", "Leave"] },
+        "checkIn": { "type": "string" },
+        "checkOut": { "type": "string" }
+      },
+      "required": ["empId", "date", "status"]
+    },
+    "LeaveRequest": {
+      "title": "Leave Request",
+      "description": "Employee leave application",
+      "type": "object",
+      "properties": {
+        "id": { "type": "number" },
+        "empId": { "type": "string" },
+        "type": { "type": "string", "enum": ["Annual", "Casual", "Sick"] },
+        "from": { "type": "string", "format": "date" },
+        "to": { "type": "string", "format": "date" },
+        "status": { "type": "string", "enum": ["Pending", "Approved", "Rejected"] },
+        "reason": { "type": "string" }
+      },
+      "required": ["empId", "type", "from", "to", "status"]
+    },
+    "AdvanceRequest": {
+      "title": "Advance Request",
+      "description": "Salary advance request",
+      "type": "object",
+      "properties": {
+        "id": { "type": "number" },
+        "empId": { "type": "string" },
+        "amount": { "type": "number" },
+        "date": { "type": "string", "format": "date" },
+        "status": { "type": "string", "enum": ["Pending", "Approved", "Rejected"] },
+        "reason": { "type": "string" },
+        "isPaid": { "type": "boolean" }
+      },
+      "required": ["empId", "amount", "date", "status"]
+    },
+    "Target": {
+      "title": "Target",
+      "description": "Monthly performance target",
+      "type": "object",
+      "properties": {
+        "id": { "type": "number" },
+        "empId": { "type": "string" },
+        "month": { "type": "string" },
+        "category": { "type": "string" },
+        "targetCount": { "type": "number" },
+        "achievedCount": { "type": "number" }
+      },
+      "required": ["empId", "month", "category", "targetCount"]
+    },
+    "AuditLog": {
+      "title": "Audit Log",
+      "description": "System activity log",
+      "type": "object",
+      "properties": {
+        "id": { "type": "number" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "user": { "type": "string" },
+        "action": { "type": "string" },
+        "details": { "type": "string" },
+        "type": { "type": "string" }
+      },
+      "required": ["timestamp", "user", "action"]
+    },
+    "Settings": {
+      "title": "Settings",
+      "description": "Global application settings",
+      "type": "object",
+      "properties": {
+        "companyName": { "type": "string" },
+        "companySubtitle": { "type": "string" },
+        "fuelPrice": { "type": "number" },
+        "leavePolicy": { "type": "object" },
+        "workSchedule": { "type": "object" },
+        "theme": { "type": "object" }
+      }
+    },
+    "PaidDeductions": {
+      "title": "Paid Deductions",
+      "description": "Tracking of recurring deductions paid per month",
+      "type": "object",
+      "properties": {
+        "months": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "Credential": {
+      "title": "Credential",
+      "description": "User login credentials",
+      "type": "object",
+      "properties": {
+        "empId": { "type": "string" },
+        "username": { "type": "string" },
+        "password": { "type": "string" },
+        "isAdmin": { "type": "boolean" }
+      },
+      "required": ["empId", "username", "password"]
+    }
+  },
+  "firestore": {
+    "/employees/{empId}": { "schema": "Employee", "description": "Employee profiles" },
+    "/attendance/{id}": { "schema": "Attendance", "description": "Attendance records" },
+    "/leaves/{id}": { "schema": "LeaveRequest", "description": "Leave requests" },
+    "/advances/{id}": { "schema": "AdvanceRequest", "description": "Advance requests" },
+    "/targets/{id}": { "schema": "Target", "description": "Performance targets" },
+    "/auditLogs/{id}": { "schema": "AuditLog", "description": "System logs" },
+    "/settings/global": { "schema": "Settings", "description": "Global settings" },
+    "/paidDeductions/{empId}": { "schema": "PaidDeductions", "description": "Paid months for deductions" },
+    "/credentials/{username}": { "schema": "Credential", "description": "User credentials" }
+  }
+}

@@ -1,0 +1,146 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: employees
+    // Fields: id, name, role, department, branch, baseSalary, travelingAllowance, vehicleAllowance, performanceAllowance, petrolLitres, attendanceBonus, overtime, bikeInstallment, staffLoan, bankName, bankBranch, accountNo, hasEPF
+    //
+    // Collection: attendance
+    // Fields: id, empId, date, status, checkIn, checkOut
+    //
+    // Collection: leaves
+    // Fields: id, empId, type, from, to, status, reason
+    //
+    // Collection: advances
+    // Fields: id, empId, amount, date, status, reason, isPaid
+    //
+    // Collection: targets
+    // Fields: id, empId, month, category, targetCount, achievedCount
+    //
+    // Collection: auditLogs
+    // Fields: id, timestamp, user, action, details, type
+    //
+    // Collection: settings
+    // Fields: companyName, companySubtitle, fuelPrice, leavePolicy, workSchedule, theme
+    //
+    // Collection: paidDeductions
+    // Fields: months
+    //
+    // Collection: credentials
+    // Fields: empId, username, password, isAdmin
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isMasterAdmin() {
+      return isAuthenticated() && 
+        request.auth.token.email != null && 
+        request.auth.token.email.lower() == "zioncommercialcreditampara@gmail.com";
+    }
+
+    function isAdmin() {
+      return isMasterAdmin() || (
+        isAuthenticated() && 
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'
+      );
+    }
+
+    function isOwner(empId) {
+      return isAuthenticated() && (
+        isMasterAdmin() ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.empId == empId) ||
+        (resource != null && resource.data.email == request.auth.token.email)
+      );
+    }
+
+    function isValidEmployee(data) {
+      return data.id is string && data.name is string && data.name.size() < 100;
+    }
+
+    function isValidAttendance(data) {
+      return data.empId is string && data.date is string && data.status in ['Present', 'Absent', 'Late', 'Leave'];
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /employees/{empId} {
+      allow read: if isAuthenticated() && (
+        isOwner(empId) || 
+        isAdmin() || 
+        request.auth.token.firebase.sign_in_provider == 'anonymous'
+      );
+      allow write: if isAdmin();
+    }
+
+    match /attendance/{id} {
+      allow read: if isAuthenticated() && (isOwner(resource.data.empId) || isAdmin());
+      allow create: if isAuthenticated() && (isOwner(request.resource.data.empId) || isAdmin());
+      allow update, delete: if isAdmin();
+    }
+
+    match /leaves/{id} {
+      allow read: if isAuthenticated() && (isOwner(resource.data.empId) || isAdmin());
+      allow create: if isAuthenticated() && (isOwner(request.resource.data.empId) || isAdmin());
+      allow update, delete: if isAdmin();
+    }
+
+    match /advances/{id} {
+      allow read: if isAuthenticated() && (isOwner(resource.data.empId) || isAdmin());
+      allow create: if isAuthenticated() && (isOwner(request.resource.data.empId) || isAdmin());
+      allow update, delete: if isAdmin();
+    }
+
+    match /targets/{id} {
+      allow read: if isAuthenticated() && (isOwner(resource.data.empId) || isAdmin());
+      allow write: if isAdmin();
+    }
+
+    match /auditLogs/{id} {
+      allow read: if isAdmin();
+      allow write: if isAuthenticated();
+    }
+
+    match /settings/{id} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    match /paidDeductions/{empId} {
+      allow read: if isAuthenticated() && (isOwner(empId) || isAdmin());
+      allow write: if isAdmin();
+    }
+
+    match /leaveBalances/{empId} {
+      allow read: if isAuthenticated() && (isOwner(empId) || isAdmin());
+      allow write: if isAdmin();
+    }
+
+    match /credentials/{username} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /test/{id} {
+      allow read: if true;
+    }
+    
+    match /users/{uid} {
+      allow read: if isAuthenticated() && (request.auth.uid == uid || isMasterAdmin());
+      allow write: if isAuthenticated() && (request.auth.uid == uid || isMasterAdmin());
+    }
+  }
+}

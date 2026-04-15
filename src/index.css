@@ -1,0 +1,112 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-serif: "Outfit", sans-serif;
+  --font-sans: "Inter", sans-serif;
+  
+  --color-bg-primary: var(--bg-primary, #0f172a);
+  --color-bg-secondary: var(--bg-secondary, #1e293b);
+  --color-brand-accent: var(--brand-accent, #6366f1);
+  --color-brand-secondary: var(--brand-secondary, #10b981);
+  --color-text-primary: var(--text-primary, #f8fafc);
+  --color-text-secondary: var(--text-secondary, #94a3b8);
+  --color-border-accent: var(--border-accent, rgba(99, 102, 241, 0.2));
+}
+
+@layer base {
+  body {
+    @apply bg-bg-primary text-text-primary font-sans antialiased;
+  }
+
+  h1, h2, h3, h4, .font-serif {
+    @apply font-serif;
+  }
+}
+
+@layer components {
+  .app-container {
+    @apply flex min-h-screen w-full bg-bg-primary overflow-hidden;
+  }
+
+  .main-content {
+    @apply flex-1 flex flex-col h-screen overflow-y-auto;
+  }
+
+  .glass-panel {
+    @apply bg-bg-secondary border border-border-accent rounded-xl shadow-xl shadow-black/20;
+  }
+  
+  .gradient-text {
+    @apply text-brand-accent;
+  }
+
+  .btn {
+    @apply px-8 py-2.5 rounded-lg font-sans text-[11px] font-semibold uppercase tracking-[1.5px] transition-all duration-300 flex items-center gap-2 cursor-pointer active:scale-95 border;
+  }
+
+  .btn-primary {
+    @apply border-brand-accent text-white bg-brand-accent hover:bg-brand-accent/80;
+  }
+
+  .btn-outline {
+    @apply border-brand-accent text-brand-accent hover:bg-brand-accent hover:text-white;
+  }
+
+  .btn-success {
+    @apply border-brand-secondary/50 text-brand-secondary hover:bg-brand-secondary hover:text-white;
+  }
+
+  .btn-danger {
+    @apply border-red-500/50 text-red-500 hover:bg-red-500 hover:text-white;
+  }
+
+  .form-control {
+    @apply w-full px-4 py-3 bg-bg-primary/50 border border-border-accent rounded-lg text-white outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-accent/50 transition-all font-sans text-sm;
+  }
+
+  .badge {
+    @apply px-3 py-1 rounded-full text-[9px] font-bold uppercase tracking-wider border;
+  }
+
+  .badge-success { @apply border-brand-secondary/30 text-brand-secondary bg-brand-secondary/5; }
+  .badge-warning { @apply border-amber-500/30 text-amber-500 bg-amber-500/5; }
+  .badge-danger { @apply border-red-500/30 text-red-500 bg-red-500/5; }
+  .badge-info { @apply border-brand-accent/30 text-brand-accent bg-brand-accent/5; }
+
+  .table-container {
+    @apply w-full overflow-x-auto rounded-xl bg-bg-secondary border border-border-accent p-8 shadow-lg;
+  }
+
+  table {
+    @apply w-full border-collapse;
+  }
+
+  th {
+    @apply p-4 text-left text-text-secondary font-sans uppercase text-[10px] tracking-[2px] border-b border-border-accent;
+  }
+
+  td {
+    @apply p-4 text-left border-b border-border-accent/50 text-sm font-sans;
+  }
+
+  tr:hover td {
+    @apply bg-white/[0.02];
+  }
+
+  .stat-card {
+    @apply bg-bg-secondary border border-border-accent p-8 rounded-xl flex flex-col gap-4 relative overflow-hidden shadow-lg hover:border-brand-accent/50 transition-colors;
+  }
+
+  .stat-card .title {
+    @apply text-brand-accent text-[10px] uppercase tracking-[2px] font-sans font-medium;
+  }
+
+  .stat-card .value {
+    @apply text-4xl font-serif text-text-primary;
+  }
+
+  .card-label {
+    @apply text-[10px] uppercase tracking-[2px] text-brand-accent mb-4 block font-sans;
+  }
+}
