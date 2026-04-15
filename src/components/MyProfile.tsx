@@ -70,13 +70,16 @@ export default function MyProfile({ session, data, onRefresh }: MyProfileProps) 
   const myAttendance = data.attendance.filter(a => a.empId === emp.id).sort((a, b) => b.id - a.id).slice(0, 5);
   const myLeaves = data.leaves.filter(l => l.empId === emp.id).sort((a, b) => b.id - a.id);
   const myAdvances = data.advances.filter(a => a.empId === emp.id).sort((a, b) => b.id - a.id);
+  const myCashRequests = data.cashRequests?.filter(r => r.empId === emp.id).sort((a, b) => b.id - a.id) || [];
   
   const pendingLeaves = myLeaves.filter(l => l.status === 'Pending');
   const pendingAdvances = myAdvances.filter(a => a.status === 'Pending');
+  const pendingCashRequests = myCashRequests.filter(r => r.status === 'Pending');
   
   const recentHistory = [
-    ...myLeaves.filter(l => l.status !== 'Pending').map(l => ({ ...l, category: 'Leave' as const })),
-    ...myAdvances.filter(a => a.status !== 'Pending').map(a => ({ ...a, category: 'Advance' as const }))
+    ...myLeaves.filter(l => l.status !== 'Pending').map(l => ({ ...l, typeCategory: 'Leave' as const })),
+    ...myAdvances.filter(a => a.status !== 'Pending').map(a => ({ ...a, typeCategory: 'Advance' as const })),
+    ...myCashRequests.filter(r => r.status !== 'Pending').map(r => ({ ...r, typeCategory: 'Cash' as const, originalCategory: r.category }))
   ].sort((a, b) => b.id - a.id).slice(0, 5);
 
   const currentMonth = new Date().toLocaleString('default', { month: 'long', year: 'numeric' });
@@ -273,7 +276,7 @@ export default function MyProfile({ session, data, onRefresh }: MyProfileProps) 
             <PlaneTakeoff className="w-4 h-4" /> Pending Requests
           </h4>
           <div className="space-y-6">
-            {pendingLeaves.length === 0 && pendingAdvances.length === 0 ? (
+            {pendingLeaves.length === 0 && pendingAdvances.length === 0 && pendingCashRequests.length === 0 ? (
               <p className="text-[10px] text-text-secondary uppercase tracking-[1px] text-center py-4">No pending requests</p>
             ) : (
               <>
@@ -291,6 +294,15 @@ export default function MyProfile({ session, data, onRefresh }: MyProfileProps) 
                     <div>
                       <span className="text-[11px] uppercase tracking-[1px] text-text-primary block">Salary Advance</span>
                       <span className="text-[9px] text-text-secondary uppercase tracking-[1px]">LKR {a.amount.toLocaleString()}</span>
+                    </div>
+                    <span className="badge badge-warning">Pending</span>
+                  </div>
+                ))}
+                {pendingCashRequests.map(r => (
+                  <div key={r.id} className="flex justify-between items-center border-b border-border-accent pb-4">
+                    <div>
+                      <span className="text-[11px] uppercase tracking-[1px] text-text-primary block">Cash Request: {r.category}</span>
+                      <span className="text-[9px] text-text-secondary uppercase tracking-[1px]">LKR {r.amount.toLocaleString()}</span>
                     </div>
                     <span className="badge badge-warning">Pending</span>
                   </div>
@@ -316,9 +328,11 @@ export default function MyProfile({ session, data, onRefresh }: MyProfileProps) 
               const statusCls = item.status === 'Approved' ? 'badge-success' : 'badge-danger';
               return (
                 <tr key={item.id}>
-                  <td className="text-[11px] uppercase tracking-[1px] font-bold">{item.category}</td>
+                  <td className="text-[11px] uppercase tracking-[1px] font-bold">{item.typeCategory}</td>
                   <td className="text-[11px] text-text-secondary">
-                    {item.category === 'Leave' ? `${item.type} (${item.from} to ${item.to})` : `LKR ${item.amount.toLocaleString()} - ${item.reason}`}
+                    {item.typeCategory === 'Leave' ? `${item.type} (${item.from} to ${item.to})` : 
+                     item.typeCategory === 'Advance' ? `LKR ${item.amount.toLocaleString()} - ${item.reason}` :
+                     `LKR ${item.amount.toLocaleString()} - ${item.originalCategory}`}
                   </td>
                   <td><span className={`badge ${statusCls}`}>{item.status}</span></td>
                 </tr>

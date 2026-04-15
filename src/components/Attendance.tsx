@@ -41,6 +41,7 @@ export default function Attendance({ session, data, onRefresh }: AttendanceProps
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Attendance');
     XLSX.writeFile(wb, 'Zion_Attendance_Report.xlsx');
+    DataStore.logAction('Export Data', 'Exported Attendance Report to Excel', 'Attendance');
     showNotification('Attendance report exported.');
   };
 

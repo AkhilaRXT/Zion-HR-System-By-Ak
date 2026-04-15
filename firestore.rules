@@ -104,6 +104,12 @@ service cloud.firestore {
       allow update, delete: if isAdmin();
     }
 
+    match /cashRequests/{id} {
+      allow read: if isAuthenticated() && (isOwner(resource.data.empId) || isAdmin());
+      allow create: if isAuthenticated() && (isOwner(request.resource.data.empId) || isAdmin());
+      allow update, delete: if isAdmin();
+    }
+
     match /targets/{id} {
       allow read: if isAuthenticated() && (isOwner(resource.data.empId) || isAdmin());
       allow write: if isAdmin();

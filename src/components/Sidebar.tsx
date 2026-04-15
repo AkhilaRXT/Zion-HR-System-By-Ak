@@ -61,6 +61,7 @@ export default function Sidebar({ session, data, activeRoute, onNavigate, onLogo
     { id: 'attendance', label: 'Attendance', icon: CalendarCheck },
     { id: 'leave', label: 'Leave Mgmt', icon: PlaneTakeoff },
     { id: 'payroll', label: isAdmin ? 'Payroll' : 'Salary Advance', icon: FileText },
+    { id: 'cash_requests', label: 'Cash Requests', icon: FileText },
     { id: 'audit', label: 'Audit Logs', icon: History },
     { id: 'settings', label: 'Control Panel', icon: Settings },
     { id: 'myprofile', label: 'My Profile', icon: UserCircle },
@@ -68,7 +69,7 @@ export default function Sidebar({ session, data, activeRoute, onNavigate, onLogo
 
   const hasPermission = (id: string) => {
     // Always accessible for everyone
-    if (id === 'dashboard' || id === 'myprofile' || id === 'leave' || id === 'payroll') return true;
+    if (id === 'dashboard' || id === 'myprofile' || id === 'leave' || id === 'payroll' || id === 'cash_requests') return true;
     
     // Master Admin (Google Login) gets everything
     const isMasterAdmin = session.email === "zioncommercialcreditampara@gmail.com";

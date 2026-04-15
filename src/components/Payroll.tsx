@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
 import { AppData, Session, AdvanceRequest } from '../types';
 import { DataStore } from '../lib/dataStore';
-import { Wallet, FileText, Check, X, Printer, FileDown, HandCoins } from 'lucide-react';
+import { Wallet, FileText, Check, X, Printer, FileDown, HandCoins, Paperclip } from 'lucide-react';
 import { printPayAdvice } from '../lib/payAdvice';
 import * as XLSX from 'xlsx';
 import { motion, AnimatePresence } from 'motion/react';
 import Notification, { NotificationType } from './Notification';
 import ConfirmModal from './ConfirmModal';
+import { fileToBase64 } from '../lib/fileUtils';
 
 interface PayrollProps {
   session: Session;
@@ -31,7 +32,7 @@ export default function Payroll({ session, data, onRefresh }: PayrollProps) {
     setNotification({ message, type });
   };
 
-  const [newAdvance, setNewAdvance] = useState({ amount: 0, reason: '' });
+  const [newAdvance, setNewAdvance] = useState({ amount: 0, reason: '', attachment: '' });
   const [payComponents, setPayComponents] = useState({
     baseSalary: true,
     performanceAllowance: true,
@@ -43,6 +44,18 @@ export default function Payroll({ session, data, onRefresh }: PayrollProps) {
     deductions: true,
     epf: true
   });
+
+  const handleAdvanceFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      try {
+        const base64 = await fileToBase64(file);
+        setNewAdvance({ ...newAdvance, attachment: base64 });
+      } catch (err: any) {
+        showNotification(err.message || 'Failed to process file', 'error');
+      }
+    }
+  };
 
   const handleAdvanceSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -88,12 +101,13 @@ export default function Payroll({ session, data, onRefresh }: PayrollProps) {
       amount: newAdvance.amount,
       date: new Date().toISOString().split('T')[0],
       status: 'Pending',
-      reason: newAdvance.reason
+      reason: newAdvance.reason,
+      attachment: newAdvance.attachment
     };
     try {
       await DataStore.addAdvanceRequest(request);
       showNotification('Salary advance requested successfully!');
-      setNewAdvance({ amount: 0, reason: '' });
+      setNewAdvance({ amount: 0, reason: '', attachment: '' });
     } catch (err) {
       showNotification('Failed to request advance.', 'error');
     }
@@ -129,6 +143,7 @@ export default function Payroll({ session, data, onRefresh }: PayrollProps) {
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Salary Advances');
     XLSX.writeFile(wb, `Salary_Advances_${new Date().toISOString().split('T')[0]}.xlsx`);
+    DataStore.logAction('Export Data', 'Exported Salary Advances to Excel', 'Advance');
   };
 
   const handleExport = () => {
@@ -187,6 +202,7 @@ export default function Payroll({ session, data, onRefresh }: PayrollProps) {
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Monthly Paysheet');
     XLSX.writeFile(wb, `Nexus_Payroll_${selectedMonth.replace(' ', '_')}.xlsx`);
+    DataStore.logAction('Export Data', `Exported Payroll for ${selectedMonth} to Excel`, 'Payroll' as any);
     
     // Show confirmation to finalize
     setTimeout(() => {
@@ -226,6 +242,15 @@ export default function Payroll({ session, data, onRefresh }: PayrollProps) {
                 <input 
                   type="text" className="form-control" required 
                   value={newAdvance.reason} onChange={e => setNewAdvance({...newAdvance, reason: e.target.value})}
+                />
+              </div>
+              <div className="form-group">
+                <label className="text-[10px] uppercase tracking-[2px] text-text-secondary mb-2 block">Attachment (PDF/Image, max 700KB)</label>
+                <input 
+                  type="file" 
+                  accept=".pdf,image/*"
+                  className="form-control file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-[10px] file:uppercase file:tracking-[1px] file:bg-brand-accent/10 file:text-brand-accent hover:file:bg-brand-accent/20"
+                  onChange={handleAdvanceFileChange}
                 />
               </div>
               <button type="submit" className="btn btn-primary w-full justify-center py-4">Submit Request</button>
@@ -378,7 +403,14 @@ export default function Payroll({ session, data, onRefresh }: PayrollProps) {
                         <td className="font-serif text-text-secondary text-[11px]">{a.date}</td>
                         <td>
                           <div className="uppercase tracking-[1px] text-[12px] font-medium">{emp?.name || a.empId}</div>
-                          <div className="text-[10px] text-text-secondary uppercase tracking-[1px] mt-1">{a.reason}</div>
+                          <div className="text-[10px] text-text-secondary uppercase tracking-[1px] mt-1 flex items-center gap-2">
+                            {a.reason}
+                            {a.attachment && (
+                              <a href={a.attachment} download={`Advance_Request_${a.empId}.pdf`} className="text-brand-accent hover:text-brand-secondary flex items-center gap-1" title="View Attachment">
+                                <Paperclip className="w-3 h-3" />
+                              </a>
+                            )}
+                          </div>
                           {hasPayrollPermission && emp && (
                             <div className="mt-2">
                               <span className="text-[9px] px-2 py-1 bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 rounded uppercase tracking-[1px] font-bold">

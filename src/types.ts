@@ -46,6 +46,7 @@ export interface LeaveRequest {
   to: string;
   status: 'Pending' | 'Approved' | 'Rejected';
   reason: string;
+  attachment?: string;
 }
 
 export interface Target {
@@ -65,6 +66,18 @@ export interface AdvanceRequest {
   status: 'Pending' | 'Approved' | 'Rejected';
   reason: string;
   isPaid?: boolean;
+  attachment?: string;
+}
+
+export interface CashRequest {
+  id: number;
+  empId: string;
+  amount: number;
+  category: string;
+  description: string;
+  date: string;
+  status: 'Pending' | 'Approved' | 'Rejected';
+  attachment?: string;
 }
 
 export interface LeaveBalances {
@@ -107,7 +120,7 @@ export interface AuditLog {
   user: string;
   action: string;
   details: string;
-  type: 'Employee' | 'Attendance' | 'Leave' | 'Advance' | 'Target' | 'Settings' | 'Auth';
+  type: 'Employee' | 'Attendance' | 'Leave' | 'Advance' | 'Target' | 'Settings' | 'Auth' | 'Cash' | 'Payroll';
 }
 
 export interface AppData {
@@ -117,6 +130,7 @@ export interface AppData {
   leaves: LeaveRequest[];
   targets: Target[];
   advances: AdvanceRequest[];
+  cashRequests: CashRequest[];
   leaveBalances: LeaveBalances;
   settings: AppSettings;
   auditLogs: AuditLog[];

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { DataStore } from './lib/dataStore';
-import { Session, AppData, Employee, Attendance, LeaveRequest, AdvanceRequest, Target, AuditLog, AppSettings } from './types';
+import { Session, AppData, Employee, Attendance, LeaveRequest, AdvanceRequest, Target, AuditLog, AppSettings, CashRequest } from './types';
 import { db, auth } from './lib/firebase';
 import { collection, onSnapshot, doc } from 'firebase/firestore';
 import Login from './components/Login';
@@ -10,6 +10,7 @@ import StaffManagement from './components/StaffManagement';
 import AttendanceView from './components/Attendance';
 import LeaveManagement from './components/LeaveManagement';
 import Payroll from './components/Payroll';
+import CashRequests from './components/CashRequests';
 import Settings from './components/Settings';
 import MyProfile from './components/MyProfile';
 import AuditLogs from './components/AuditLogs';
@@ -80,6 +81,7 @@ export default function App() {
       syncCollection('attendance', (docs) => updatePart({ attendance: docs as Attendance[] }));
       syncCollection('leaves', (docs) => updatePart({ leaves: docs as LeaveRequest[] }));
       syncCollection('advances', (docs) => updatePart({ advances: docs as AdvanceRequest[] }));
+      syncCollection('cashRequests', (docs) => updatePart({ cashRequests: docs as CashRequest[] }));
       syncCollection('targets', (docs) => updatePart({ targets: docs as Target[] }));
       syncCollection('auditLogs', (docs) => updatePart({ auditLogs: (docs as AuditLog[]).sort((a, b) => b.id - a.id) }));
       
@@ -118,6 +120,14 @@ export default function App() {
           updatePart({ advances: docs });
         }, (err) => console.warn('Permission denied for advances'));
         unsubscribers.push(unsubAdvances);
+
+        // Sync their own cash requests
+        const cashQuery = query(collection(db, 'cashRequests'), where('empId', '==', session.empId));
+        const unsubCash = onSnapshot(cashQuery, (snap) => {
+          const docs = snap.docs.map(d => d.data() as CashRequest);
+          updatePart({ cashRequests: docs });
+        }, (err) => console.warn('Permission denied for cashRequests'));
+        unsubscribers.push(unsubCash);
 
         // Sync their own attendance
         const attendanceQuery = query(collection(db, 'attendance'), where('empId', '==', session.empId));
@@ -182,7 +192,7 @@ export default function App() {
           <div className="absolute inset-0 border-4 border-brand-accent/30 rounded-full animate-ping" style={{ animationDuration: '2s' }} />
         </div>
         <div className="flex flex-col items-center gap-3">
-          <h2 className="text-text-primary font-serif text-2xl tracking-[6px] uppercase">{appData.settings.companyName || 'Nexus HR'}</h2>
+          <h2 className="text-text-primary font-serif text-2xl tracking-[6px] uppercase">{appData.settings.companyName || 'Zion HR'}</h2>
           <div className="flex items-center gap-2">
             <div className="w-1.5 h-1.5 bg-brand-accent rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
             <div className="w-1.5 h-1.5 bg-brand-accent rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
@@ -202,7 +212,7 @@ export default function App() {
     // Basic permission check for rendering
     const hasAccess = (id: string) => {
       // Always accessible for everyone
-      if (id === 'dashboard' || id === 'myprofile' || id === 'leave' || id === 'payroll') return true;
+      if (id === 'dashboard' || id === 'myprofile' || id === 'leave' || id === 'payroll' || id === 'cash_requests') return true;
       
       // Master Admin (Google Login) gets everything
       const isMasterAdmin = session.email === "zioncommercialcreditampara@gmail.com";
@@ -228,6 +238,7 @@ export default function App() {
       case 'attendance': return <AttendanceView session={session} data={appData} onRefresh={refreshData} />;
       case 'leave': return <LeaveManagement session={session} data={appData} onRefresh={refreshData} />;
       case 'payroll': return <Payroll session={session} data={appData} onRefresh={refreshData} />;
+      case 'cash_requests': return <CashRequests session={session} data={appData} />;
       case 'myprofile': return <MyProfile session={session} data={appData} onRefresh={refreshData} />;
       case 'settings': return <Settings session={session} data={appData} onRefresh={refreshData} />;
       case 'audit': return <AuditLogs session={session} data={appData} />;
@@ -242,6 +253,7 @@ export default function App() {
       case 'attendance': return 'Attendance Tracking';
       case 'leave': return 'Leave Management';
       case 'payroll': return 'Payroll & Advances';
+      case 'cash_requests': return 'Cash Requests';
       case 'myprofile': return 'My Profile';
       case 'settings': return 'Control Panel';
       case 'audit': return 'Audit Logs';

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { AppData, Session, AuditLog } from '../types';
+import { DataStore } from '../lib/dataStore';
 import { Search, FileDown, Calendar, Filter } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { motion } from 'motion/react';
@@ -23,7 +24,13 @@ export default function AuditLogs({ session, data }: AuditLogsProps) {
       log.details.toLowerCase().includes(searchTerm.toLowerCase());
     
     const matchesType = filterType === 'All' || log.type === filterType;
-    const matchesDate = !filterDate || log.timestamp.startsWith(filterDate);
+    
+    let matchesDate = true;
+    if (filterDate) {
+      const logDate = new Date(log.timestamp);
+      const localDateStr = `${logDate.getFullYear()}-${String(logDate.getMonth() + 1).padStart(2, '0')}-${String(logDate.getDate()).padStart(2, '0')}`;
+      matchesDate = localDateStr === filterDate;
+    }
 
     return matchesSearch && matchesType && matchesDate;
   });
@@ -50,6 +57,7 @@ export default function AuditLogs({ session, data }: AuditLogsProps) {
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Audit Logs');
     XLSX.writeFile(wb, `Audit_Logs_${type}_${new Date().toISOString().split('T')[0]}.xlsx`);
+    DataStore.logAction('Export Data', `Exported Audit Logs (${type}) to Excel`, 'Settings');
   };
 
   const logTypes = ['All', 'Employee', 'Attendance', 'Leave', 'Advance', 'Target', 'Settings', 'Auth'];

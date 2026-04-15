@@ -7,8 +7,8 @@ export function printPayAdvice(
   fuelPrice: number = 398,
   deductEPF: boolean = true,
   epfPercentage: number = 8,
-  companyName: string = 'NEXUS',
-  companySubtitle: string = 'Institutional HR',
+  companyName: string = 'Zion HR',
+  companySubtitle: string = 'Human Resources',
   payComponents: any = {
     baseSalary: true,
     performanceAllowance: true,

@@ -1,4 +1,4 @@
-import { AppData, Employee, Session, AppSettings, Attendance, LeaveRequest, AdvanceRequest, AuditLog, Credential } from '../types';
+import { AppData, Employee, Session, AppSettings, Attendance, LeaveRequest, AdvanceRequest, AuditLog, Credential, CashRequest } from '../types';
 import { db, auth } from './firebase';
 import { 
   doc, 
@@ -83,14 +83,15 @@ const initialData: AppData = {
   leaves: [],
   targets: [],
   advances: [],
+  cashRequests: [],
   leaveBalances: {
     'EMP001': { annual: 24, casual: 10, sick: 14 },
     'EMP002': { annual: 24, casual: 10, sick: 14 },
     'EMP003': { annual: 24, casual: 10, sick: 14 }
   },
   settings: {
-    companyName: 'NEXUS',
-    companySubtitle: 'Institutional HR',
+    companyName: 'Zion HR',
+    companySubtitle: 'Human Resources',
     leavePolicy: {
       monthlyLimit: 2,
       annualTotal: 24,
@@ -139,7 +140,7 @@ export const DataStore = {
           await setDoc(doc(db, 'leaveBalances', empId), balance);
         }
       } else {
-        // Self-repair for master admin record if it already exists but lacks email
+        // Self-repair for master admin record and settings
         try {
           const adminDoc = await getDoc(doc(db, 'employees', 'EMP003'));
           if (adminDoc.exists()) {
@@ -148,8 +149,18 @@ export const DataStore = {
               await updateDoc(doc(db, 'employees', 'EMP003'), { email: "zioncommercialcreditampara@gmail.com" });
             }
           }
+
+          if (settingsDoc.exists()) {
+            const settingsData = settingsDoc.data() as AppSettings;
+            if (settingsData.companyName === 'NEXUS') {
+              await updateDoc(doc(db, 'settings', 'global'), { 
+                companyName: 'Zion HR', 
+                companySubtitle: 'Human Resources' 
+              });
+            }
+          }
         } catch (e) {
-          console.warn('Admin record repair skipped or failed:', e);
+          console.warn('Self-repair skipped or failed:', e);
         }
       }
     } catch (error) {
@@ -184,12 +195,12 @@ export const DataStore = {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
   },
 
-  async logAction(action: string, details: string, type: AuditLog['type']) {
+  async logAction(action: string, details: string, type: AuditLog['type'], userOverride?: string) {
     const session = this.getSession();
     const log: AuditLog = {
       id: Date.now(),
       timestamp: new Date().toISOString(),
-      user: session ? `${session.name} (${session.empId})` : 'System',
+      user: userOverride || (session ? `${session.name} (${session.empId})` : 'System'),
       action,
       details,
       type
@@ -250,7 +261,7 @@ export const DataStore = {
         console.warn('Failed to sync user doc:', e);
       }
 
-      await this.logAction('Login Success', `User ${username} logged in successfully via credentials.`, 'Auth');
+      await this.logAction('Login Success', `User ${username} logged in successfully via credentials.`, 'Auth', `${session.name} (${session.empId})`);
       return { success: true, session };
     } catch (error) {
       await this.logAction('Login Failed', `Username: ${username}`, 'Auth');
@@ -304,7 +315,7 @@ export const DataStore = {
         console.warn('Failed to sync user doc:', e);
       }
 
-      await this.logAction('Google Login', `User ${user.email} logged in via Google.`, 'Auth');
+      await this.logAction('Google Login', `User ${user.email} logged in via Google.`, 'Auth', `${session.name} (${session.empId})`);
       return { success: true, session };
     } catch (error: any) {
       const errorMessage = error instanceof Error ? error.message : (error?.message || 'Unknown error');
@@ -530,6 +541,28 @@ export const DataStore = {
       await this.logAction('Advance Decision', `${status} advance request for ${advData.empId} (LKR ${advData.amount.toLocaleString()})`, 'Advance');
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, `advances/${id}`);
+    }
+  },
+
+  async addCashRequest(request: CashRequest) {
+    try {
+      await setDoc(doc(db, 'cashRequests', request.id.toString()), request);
+      await this.logAction('Cash Request', `New cash request by ${request.empId} for LKR ${request.amount.toLocaleString()}. Category: ${request.category}`, 'Cash');
+    } catch (error) {
+      handleFirestoreError(error, OperationType.CREATE, `cashRequests/${request.id}`);
+    }
+  },
+
+  async updateCashRequestStatus(id: number, status: 'Approved' | 'Rejected') {
+    try {
+      const cashRef = doc(db, 'cashRequests', id.toString());
+      const cashDoc = await getDoc(cashRef);
+      const cashData = cashDoc.data() as CashRequest;
+      
+      await updateDoc(cashRef, { status });
+      await this.logAction('Cash Decision', `${status} cash request for ${cashData.empId} (LKR ${cashData.amount.toLocaleString()})`, 'Cash');
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `cashRequests/${id}`);
     }
   },
 

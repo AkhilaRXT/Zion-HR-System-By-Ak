@@ -100,6 +100,7 @@ export default function Settings({ session, data, onRefresh }: SettingsProps) {
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Attendance');
     XLSX.writeFile(wb, `Zion_${filename}.xlsx`);
+    DataStore.logAction('Export Data', `Exported ${filename} to Excel`, 'Settings');
     showNotification('Export successful!');
   };
 
@@ -118,6 +119,7 @@ export default function Settings({ session, data, onRefresh }: SettingsProps) {
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Bank Details');
     XLSX.writeFile(wb, `Zion_Bank_Details_${new Date().toISOString().split('T')[0]}.xlsx`);
+    DataStore.logAction('Export Data', 'Exported Bank Details to Excel', 'Settings');
     showNotification('Bank details exported!');
   };
 

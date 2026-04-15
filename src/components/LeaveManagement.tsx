@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { AppData, Session, LeaveRequest } from '../types';
 import { DataStore } from '../lib/dataStore';
-import { Check, X, PlaneTakeoff } from 'lucide-react';
+import { Check, X, PlaneTakeoff, Paperclip } from 'lucide-react';
 import { AnimatePresence } from 'motion/react';
 import Notification, { NotificationType } from './Notification';
+import { fileToBase64 } from '../lib/fileUtils';
 
 interface LeaveManagementProps {
   session: Session;
@@ -46,8 +47,21 @@ export default function LeaveManagement({ session, data, onRefresh }: LeaveManag
     type: 'Annual' as 'Annual' | 'Casual' | 'Sick',
     from: '',
     to: '',
-    reason: ''
+    reason: '',
+    attachment: ''
   });
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      try {
+        const base64 = await fileToBase64(file);
+        setNewLeave({ ...newLeave, attachment: base64 });
+      } catch (err: any) {
+        showNotification(err.message || 'Failed to process file', 'error');
+      }
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -60,7 +74,7 @@ export default function LeaveManagement({ session, data, onRefresh }: LeaveManag
     try {
       await DataStore.addLeaveRequest(request);
       showNotification('Leave Application Submitted!');
-      setNewLeave({ type: 'Annual', from: '', to: '', reason: '' });
+      setNewLeave({ type: 'Annual', from: '', to: '', reason: '', attachment: '' });
     } catch (err) {
       showNotification('Failed to submit leave request.', 'error');
     }
@@ -127,6 +141,15 @@ export default function LeaveManagement({ session, data, onRefresh }: LeaveManag
                 value={newLeave.reason} onChange={e => setNewLeave({...newLeave, reason: e.target.value})}
               />
             </div>
+            <div className="form-group">
+              <label className="text-[10px] uppercase tracking-[2px] text-text-secondary mb-2 block">Attachment (PDF/Image, max 700KB)</label>
+              <input 
+                type="file" 
+                accept=".pdf,image/*"
+                className="form-control file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-[10px] file:uppercase file:tracking-[1px] file:bg-brand-accent/10 file:text-brand-accent hover:file:bg-brand-accent/20"
+                onChange={handleFileChange}
+              />
+            </div>
             <button type="submit" className="btn btn-primary w-full justify-center py-4">
               Submit Request
             </button>
@@ -175,7 +198,16 @@ export default function LeaveManagement({ session, data, onRefresh }: LeaveManag
                       )}
                     </td>
                     <td className="text-[11px] uppercase tracking-[1px] text-text-secondary">{l.type}</td>
-                    <td className="font-serif text-[12px]">{l.from} → {l.to}</td>
+                    <td className="font-serif text-[12px]">
+                      {l.from} → {l.to}
+                      {l.attachment && (
+                        <div className="mt-2">
+                          <a href={l.attachment} download={`Leave_Request_${l.empId}.pdf`} className="text-[10px] text-brand-accent hover:text-brand-secondary flex items-center gap-1 uppercase tracking-[1px]">
+                            <Paperclip className="w-3 h-3" /> View Attachment
+                          </a>
+                        </div>
+                      )}
+                    </td>
                     <td><span className={`badge ${statusCls}`}>{l.status}</span></td>
                     {canManageLeaves && (
                       <td>
