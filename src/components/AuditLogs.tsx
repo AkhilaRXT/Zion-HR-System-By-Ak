@@ -35,7 +35,7 @@ export default function AuditLogs({ session, data }: AuditLogsProps) {
     return matchesSearch && matchesType && matchesDate;
   });
 
-  const handleExport = (type: 'All' | 'Monthly' | 'Filtered') => {
+  const handleExport = async (type: 'All' | 'Monthly' | 'Filtered') => {
     let dataToExport = filteredLogs;
 
     if (type === 'All') {
@@ -57,7 +57,7 @@ export default function AuditLogs({ session, data }: AuditLogsProps) {
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Audit Logs');
     XLSX.writeFile(wb, `Audit_Logs_${type}_${new Date().toISOString().split('T')[0]}.xlsx`);
-    DataStore.logAction('Export Data', `Exported Audit Logs (${type}) to Excel`, 'Settings');
+    await DataStore.logAction('Export Data', `Exported Audit Logs (${type}) to Excel`, 'Settings');
   };
 
   const logTypes = ['All', 'Employee', 'Attendance', 'Leave', 'Advance', 'Target', 'Settings', 'Auth'];
@@ -66,17 +66,17 @@ export default function AuditLogs({ session, data }: AuditLogsProps) {
     <div className="space-y-8">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6">
         <div>
-          <h3 className="text-[11px] uppercase tracking-[3px] text-brand-accent">System Audit Logs</h3>
-          <p className="text-[10px] text-text-secondary uppercase tracking-[1px] mt-1">Detailed history of all system actions</p>
+          <h3 className="text-sm font-semibold text-text-primary">System Audit Logs</h3>
+          <p className="text-xs text-text-secondary font-medium mt-1">Detailed history of all system actions</p>
         </div>
-        <div className="flex flex-wrap gap-4">
-          <button onClick={() => handleExport('All')} className="btn btn-outline">
+        <div className="flex flex-wrap gap-3">
+          <button onClick={() => handleExport('All')} className="btn btn-outline text-xs py-2 px-4 h-auto">
             <FileDown className="w-4 h-4" /> Export All
           </button>
-          <button onClick={() => handleExport('Monthly')} className="btn btn-outline">
+          <button onClick={() => handleExport('Monthly')} className="btn btn-outline text-xs py-2 px-4 h-auto">
             <Calendar className="w-4 h-4" /> This Month
           </button>
-          <button onClick={() => handleExport('Filtered')} className="btn btn-primary">
+          <button onClick={() => handleExport('Filtered')} className="btn btn-primary text-xs py-2 px-4 h-auto">
             <Filter className="w-4 h-4" /> Export Filtered
           </button>
         </div>
@@ -85,7 +85,7 @@ export default function AuditLogs({ session, data }: AuditLogsProps) {
       <div className="glass-panel p-8 space-y-8">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div className="form-group">
-            <label className="text-[10px] uppercase tracking-[2px] text-text-secondary mb-2 block">Search Logs</label>
+            <label className="text-xs font-medium text-text-secondary mb-2 block">Search Logs</label>
             <div className="relative">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-text-secondary" />
               <input 
@@ -96,7 +96,7 @@ export default function AuditLogs({ session, data }: AuditLogsProps) {
             </div>
           </div>
           <div className="form-group">
-            <label className="text-[10px] uppercase tracking-[2px] text-text-secondary mb-2 block">Filter by Type</label>
+            <label className="text-xs font-medium text-text-secondary mb-2 block">Filter by Type</label>
             <select 
               className="form-control"
               value={filterType} onChange={e => setFilterType(e.target.value)}
@@ -105,7 +105,7 @@ export default function AuditLogs({ session, data }: AuditLogsProps) {
             </select>
           </div>
           <div className="form-group">
-            <label className="text-[10px] uppercase tracking-[2px] text-text-secondary mb-2 block">Filter by Date</label>
+            <label className="text-xs font-medium text-text-secondary mb-2 block">Filter by Date</label>
             <input 
               type="date" className="form-control"
               value={filterDate} onChange={e => setFilterDate(e.target.value)}
@@ -127,11 +127,11 @@ export default function AuditLogs({ session, data }: AuditLogsProps) {
             <tbody>
               {filteredLogs.length > 0 ? (
                 filteredLogs.map(log => (
-                  <tr key={log.id} className="hover:bg-white/[0.02] transition-colors">
-                    <td className="font-mono text-[10px] text-text-secondary">
+                  <tr key={log.id} className="hover:bg-gray-50 transition-colors">
+                    <td className="font-mono text-xs text-text-secondary">
                       {new Date(log.timestamp).toLocaleString()}
                     </td>
-                    <td className="text-[11px] font-medium text-text-primary">
+                    <td className="text-sm font-semibold text-text-primary">
                       {log.user}
                     </td>
                     <td>
@@ -144,17 +144,17 @@ export default function AuditLogs({ session, data }: AuditLogsProps) {
                         {log.type}
                       </span>
                     </td>
-                    <td className="text-[11px] uppercase tracking-[1px] text-brand-accent">
+                    <td className="text-xs font-bold text-brand-accent uppercase tracking-wider">
                       {log.action}
                     </td>
-                    <td className="text-[11px] text-text-secondary">
+                    <td className="text-sm text-text-secondary font-medium">
                       {log.details}
                     </td>
                   </tr>
                 ))
               ) : (
                 <tr>
-                  <td colSpan={5} className="text-center py-12 text-text-secondary italic">
+                  <td colSpan={5} className="text-center py-12 text-text-secondary font-medium text-sm">
                     No logs found matching your filters.
                   </td>
                 </tr>

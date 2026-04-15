@@ -100,13 +100,13 @@ export default function LeaveManagement({ session, data, onRefresh }: LeaveManag
       </div>
 
       <div className="flex flex-col lg:flex-row gap-12 items-start">
-        <div className="w-full lg:w-1/3 bg-bg-secondary border border-border-accent p-6 md:p-10">
-          <h3 className="text-[11px] uppercase tracking-[3px] text-brand-accent mb-8 flex items-center gap-2">
+        <div className="w-full lg:w-1/3 glass-panel p-6 md:p-8">
+          <h3 className="text-sm font-semibold text-text-primary mb-6 flex items-center gap-2">
             Apply for Leave
           </h3>
-          <form onSubmit={handleSubmit} className="space-y-6">
+          <form onSubmit={handleSubmit} className="space-y-5">
             <div className="form-group">
-              <label className="text-[10px] uppercase tracking-[2px] text-text-secondary mb-2 block">Leave Type</label>
+              <label className="text-xs font-medium text-text-secondary mb-2 block">Leave Type</label>
               <select 
                 className="form-control"
                 value={newLeave.type}
@@ -117,16 +117,16 @@ export default function LeaveManagement({ session, data, onRefresh }: LeaveManag
                 <option value="Sick">Sick</option>
               </select>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
               <div className="form-group">
-                <label className="text-[10px] uppercase tracking-[2px] text-text-secondary mb-2 block">From Date</label>
+                <label className="text-xs font-medium text-text-secondary mb-2 block">From Date</label>
                 <input 
                   type="date" className="form-control" required 
                   value={newLeave.from} onChange={e => setNewLeave({...newLeave, from: e.target.value})}
                 />
               </div>
               <div className="form-group">
-                <label className="text-[10px] uppercase tracking-[2px] text-text-secondary mb-2 block">To Date</label>
+                <label className="text-xs font-medium text-text-secondary mb-2 block">To Date</label>
                 <input 
                   type="date" className="form-control" required 
                   value={newLeave.to} onChange={e => setNewLeave({...newLeave, to: e.target.value})}
@@ -134,7 +134,7 @@ export default function LeaveManagement({ session, data, onRefresh }: LeaveManag
               </div>
             </div>
             <div className="form-group">
-              <label className="text-[10px] uppercase tracking-[2px] text-text-secondary mb-2 block">Reason</label>
+              <label className="text-xs font-medium text-text-secondary mb-2 block">Reason</label>
               <textarea 
                 className="form-control min-h-[100px]" required 
                 placeholder="State reason..."
@@ -142,11 +142,11 @@ export default function LeaveManagement({ session, data, onRefresh }: LeaveManag
               />
             </div>
             <div className="form-group">
-              <label className="text-[10px] uppercase tracking-[2px] text-text-secondary mb-2 block">Attachment (PDF/Image, max 700KB)</label>
+              <label className="text-xs font-medium text-text-secondary mb-2 block">Attachment (PDF/Image, max 700KB)</label>
               <input 
                 type="file" 
                 accept=".pdf,image/*"
-                className="form-control file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-[10px] file:uppercase file:tracking-[1px] file:bg-brand-accent/10 file:text-brand-accent hover:file:bg-brand-accent/20"
+                className="form-control file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-xs file:font-medium file:bg-brand-accent file:text-white hover:file:bg-blue-700"
                 onChange={handleFileChange}
               />
             </div>
@@ -157,9 +157,11 @@ export default function LeaveManagement({ session, data, onRefresh }: LeaveManag
         </div>
 
         <div className="w-full lg:w-2/3 table-container">
-          <h3 className="text-[11px] uppercase tracking-[3px] text-brand-accent mb-8">
-            {canManageLeaves ? 'All Leave Requests' : 'My Leave Requests'}
-          </h3>
+          <div className="p-6 border-b border-border-accent">
+            <h3 className="text-sm font-semibold text-text-primary">
+              {canManageLeaves ? 'All Leave Requests' : 'My Leave Requests'}
+            </h3>
+          </div>
           <table>
             <thead>
               <tr>
@@ -188,21 +190,21 @@ export default function LeaveManagement({ session, data, onRefresh }: LeaveManag
                 return (
                   <tr key={l.id}>
                     <td>
-                      <div className="uppercase tracking-[1px] text-[12px] font-medium">{emp?.name || l.empId}</div>
+                      <div className="font-medium text-text-primary">{emp?.name || l.empId}</div>
                       {canManageLeaves && (
                         <div className="mt-2 flex flex-wrap gap-2">
-                          <span className="text-[9px] px-1.5 py-0.5 bg-brand-accent/10 text-brand-accent border border-brand-accent/20 rounded uppercase tracking-[1px]">Annual: {empAnnualBalance}</span>
-                          <span className="text-[9px] px-1.5 py-0.5 bg-brand-accent/10 text-brand-accent border border-brand-accent/20 rounded uppercase tracking-[1px]">Casual: {empCasualBalance}</span>
-                          <span className="text-[9px] px-1.5 py-0.5 bg-brand-accent/10 text-brand-accent border border-brand-accent/20 rounded uppercase tracking-[1px]">Sick: {empSickBalance}</span>
+                          <span className="text-xs px-2 py-1 bg-gray-100 text-text-secondary rounded-md">Annual: {empAnnualBalance}</span>
+                          <span className="text-xs px-2 py-1 bg-gray-100 text-text-secondary rounded-md">Casual: {empCasualBalance}</span>
+                          <span className="text-xs px-2 py-1 bg-gray-100 text-text-secondary rounded-md">Sick: {empSickBalance}</span>
                         </div>
                       )}
                     </td>
-                    <td className="text-[11px] uppercase tracking-[1px] text-text-secondary">{l.type}</td>
-                    <td className="font-serif text-[12px]">
+                    <td className="text-sm text-text-secondary">{l.type}</td>
+                    <td className="font-mono text-sm text-text-secondary">
                       {l.from} → {l.to}
                       {l.attachment && (
                         <div className="mt-2">
-                          <a href={l.attachment} download={`Leave_Request_${l.empId}.pdf`} className="text-[10px] text-brand-accent hover:text-brand-secondary flex items-center gap-1 uppercase tracking-[1px]">
+                          <a href={l.attachment} download={`Leave_Request_${l.empId}.pdf`} className="text-xs font-medium text-brand-accent hover:text-blue-700 flex items-center gap-1">
                             <Paperclip className="w-3 h-3" /> View Attachment
                           </a>
                         </div>

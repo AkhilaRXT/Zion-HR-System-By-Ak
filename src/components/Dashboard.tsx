@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { AppData, Session, Attendance } from '../types';
 import { DataStore } from '../lib/dataStore';
 import { 
@@ -36,7 +36,12 @@ export default function Dashboard({ session, data, onRefresh }: DashboardProps) 
   const canSeeAdvances = isAdmin && (session.email === "zioncommercialcreditampara@gmail.com" || session.permissions?.includes('payroll'));
 
   const totalStaff = data.employees.length;
-  const presentToday = data.attendance.filter(a => a.date === today).length;
+  const presentToday = new Set(
+    data.attendance
+      .filter(a => a.date === today && (a.status === 'Present' || a.status === 'Late' || a.status === 'Half Day'))
+      .map(a => a.empId)
+      .filter(id => data.employees.some(e => e.id === id))
+  ).size;
   const pendingLeavesCount = data.leaves.filter(l => l.status === 'Pending').length;
   const approvedAdvancesCount = data.advances.filter(a => a.status === 'Approved').length;
 
@@ -48,6 +53,21 @@ export default function Dashboard({ session, data, onRefresh }: DashboardProps) 
 
   const [selectedEmpId, setSelectedEmpId] = useState(data.employees[0]?.id || '');
   const [empSearch, setEmpSearch] = useState('');
+
+  // Sync selection with search results
+  useEffect(() => {
+    const filtered = data.employees.filter(e => 
+      e.name.toLowerCase().includes(empSearch.toLowerCase()) || 
+      e.id.toLowerCase().includes(empSearch.toLowerCase())
+    );
+    if (filtered.length > 0) {
+      const isStillInList = filtered.some(e => e.id === selectedEmpId);
+      if (!isStillInList) {
+        setSelectedEmpId(filtered[0].id);
+      }
+    }
+  }, [empSearch, data.employees, selectedEmpId]);
+
   const [notification, setNotification] = useState<{ message: string, type: NotificationType } | null>(null);
   const [editingAttendance, setEditingAttendance] = useState<Attendance | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null);
@@ -128,8 +148,8 @@ export default function Dashboard({ session, data, onRefresh }: DashboardProps) 
             {canSeeLeaves && <StatCard icon={MailWarning} title="Pending Leaves" value={pendingLeavesCount} color="text-brand-accent" />}
             {canSeeAdvances && <StatCard icon={HandCoins} title="Approved Advances" value={approvedAdvancesCount} />}
             {!canSeeStaff && !canSeeAttendance && !canSeeLeaves && !canSeeAdvances && (
-              <div className="col-span-full p-12 bg-bg-secondary border border-border-accent text-center">
-                <p className="text-text-secondary uppercase tracking-[2px] text-[12px]">Welcome to the Admin Dashboard</p>
+              <div className="col-span-full p-12 bg-white border border-border-accent rounded-2xl text-center shadow-sm">
+                <p className="text-text-secondary font-medium text-sm">Welcome to the Admin Dashboard</p>
               </div>
             )}
           </>
@@ -152,19 +172,19 @@ export default function Dashboard({ session, data, onRefresh }: DashboardProps) 
         <motion.div 
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="bg-bg-secondary border border-border-accent p-10"
+          className="glass-panel p-8"
         >
-          <h3 className="text-[11px] uppercase tracking-[3px] text-brand-accent mb-8 flex items-center gap-2">
+          <h3 className="text-sm font-semibold text-text-primary mb-6 flex items-center gap-2">
             Mark Attendance
           </h3>
           <div className="flex flex-wrap gap-6 items-end">
             <div className="flex-1 min-w-[240px]">
-              <label className="text-[10px] uppercase tracking-[2px] text-text-secondary mb-3 block">Search & Select Employee</label>
+              <label className="text-xs font-medium text-text-secondary mb-2 block">Search & Select Employee</label>
               <div className="space-y-3">
                 <input 
                   type="text" 
                   placeholder="Search by name or ID..."
-                  className="form-control text-[12px]"
+                  className="form-control"
                   value={empSearch}
                   onChange={(e) => setEmpSearch(e.target.value)}
                 />
@@ -203,10 +223,12 @@ export default function Dashboard({ session, data, onRefresh }: DashboardProps) 
         </motion.div>
       )}
 
-      <div className="table-container">
-        <h3 className="text-[11px] uppercase tracking-[3px] text-brand-accent mb-8">
-          Daily Attendance Log <span className="text-text-secondary font-normal ml-4">— {today}</span>
-        </h3>
+      <div className="table-container glass-panel">
+        <div className="p-6 border-b border-border-accent">
+          <h3 className="text-sm font-semibold text-text-primary">
+            Daily Attendance Log <span className="text-text-secondary font-normal ml-2">— {today}</span>
+          </h3>
+        </div>
         <table>
           <thead>
             <tr>
@@ -223,20 +245,21 @@ export default function Dashboard({ session, data, onRefresh }: DashboardProps) 
               const rec = todayAttendance.find(a => a.empId === emp.id);
               return (
                 <tr key={emp.id}>
-                  <td className="font-serif text-brand-accent">{emp.id}</td>
-                  <td className="uppercase tracking-[1px] text-[12px]">{emp.name}</td>
+                  <td className="font-mono text-sm text-brand-accent">{emp.id}</td>
+                  <td className="font-medium text-text-primary">{emp.name}</td>
                   <td>
                     <span className={`badge ${
                       !rec ? 'badge-danger' : 
                       rec.status === 'Present' ? 'badge-success' : 
                       rec.status === 'Half Day' ? 'badge-warning' : 
-                      rec.status === 'Late' ? 'badge-info' : 'badge-danger'
+                      rec.status === 'Late' ? 'badge-info' : 
+                      rec.status === 'Leave' ? 'badge-info' : 'badge-danger'
                     }`}>
                       {rec ? rec.status : 'Absent'}
                     </span>
                   </td>
-                  <td className="font-serif">{rec ? rec.checkIn : '--'}</td>
-                  <td className="font-serif">
+                  <td className="font-mono text-sm text-text-secondary">{rec ? rec.checkIn : '--'}</td>
+                  <td className="font-mono text-sm text-text-secondary">
                     {rec ? (rec.checkOut === '--' ? <span className="text-text-secondary italic">Not yet</span> : rec.checkOut) : '--'}
                   </td>
                   {canSeeAttendance && (
@@ -267,22 +290,22 @@ export default function Dashboard({ session, data, onRefresh }: DashboardProps) 
       </div>
 
       {editingAttendance && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
           <motion.div 
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="bg-bg-secondary border border-border-accent p-12 w-full max-w-md"
+            className="bg-white border border-border-accent p-8 rounded-2xl w-full max-w-md shadow-xl"
           >
-            <div className="flex justify-between items-center mb-10">
-              <h3 className="text-[11px] uppercase tracking-[3px] text-brand-accent">Edit Attendance</h3>
-              <button onClick={() => setEditingAttendance(null)} className="text-text-secondary hover:text-white">
-                <X className="w-6 h-6" />
+            <div className="flex justify-between items-center mb-8">
+              <h3 className="text-lg font-semibold text-text-primary">Edit Attendance</h3>
+              <button onClick={() => setEditingAttendance(null)} className="text-text-secondary hover:text-text-primary">
+                <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleUpdateAttendance} className="space-y-8">
+            <form onSubmit={handleUpdateAttendance} className="space-y-6">
               <div className="form-group">
-                <label className="text-[10px] uppercase tracking-[2px] text-text-secondary mb-2 block">Check In Time</label>
+                <label className="text-sm font-medium text-text-secondary mb-2 block">Check In Time</label>
                 <input 
                   type="text" className="form-control" placeholder="e.g. 08:30 AM"
                   value={editingAttendance.checkIn} 
@@ -290,7 +313,7 @@ export default function Dashboard({ session, data, onRefresh }: DashboardProps) 
                 />
               </div>
               <div className="form-group">
-                <label className="text-[10px] uppercase tracking-[2px] text-text-secondary mb-2 block">Check Out Time</label>
+                <label className="text-sm font-medium text-text-secondary mb-2 block">Check Out Time</label>
                 <input 
                   type="text" className="form-control" placeholder="e.g. 05:30 PM"
                   value={editingAttendance.checkOut} 
@@ -308,6 +331,7 @@ export default function Dashboard({ session, data, onRefresh }: DashboardProps) 
                   <option value="Absent">Absent</option>
                   <option value="Half Day">Half Day</option>
                   <option value="Late">Late</option>
+                  <option value="Leave">Leave</option>
                 </select>
               </div>
               <button type="submit" className="btn btn-primary w-full justify-center py-4">
@@ -341,16 +365,16 @@ export default function Dashboard({ session, data, onRefresh }: DashboardProps) 
 
 function StatCard({ icon: Icon, title, value, color = "text-text-primary", isProgress = false, progress = 0 }: any) {
   return (
-    <div className="stat-card group">
+    <div className="glass-panel p-6 flex flex-col gap-3 relative overflow-hidden shadow-sm hover:shadow-md transition-all group">
       <div className="flex justify-between items-start">
-        <div className="title">{title}</div>
+        <div className="text-text-secondary text-sm font-sans font-medium">{title}</div>
         <div className="p-2 bg-brand-accent/10 rounded-lg group-hover:bg-brand-accent/20 transition-colors">
           <Icon className="w-4 h-4 text-brand-accent" />
         </div>
       </div>
-      <div className={`value ${color}`}>{value}</div>
+      <div className={`text-3xl font-serif font-semibold ${color}`}>{value}</div>
       {isProgress && (
-        <div className="w-full h-1 bg-bg-primary rounded-full mt-2 overflow-hidden">
+        <div className="w-full h-1 bg-gray-100 rounded-full mt-2 overflow-hidden">
           <div className="h-full bg-brand-accent transition-all duration-500" style={{ width: `${progress}%` }} />
         </div>
       )}

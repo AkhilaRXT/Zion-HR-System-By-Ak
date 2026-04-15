@@ -122,7 +122,7 @@ export default function Payroll({ session, data, onRefresh }: PayrollProps) {
     }
   };
 
-  const handleExportAdvances = () => {
+  const handleExportAdvances = async () => {
     const advancesToExport = data.advances
       .filter(a => hasPayrollPermission || a.empId === currentEmpId)
       .sort((a, b) => b.id - a.id);
@@ -143,10 +143,10 @@ export default function Payroll({ session, data, onRefresh }: PayrollProps) {
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Salary Advances');
     XLSX.writeFile(wb, `Salary_Advances_${new Date().toISOString().split('T')[0]}.xlsx`);
-    DataStore.logAction('Export Data', 'Exported Salary Advances to Excel', 'Advance');
+    await DataStore.logAction('Export Data', 'Exported Salary Advances to Excel', 'Advance');
   };
 
-  const handleExport = () => {
+  const handleExport = async () => {
     const sheetData = data.employees.map(emp => {
       const advTotal = data.advances
         .filter(a => {
@@ -202,7 +202,7 @@ export default function Payroll({ session, data, onRefresh }: PayrollProps) {
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Monthly Paysheet');
     XLSX.writeFile(wb, `Nexus_Payroll_${selectedMonth.replace(' ', '_')}.xlsx`);
-    DataStore.logAction('Export Data', `Exported Payroll for ${selectedMonth} to Excel`, 'Payroll' as any);
+    await DataStore.logAction('Export Data', `Exported Payroll for ${selectedMonth} to Excel`, 'Payroll' as any);
     
     // Show confirmation to finalize
     setTimeout(() => {
@@ -225,31 +225,31 @@ export default function Payroll({ session, data, onRefresh }: PayrollProps) {
     <div className="space-y-12">
       <div className="flex flex-col lg:flex-row gap-12 items-start">
         <div className="w-full lg:w-1/3 space-y-8">
-          <div className="bg-bg-secondary border border-border-accent p-6 md:p-10">
-            <h3 className="text-[11px] uppercase tracking-[3px] text-brand-accent mb-8 flex items-center gap-2">
+          <div className="glass-panel p-6 md:p-8">
+            <h3 className="text-sm font-semibold text-text-primary mb-6 flex items-center gap-2">
               Request Salary Advance
             </h3>
-            <form onSubmit={handleAdvanceSubmit} className="space-y-6">
+            <form onSubmit={handleAdvanceSubmit} className="space-y-5">
               <div className="form-group">
-                <label className="text-[10px] uppercase tracking-[2px] text-text-secondary mb-2 block">Amount (LKR)</label>
+                <label className="text-xs font-medium text-text-secondary mb-2 block">Amount (LKR)</label>
                 <input 
                   type="number" className="form-control" required min="1"
                   value={newAdvance.amount || ''} onChange={e => setNewAdvance({...newAdvance, amount: Number(e.target.value)})}
                 />
               </div>
               <div className="form-group">
-                <label className="text-[10px] uppercase tracking-[2px] text-text-secondary mb-2 block">Reason</label>
+                <label className="text-xs font-medium text-text-secondary mb-2 block">Reason</label>
                 <input 
                   type="text" className="form-control" required 
                   value={newAdvance.reason} onChange={e => setNewAdvance({...newAdvance, reason: e.target.value})}
                 />
               </div>
               <div className="form-group">
-                <label className="text-[10px] uppercase tracking-[2px] text-text-secondary mb-2 block">Attachment (PDF/Image, max 700KB)</label>
+                <label className="text-xs font-medium text-text-secondary mb-2 block">Attachment (PDF/Image, max 700KB)</label>
                 <input 
                   type="file" 
                   accept=".pdf,image/*"
-                  className="form-control file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-[10px] file:uppercase file:tracking-[1px] file:bg-brand-accent/10 file:text-brand-accent hover:file:bg-brand-accent/20"
+                  className="form-control file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-xs file:font-medium file:bg-brand-accent file:text-white hover:file:bg-blue-700"
                   onChange={handleAdvanceFileChange}
                 />
               </div>
@@ -258,17 +258,17 @@ export default function Payroll({ session, data, onRefresh }: PayrollProps) {
           </div>
 
           {hasPayrollPermission && (
-            <div className="bg-bg-secondary border border-border-accent p-10 space-y-8">
+            <div className="glass-panel p-8 space-y-6">
               <div>
-                <h3 className="text-[11px] uppercase tracking-[3px] text-brand-accent mb-2">
+                <h3 className="text-sm font-semibold text-text-primary mb-1">
                   Paysheet Generator
                 </h3>
-                <p className="text-[10px] text-text-secondary uppercase tracking-[1px]">Calculates net salary for all employees</p>
+                <p className="text-xs text-text-secondary font-medium">Calculates net salary for all employees</p>
               </div>
 
-              <div className="space-y-6">
+              <div className="space-y-5">
                 <div className="form-group">
-                  <label className="text-[10px] uppercase tracking-[2px] text-text-secondary mb-2 block">Select Month</label>
+                  <label className="text-xs font-medium text-text-secondary mb-2 block">Select Month</label>
                   <input 
                     type="month" className="form-control"
                     onChange={e => {
@@ -278,9 +278,9 @@ export default function Payroll({ session, data, onRefresh }: PayrollProps) {
                   />
                 </div>
 
-                <div className="space-y-4 border-t border-border-accent pt-6">
-                  <label className="text-[10px] uppercase tracking-[2px] text-brand-accent block mb-4">Include in this Payment</label>
-                  <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-4 border-t border-border-accent pt-5">
+                  <label className="text-xs font-semibold text-text-primary block mb-3">Include in this Payment</label>
+                  <div className="grid grid-cols-1 gap-3">
                     {[
                       { id: 'baseSalary', label: 'Basic Salary' },
                       { id: 'performanceAllowance', label: 'Performance' },
@@ -292,14 +292,14 @@ export default function Payroll({ session, data, onRefresh }: PayrollProps) {
                       { id: 'deductions', label: 'Deductions (Advances/Loans)' },
                       { id: 'epf', label: 'EPF Deduction' }
                     ].map(comp => (
-                      <label key={comp.id} className="flex items-center gap-2 cursor-pointer group">
+                      <label key={comp.id} className="flex items-center gap-3 cursor-pointer group">
                         <input 
                           type="checkbox" 
-                          className="w-3 h-3 accent-brand-accent"
+                          className="w-4 h-4 accent-brand-accent"
                           checked={(payComponents as any)[comp.id]}
                           onChange={e => setPayComponents({...payComponents, [comp.id]: e.target.checked})}
                         />
-                        <span className="text-[9px] uppercase tracking-[1px] text-text-secondary group-hover:text-text-primary transition-colors">
+                        <span className="text-xs font-medium text-text-secondary group-hover:text-text-primary transition-colors">
                           {comp.label}
                         </span>
                       </label>
@@ -308,8 +308,8 @@ export default function Payroll({ session, data, onRefresh }: PayrollProps) {
                 </div>
 
                 {payComponents.epf && (
-                  <div className="form-group animate-in fade-in slide-in-from-top-2 border-t border-border-accent pt-6">
-                    <label className="text-[10px] uppercase tracking-[2px] text-text-secondary mb-2 block">EPF Percentage (%)</label>
+                  <div className="form-group animate-in fade-in slide-in-from-top-2 border-t border-border-accent pt-5">
+                    <label className="text-xs font-medium text-text-secondary mb-2 block">EPF Percentage (%)</label>
                     <input 
                       type="number" className="form-control"
                       value={epfPercentage}
@@ -338,13 +338,13 @@ export default function Payroll({ session, data, onRefresh }: PayrollProps) {
 
         <div className="w-full lg:w-2/3 space-y-12">
           <div className="table-container">
-            <div className="flex justify-between items-center mb-8">
-              <h3 className="text-[11px] uppercase tracking-[3px] text-brand-accent">
+            <div className="p-6 border-b border-border-accent flex justify-between items-center">
+              <h3 className="text-sm font-semibold text-text-primary">
                 {hasPayrollPermission ? 'All Salary Advances' : 'My Salary Advances'}
               </h3>
               <button 
                 onClick={handleExportAdvances}
-                className="btn btn-outline py-2 px-4 h-auto"
+                className="btn btn-outline py-2 px-4 h-auto text-xs"
               >
                 <FileDown className="w-4 h-4" />
                 Export
@@ -400,26 +400,26 @@ export default function Payroll({ session, data, onRefresh }: PayrollProps) {
 
                     return (
                       <tr key={a.id}>
-                        <td className="font-serif text-text-secondary text-[11px]">{a.date}</td>
+                        <td className="font-mono text-sm text-text-secondary">{a.date}</td>
                         <td>
-                          <div className="uppercase tracking-[1px] text-[12px] font-medium">{emp?.name || a.empId}</div>
-                          <div className="text-[10px] text-text-secondary uppercase tracking-[1px] mt-1 flex items-center gap-2">
+                          <div className="font-medium text-text-primary">{emp?.name || a.empId}</div>
+                          <div className="text-xs text-text-secondary font-medium mt-1 flex items-center gap-2">
                             {a.reason}
                             {a.attachment && (
-                              <a href={a.attachment} download={`Advance_Request_${a.empId}.pdf`} className="text-brand-accent hover:text-brand-secondary flex items-center gap-1" title="View Attachment">
+                              <a href={a.attachment} download={`Advance_Request_${a.empId}.pdf`} className="text-brand-accent hover:text-blue-700 flex items-center gap-1" title="View Attachment">
                                 <Paperclip className="w-3 h-3" />
                               </a>
                             )}
                           </div>
                           {hasPayrollPermission && emp && (
                             <div className="mt-2">
-                              <span className="text-[9px] px-2 py-1 bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 rounded uppercase tracking-[1px] font-bold">
+                              <span className="text-xs px-2 py-1 bg-emerald-50 text-emerald-600 rounded-md font-semibold">
                                 Est. Net: LKR {netSalary.toLocaleString()}
                               </span>
                             </div>
                           )}
                         </td>
-                        <td className="font-serif text-brand-accent">LKR {a.amount.toLocaleString()}</td>
+                        <td className="font-mono text-sm text-brand-accent font-semibold">LKR {a.amount.toLocaleString()}</td>
                         <td>
                           <div className="flex flex-col gap-1">
                             <span className={`badge ${statusCls}`}>{a.status}</span>
@@ -449,10 +449,12 @@ export default function Payroll({ session, data, onRefresh }: PayrollProps) {
 
           {isAdmin && showPaysheet && (
             <div className="table-container animate-in fade-in slide-in-from-bottom-4 duration-500">
-              <h3 className="text-[11px] uppercase tracking-[3px] text-brand-accent mb-8 flex items-center justify-between">
-                Generated Paysheet
-                <span className="text-text-secondary font-normal ml-4">— {selectedMonth}</span>
-              </h3>
+              <div className="p-6 border-b border-border-accent flex items-center justify-between">
+                <h3 className="text-sm font-semibold text-text-primary">
+                  Generated Paysheet
+                  <span className="text-text-secondary font-normal ml-2">— {selectedMonth}</span>
+                </h3>
+              </div>
               <table>
                 <thead>
                   <tr>
@@ -492,10 +494,10 @@ export default function Payroll({ session, data, onRefresh }: PayrollProps) {
 
                     return (
                       <tr key={emp.id}>
-                        <td className="font-serif text-brand-accent">{emp.id}</td>
-                        <td className="uppercase tracking-[1px] text-[12px]">{emp.name}</td>
-                        <td className="text-[11px] text-text-secondary">LKR {totalEarnings.toLocaleString()}</td>
-                        <td className="font-serif text-text-primary">LKR {net.toLocaleString()}</td>
+                        <td className="font-mono text-sm text-brand-accent">{emp.id}</td>
+                        <td className="font-medium text-text-primary">{emp.name}</td>
+                        <td className="text-xs text-text-secondary">LKR {totalEarnings.toLocaleString()}</td>
+                        <td className="font-mono text-sm text-text-primary font-semibold">LKR {net.toLocaleString()}</td>
                         <td>
                           <button 
                             onClick={() => printPayAdvice(

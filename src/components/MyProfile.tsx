@@ -86,12 +86,17 @@ export default function MyProfile({ session, data, onRefresh }: MyProfileProps) 
   const advTotal = data.advances
     .filter(a => {
       const advanceMonth = new Date(a.date).toLocaleString('default', { month: 'long', year: 'numeric' });
-      return a.empId === emp.id && a.status === 'Approved' && advanceMonth === currentMonth;
+      return a.empId === emp.id && a.status === 'Approved' && !a.isPaid && advanceMonth === currentMonth;
     })
     .reduce((s, a) => s + a.amount, 0);
   
-  const epf = emp.hasEPF ? (emp.baseSalary || 0) * 0.08 : 0;
-  const totalDeductions = advTotal + (emp.bikeInstallment || 0) + (emp.staffLoan || 0) + epf;
+  const isAlreadyFinalized = data.paidDeductions?.[emp.id]?.includes(currentMonth);
+
+  const epf = (emp.hasEPF && !isAlreadyFinalized) ? (emp.baseSalary || 0) * 0.08 : 0;
+  const bikeInstallment = !isAlreadyFinalized ? (emp.bikeInstallment || 0) : 0;
+  const staffLoan = !isAlreadyFinalized ? (emp.staffLoan || 0) : 0;
+
+  const totalDeductions = advTotal + bikeInstallment + staffLoan + epf;
   
   const gross = (emp.baseSalary || 0) + (emp.travelingAllowance || 0) + (emp.vehicleAllowance || 0) +
                 (emp.performanceAllowance || 0) + petrolLKR + (emp.attendanceBonus || 0) + (emp.overtime || 0);
@@ -99,19 +104,19 @@ export default function MyProfile({ session, data, onRefresh }: MyProfileProps) 
 
   return (
     <div className="max-w-4xl mx-auto space-y-12">
-      <div className="bg-bg-secondary border border-border-accent p-12">
-        <div className="flex flex-col md:flex-row gap-12 items-center md:items-start">
+      <div className="glass-panel p-10">
+        <div className="flex flex-col md:flex-row gap-10 items-center md:items-start">
           <div 
             onClick={handlePhotoClick}
-            className="w-40 h-40 bg-bg-primary border border-border-accent flex items-center justify-center relative group cursor-pointer overflow-hidden rounded-full shadow-2xl"
+            className="w-32 h-32 bg-bg-primary border border-border-accent flex items-center justify-center relative group cursor-pointer overflow-hidden rounded-full shadow-lg"
           >
             {emp.profilePic ? (
               <img src={emp.profilePic} alt={emp.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
             ) : (
-              <User className="w-20 h-20 text-brand-accent/50" />
+              <User className="w-16 h-16 text-brand-accent/50" />
             )}
             <div className="absolute inset-0 bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-              <Camera className="w-8 h-8 text-white" />
+              <Camera className="w-6 h-6 text-white" />
             </div>
             <input 
               type="file" 
@@ -122,135 +127,138 @@ export default function MyProfile({ session, data, onRefresh }: MyProfileProps) 
             />
           </div>
           <div className="flex-1 text-center md:text-left">
-            <h3 className="text-[24px] font-serif text-text-primary mb-2">{emp.name}</h3>
-            <p className="text-[12px] uppercase tracking-[3px] text-brand-accent mb-6">{emp.role}</p>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <h3 className="text-2xl font-bold text-text-primary mb-1">{emp.name}</h3>
+            <p className="text-sm font-semibold text-brand-accent mb-6">{emp.role}</p>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div className="space-y-1">
-                <p className="text-[9px] uppercase tracking-[1px] text-text-secondary">Employee ID</p>
-                <p className="text-[14px] font-serif text-text-primary">{emp.id}</p>
+                <p className="text-xs font-medium text-text-secondary">Employee ID</p>
+                <p className="text-sm font-semibold text-text-primary">{emp.id}</p>
               </div>
               <div className="space-y-1">
-                <p className="text-[9px] uppercase tracking-[1px] text-text-secondary">Department</p>
-                <p className="text-[14px] font-serif text-text-primary">{emp.department}</p>
+                <p className="text-xs font-medium text-text-secondary">Department</p>
+                <p className="text-sm font-semibold text-text-primary">{emp.department}</p>
               </div>
               <div className="space-y-1">
-                <p className="text-[9px] uppercase tracking-[1px] text-text-secondary">Branch</p>
-                <p className="text-[14px] font-serif text-text-primary">{emp.branch}</p>
+                <p className="text-xs font-medium text-text-secondary">Branch</p>
+                <p className="text-sm font-semibold text-text-primary">{emp.branch}</p>
               </div>
             </div>
           </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
-        <div className="bg-bg-secondary border border-border-accent p-10">
-          <h4 className="text-[11px] uppercase tracking-[3px] text-brand-accent mb-8 flex items-center gap-2">
-            <Wallet className="w-4 h-4" /> Salary Breakdown
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+        <div className="glass-panel p-8">
+          <h4 className="text-sm font-semibold text-text-primary mb-6 flex items-center gap-2">
+            <Wallet className="w-4 h-4 text-brand-accent" /> Salary Breakdown
           </h4>
-          <div className="space-y-6">
+          <div className="space-y-5">
             <div className="space-y-3">
-              <p className="text-[9px] uppercase tracking-[2px] text-text-secondary mb-4">Earnings</p>
-              <div className="flex justify-between items-center text-[13px]">
-                <span className="text-text-secondary">Basic Salary</span>
-                <span className="font-serif text-text-primary">LKR {emp.baseSalary.toLocaleString()}</span>
+              <p className="text-xs font-bold text-text-secondary uppercase tracking-wider mb-2">Earnings</p>
+              <div className="flex justify-between items-center text-sm">
+                <span className="text-text-secondary font-medium">Basic Salary</span>
+                <span className="font-mono text-text-primary font-semibold">LKR {emp.baseSalary.toLocaleString()}</span>
               </div>
-              <div className="flex justify-between items-center text-[13px]">
-                <span className="text-text-secondary">Allowances (Fuel/Travel/Veh)</span>
-                <span className="font-serif text-text-primary">LKR {(petrolLKR + (emp.travelingAllowance || 0) + (emp.vehicleAllowance || 0)).toLocaleString()}</span>
+              <div className="flex justify-between items-center text-sm">
+                <span className="text-text-secondary font-medium">Allowances</span>
+                <span className="font-mono text-text-primary font-semibold">LKR {(petrolLKR + (emp.travelingAllowance || 0) + (emp.vehicleAllowance || 0)).toLocaleString()}</span>
               </div>
               {(emp.performanceAllowance || 0) > 0 && (
-                <div className="flex justify-between items-center text-[13px]">
-                  <span className="text-text-secondary">Performance Bonus</span>
-                  <span className="font-serif text-text-primary">LKR {emp.performanceAllowance.toLocaleString()}</span>
-                </div>
-              )}
-              {(emp.attendanceBonus || 0) > 0 && (
-                <div className="flex justify-between items-center text-[13px]">
-                  <span className="text-text-secondary">Attendance Bonus</span>
-                  <span className="font-serif text-text-primary">LKR {emp.attendanceBonus.toLocaleString()}</span>
-                </div>
-              )}
-              {(emp.overtime || 0) > 0 && (
-                <div className="flex justify-between items-center text-[13px]">
-                  <span className="text-text-secondary">Overtime</span>
-                  <span className="font-serif text-text-primary">LKR {emp.overtime.toLocaleString()}</span>
+                <div className="flex justify-between items-center text-sm">
+                  <span className="text-text-secondary font-medium">Performance Bonus</span>
+                  <span className="font-mono text-text-primary font-semibold">LKR {emp.performanceAllowance.toLocaleString()}</span>
                 </div>
               )}
             </div>
 
-            <div className="space-y-3 pt-4 border-t border-border-accent/30">
-              <p className="text-[9px] uppercase tracking-[2px] text-text-secondary mb-4">Deductions</p>
-              <div className="flex justify-between items-center text-[13px]">
-                <span className="text-text-secondary">Salary Advances ({currentMonth})</span>
-                <span className="font-serif text-rose-400">- LKR {advTotal.toLocaleString()}</span>
+            <div className="space-y-3 pt-4 border-t border-border-accent">
+              <p className="text-xs font-bold text-text-secondary uppercase tracking-wider mb-2">Deductions</p>
+              <div className="flex justify-between items-center text-sm">
+                <span className="text-text-secondary font-medium">Salary Advances</span>
+                <span className="font-mono text-red-500 font-semibold">- LKR {advTotal.toLocaleString()}</span>
               </div>
               {emp.hasEPF && (
-                <div className="flex justify-between items-center text-[13px]">
-                  <span className="text-text-secondary">EPF (8%)</span>
-                  <span className="font-serif text-rose-400">- LKR {epf.toLocaleString()}</span>
+                <div className="flex justify-between items-center text-sm">
+                  <span className="text-text-secondary font-medium">EPF (8%)</span>
+                  <span className="font-mono text-red-500 font-semibold">- LKR {epf.toLocaleString()}</span>
                 </div>
               )}
-              {((emp.bikeInstallment || 0) + (emp.staffLoan || 0)) > 0 && (
-                <div className="flex justify-between items-center text-[13px]">
-                  <span className="text-text-secondary">Loans/Installments</span>
-                  <span className="font-serif text-rose-400">- LKR {((emp.bikeInstallment || 0) + (emp.staffLoan || 0)).toLocaleString()}</span>
+              {bikeInstallment > 0 && (
+                <div className="flex justify-between items-center text-sm">
+                  <span className="text-text-secondary font-medium">Bike Installment</span>
+                  <span className="font-mono text-red-500 font-semibold">- LKR {bikeInstallment.toLocaleString()}</span>
+                </div>
+              )}
+              {staffLoan > 0 && (
+                <div className="flex justify-between items-center text-sm">
+                  <span className="text-text-secondary font-medium">Staff Loan</span>
+                  <span className="font-mono text-red-500 font-semibold">- LKR {staffLoan.toLocaleString()}</span>
+                </div>
+              )}
+              {isAlreadyFinalized && (
+                <div className="mt-2 p-2 bg-green-50 border border-green-100 rounded text-[10px] text-green-700 font-medium text-center">
+                  Payroll finalized for this month. Recurring deductions are marked as paid.
                 </div>
               )}
             </div>
 
-            <div className="flex justify-between items-center pt-6 border-t border-border-accent">
-              <span className="text-[11px] uppercase tracking-[1px] text-brand-accent font-bold">Estimated Net</span>
-              <span className="text-[20px] font-serif text-brand-accent">LKR {netSalary.toLocaleString()}</span>
+            <div className="flex justify-between items-center pt-5 border-t border-border-accent">
+              <span className="text-sm font-bold text-brand-accent">Estimated Net</span>
+              <span className="text-xl font-bold text-brand-accent">LKR {netSalary.toLocaleString()}</span>
             </div>
           </div>
         </div>
 
-        <div className="bg-bg-secondary border border-border-accent p-10">
-          <h4 className="text-[11px] uppercase tracking-[3px] text-brand-accent mb-8 flex items-center gap-2">
-            <PlaneTakeoff className="w-4 h-4" /> Leave Balances
-          </h4>
-          <div className="space-y-6">
-            <div className="flex justify-between items-center border-b border-border-accent pb-4">
-              <span className="text-[11px] uppercase tracking-[1px] text-text-secondary">Annual</span>
-              <span className="font-serif text-text-primary">{balances.annual} days</span>
-            </div>
-            <div className="flex justify-between items-center border-b border-border-accent pb-4">
-              <span className="text-[11px] uppercase tracking-[1px] text-text-secondary">Casual</span>
-              <span className="font-serif text-text-primary">{balances.casual} days</span>
-            </div>
-            <div className="flex justify-between items-center border-b border-border-accent pb-4">
-              <span className="text-[11px] uppercase tracking-[1px] text-text-secondary">Sick</span>
-              <span className="font-serif text-text-primary">{balances.sick} days</span>
+        <div className="space-y-8">
+          <div className="glass-panel p-8">
+            <h4 className="text-sm font-semibold text-text-primary mb-6 flex items-center gap-2">
+              <PlaneTakeoff className="w-4 h-4 text-brand-accent" /> Leave Balances
+            </h4>
+            <div className="grid grid-cols-3 gap-4">
+              <div className="text-center p-3 bg-gray-50 rounded-xl">
+                <p className="text-xs font-medium text-text-secondary mb-1">Annual</p>
+                <p className="text-lg font-bold text-text-primary">{balances.annual}</p>
+              </div>
+              <div className="text-center p-3 bg-gray-50 rounded-xl">
+                <p className="text-xs font-medium text-text-secondary mb-1">Casual</p>
+                <p className="text-lg font-bold text-text-primary">{balances.casual}</p>
+              </div>
+              <div className="text-center p-3 bg-gray-50 rounded-xl">
+                <p className="text-xs font-medium text-text-secondary mb-1">Sick</p>
+                <p className="text-lg font-bold text-text-primary">{balances.sick}</p>
+              </div>
             </div>
           </div>
-        </div>
 
-        <div className="bg-bg-secondary border border-border-accent p-10">
-          <h4 className="text-[11px] uppercase tracking-[3px] text-brand-accent mb-8 flex items-center gap-2">
-            <Landmark className="w-4 h-4" /> Bank Details
-          </h4>
-          <div className="space-y-6">
-            <div className="flex justify-between items-center border-b border-border-accent pb-4">
-              <span className="text-[11px] uppercase tracking-[1px] text-text-secondary">Bank Name</span>
-              <span className="font-serif text-text-primary">{emp.bankName || 'Not Set'}</span>
-            </div>
-            <div className="flex justify-between items-center border-b border-border-accent pb-4">
-              <span className="text-[11px] uppercase tracking-[1px] text-text-secondary">Branch</span>
-              <span className="font-serif text-text-primary">{emp.bankBranch || 'Not Set'}</span>
-            </div>
-            <div className="flex justify-between items-center border-b border-border-accent pb-4">
-              <span className="text-[11px] uppercase tracking-[1px] text-text-secondary">Account No</span>
-              <span className="font-serif text-text-primary">{emp.accountNo || 'Not Set'}</span>
+          <div className="glass-panel p-8">
+            <h4 className="text-sm font-semibold text-text-primary mb-6 flex items-center gap-2">
+              <Landmark className="w-4 h-4 text-brand-accent" /> Bank Details
+            </h4>
+            <div className="space-y-4">
+              <div className="flex justify-between items-center text-sm">
+                <span className="text-text-secondary font-medium">Bank Name</span>
+                <span className="font-semibold text-text-primary">{emp.bankName || 'Not Set'}</span>
+              </div>
+              <div className="flex justify-between items-center text-sm">
+                <span className="text-text-secondary font-medium">Branch</span>
+                <span className="font-semibold text-text-primary">{emp.bankBranch || 'Not Set'}</span>
+              </div>
+              <div className="flex justify-between items-center text-sm">
+                <span className="text-text-secondary font-medium">Account No</span>
+                <span className="font-mono font-semibold text-text-primary">{emp.accountNo || 'Not Set'}</span>
+              </div>
             </div>
           </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
         <div className="table-container">
-          <h4 className="text-[11px] uppercase tracking-[3px] text-brand-accent mb-8 flex items-center gap-2">
-            <CalendarCheck className="w-4 h-4" /> Recent Attendance
-          </h4>
+          <div className="p-6 border-b border-border-accent">
+            <h4 className="text-sm font-semibold text-text-primary flex items-center gap-2">
+              <CalendarCheck className="w-4 h-4 text-brand-accent" /> Recent Attendance
+            </h4>
+          </div>
           <table>
             <thead>
               <tr>
@@ -262,47 +270,47 @@ export default function MyProfile({ session, data, onRefresh }: MyProfileProps) 
             <tbody>
               {myAttendance.map(a => (
                 <tr key={a.id}>
-                  <td className="font-serif text-text-secondary">{a.date}</td>
+                  <td className="font-mono text-sm text-text-secondary">{a.date}</td>
                   <td><span className="badge badge-success">Present</span></td>
-                  <td className="font-serif">{a.checkIn}</td>
+                  <td className="font-mono text-sm">{a.checkIn}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
 
-        <div className="bg-bg-secondary border border-border-accent p-10">
-          <h4 className="text-[11px] uppercase tracking-[3px] text-brand-accent mb-8 flex items-center gap-2">
-            <PlaneTakeoff className="w-4 h-4" /> Pending Requests
+        <div className="glass-panel p-8">
+          <h4 className="text-sm font-semibold text-text-primary mb-6 flex items-center gap-2">
+            <PlaneTakeoff className="w-4 h-4 text-brand-accent" /> Pending Requests
           </h4>
-          <div className="space-y-6">
+          <div className="space-y-4">
             {pendingLeaves.length === 0 && pendingAdvances.length === 0 && pendingCashRequests.length === 0 ? (
-              <p className="text-[10px] text-text-secondary uppercase tracking-[1px] text-center py-4">No pending requests</p>
+              <p className="text-xs text-text-secondary font-medium text-center py-6">No pending requests</p>
             ) : (
               <>
                 {pendingLeaves.map(l => (
-                  <div key={l.id} className="flex justify-between items-center border-b border-border-accent pb-4">
+                  <div key={l.id} className="flex justify-between items-center p-3 bg-gray-50 rounded-xl">
                     <div>
-                      <span className="text-[11px] uppercase tracking-[1px] text-text-primary block">{l.type} Leave</span>
-                      <span className="text-[9px] text-text-secondary uppercase tracking-[1px]">{l.from} → {l.to}</span>
+                      <span className="text-sm font-semibold text-text-primary block">{l.type} Leave</span>
+                      <span className="text-xs text-text-secondary font-medium">{l.from} → {l.to}</span>
                     </div>
                     <span className="badge badge-warning">Pending</span>
                   </div>
                 ))}
                 {pendingAdvances.map(a => (
-                  <div key={a.id} className="flex justify-between items-center border-b border-border-accent pb-4">
+                  <div key={a.id} className="flex justify-between items-center p-3 bg-gray-50 rounded-xl">
                     <div>
-                      <span className="text-[11px] uppercase tracking-[1px] text-text-primary block">Salary Advance</span>
-                      <span className="text-[9px] text-text-secondary uppercase tracking-[1px]">LKR {a.amount.toLocaleString()}</span>
+                      <span className="text-sm font-semibold text-text-primary block">Salary Advance</span>
+                      <span className="text-xs text-text-secondary font-medium">LKR {a.amount.toLocaleString()}</span>
                     </div>
                     <span className="badge badge-warning">Pending</span>
                   </div>
                 ))}
                 {pendingCashRequests.map(r => (
-                  <div key={r.id} className="flex justify-between items-center border-b border-border-accent pb-4">
+                  <div key={r.id} className="flex justify-between items-center p-3 bg-gray-50 rounded-xl">
                     <div>
-                      <span className="text-[11px] uppercase tracking-[1px] text-text-primary block">Cash Request: {r.category}</span>
-                      <span className="text-[9px] text-text-secondary uppercase tracking-[1px]">LKR {r.amount.toLocaleString()}</span>
+                      <span className="text-sm font-semibold text-text-primary block">Cash Request: {r.category}</span>
+                      <span className="text-xs text-text-secondary font-medium">LKR {r.amount.toLocaleString()}</span>
                     </div>
                     <span className="badge badge-warning">Pending</span>
                   </div>
@@ -314,7 +322,9 @@ export default function MyProfile({ session, data, onRefresh }: MyProfileProps) 
       </div>
 
       <div className="table-container">
-        <h4 className="text-[11px] uppercase tracking-[3px] text-brand-accent mb-8">Recent Request History</h4>
+        <div className="p-6 border-b border-border-accent">
+          <h4 className="text-sm font-semibold text-text-primary">Recent Request History</h4>
+        </div>
         <table>
           <thead>
             <tr>
@@ -328,8 +338,8 @@ export default function MyProfile({ session, data, onRefresh }: MyProfileProps) 
               const statusCls = item.status === 'Approved' ? 'badge-success' : 'badge-danger';
               return (
                 <tr key={item.id}>
-                  <td className="text-[11px] uppercase tracking-[1px] font-bold">{item.typeCategory}</td>
-                  <td className="text-[11px] text-text-secondary">
+                  <td className="text-xs font-bold text-text-primary uppercase tracking-wider">{item.typeCategory}</td>
+                  <td className="text-sm text-text-secondary font-medium">
                     {item.typeCategory === 'Leave' ? `${item.type} (${item.from} to ${item.to})` : 
                      item.typeCategory === 'Advance' ? `LKR ${item.amount.toLocaleString()} - ${item.reason}` :
                      `LKR ${item.amount.toLocaleString()} - ${item.originalCategory}`}
@@ -340,7 +350,7 @@ export default function MyProfile({ session, data, onRefresh }: MyProfileProps) 
             })}
             {recentHistory.length === 0 && (
               <tr>
-                <td colSpan={3} className="text-center py-8 text-text-secondary uppercase tracking-[1px] text-[10px]">No history available</td>
+                <td colSpan={3} className="text-center py-8 text-text-secondary font-medium text-xs">No history available</td>
               </tr>
             )}
           </tbody>

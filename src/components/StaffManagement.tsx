@@ -466,10 +466,12 @@ export default function StaffManagement({ session, data, onRefresh }: StaffManag
           </div>
 
           <div className="table-container">
-            <h3 className="text-[11px] uppercase tracking-[3px] text-brand-accent mb-8 flex items-center justify-between">
-              Staff Roster
-              <span className="text-[10px] font-normal text-text-secondary">{filteredEmployees.length} members</span>
-            </h3>
+            <div className="p-6 border-b border-border-accent flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-text-primary">
+                Staff Roster
+              </h3>
+              <span className="text-xs font-medium text-text-secondary">{filteredEmployees.length} members</span>
+            </div>
             <table>
               <thead>
                 <tr>
@@ -491,24 +493,24 @@ export default function StaffManagement({ session, data, onRefresh }: StaffManag
                   const gross = (emp.baseSalary || 0) + (emp.travelingAllowance || 0) + (emp.vehicleAllowance || 0) + (emp.performanceAllowance || 0) + petrolLKR + (emp.attendanceBonus || 0) + (emp.overtime || 0);
                   return (
                     <tr key={emp.id}>
-                      <td className="font-serif text-brand-accent">
+                      <td>
                         <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 bg-bg-primary border border-border-accent flex items-center justify-center overflow-hidden rounded-full shadow-inner">
+                          <div className="w-10 h-10 bg-gray-100 border border-border-accent flex items-center justify-center overflow-hidden rounded-full shadow-sm">
                             {emp.profilePic ? (
                               <img src={emp.profilePic} alt={emp.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                             ) : (
                               <User className="w-5 h-5 text-text-secondary" />
                             )}
                           </div>
-                          <span className="font-mono text-[11px] tracking-wider">{emp.id}</span>
+                          <span className="font-mono text-sm text-brand-accent">{emp.id}</span>
                         </div>
                       </td>
-                      <td className="uppercase tracking-[1px] text-[12px]">{emp.name}</td>
-                      <td className="text-[12px] text-text-secondary">{emp.role}</td>
+                      <td className="font-medium text-text-primary">{emp.name}</td>
+                      <td className="text-sm text-text-secondary">{emp.role}</td>
                       <td><span className="badge badge-info">{emp.department}</span></td>
                       {isAdmin && (
                         <>
-                          <td className="font-serif text-text-primary">LKR {gross.toLocaleString()}</td>
+                          <td className="font-mono text-sm text-text-primary">LKR {gross.toLocaleString()}</td>
                           <td>
                             <div className="flex gap-4">
                               <button 

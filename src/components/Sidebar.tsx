@@ -98,14 +98,14 @@ export default function Sidebar({ session, data, activeRoute, onNavigate, onLogo
       )}
 
       <aside className={cn(
-        "fixed md:relative w-[280px] bg-bg-secondary flex flex-col p-8 z-[50] border-r border-border-accent h-screen transition-transform duration-300 md:translate-x-0",
+        "fixed md:relative w-[280px] bg-white/60 backdrop-blur-xl flex flex-col p-8 z-[50] border-r border-border-accent h-screen transition-transform duration-300 md:translate-x-0",
         isOpen ? "translate-x-0" : "-translate-x-full"
       )}>
         <div className="flex justify-between items-start mb-12">
           <div>
             <Logo src={data.settings.logo} />
-            <div className="font-serif text-2xl italic tracking-[2px] text-brand-accent mb-1">{data.settings.companyName}</div>
-            <p className="text-[9px] text-text-secondary uppercase tracking-[3px] font-sans">{data.settings.companySubtitle}</p>
+            <div className="font-serif text-2xl font-bold text-text-primary mb-1">{data.settings.companyName}</div>
+            <p className="text-xs text-text-secondary font-medium">{data.settings.companySubtitle}</p>
           </div>
           <button 
             onClick={onClose}
@@ -122,13 +122,13 @@ export default function Sidebar({ session, data, activeRoute, onNavigate, onLogo
               key={item.id}
               onClick={() => onNavigate(item.id)}
               className={cn(
-                "group px-4 py-3 cursor-pointer font-sans text-[11px] uppercase tracking-[1.5px] transition-all duration-300 flex items-center gap-3 rounded-lg",
+                "group px-4 py-3 cursor-pointer font-sans text-sm font-medium transition-all duration-200 flex items-center gap-3 rounded-lg",
                 activeRoute === item.id 
-                  ? "bg-brand-accent/10 text-brand-accent border border-brand-accent/20" 
-                  : "text-text-secondary hover:text-brand-accent hover:bg-brand-accent/5"
+                  ? "bg-brand-accent text-white shadow-sm" 
+                  : "text-text-secondary hover:text-text-primary hover:bg-gray-50"
               )}
             >
-              <item.icon className={cn("w-4 h-4", activeRoute === item.id ? "text-brand-accent" : "text-text-secondary group-hover:text-brand-accent")} />
+              <item.icon className={cn("w-5 h-5", activeRoute === item.id ? "text-white" : "text-text-secondary group-hover:text-brand-accent")} />
               <span className="flex-1">{item.label}</span>
               {activeRoute === item.id && <ChevronRight className="w-3 h-3" />}
             </li>
@@ -138,15 +138,15 @@ export default function Sidebar({ session, data, activeRoute, onNavigate, onLogo
 
       <div className="mt-auto pt-8 border-t border-border-accent flex items-center gap-4">
         <div className="flex-1 overflow-hidden">
-          <strong className="block text-[11px] uppercase tracking-[1px] truncate text-text-primary">{session.name}</strong>
-          <span className="text-[9px] text-text-secondary uppercase tracking-[2px]">{isAdmin ? 'Administrator' : 'Member'}</span>
+          <strong className="block text-sm font-semibold truncate text-text-primary">{session.name}</strong>
+          <span className="text-xs text-text-secondary">{isAdmin ? 'Administrator' : 'Member'}</span>
         </div>
         <button 
           onClick={onLogout}
           title="Logout"
-          className="p-2 text-text-secondary hover:text-brand-accent transition-colors"
+          className="p-2 text-text-secondary hover:text-red-500 transition-colors"
         >
-          <LogOut className="w-4 h-4" />
+          <LogOut className="w-5 h-5" />
         </button>
       </div>
     </aside>

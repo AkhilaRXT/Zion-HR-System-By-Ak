@@ -131,13 +131,13 @@ export default function CashRequests({ session, data }: CashRequestsProps) {
       )}
 
       <div className="flex flex-col lg:flex-row gap-12 items-start">
-        <div className="w-full lg:w-1/3 bg-bg-secondary border border-border-accent p-6 md:p-10">
-          <h3 className="text-[11px] uppercase tracking-[3px] text-brand-accent mb-8 flex items-center gap-2">
+        <div className="w-full lg:w-1/3 glass-panel p-6 md:p-8">
+          <h3 className="text-sm font-semibold text-text-primary mb-6 flex items-center gap-2">
             Request Cash
           </h3>
-          <form onSubmit={handleSubmit} className="space-y-6">
+          <form onSubmit={handleSubmit} className="space-y-5">
             <div className="form-group">
-              <label className="text-[10px] uppercase tracking-[2px] text-text-secondary mb-2 block">Category</label>
+              <label className="text-xs font-medium text-text-secondary mb-2 block">Category</label>
               <select 
                 className="form-control"
                 value={newRequest.category}
@@ -151,14 +151,14 @@ export default function CashRequests({ session, data }: CashRequestsProps) {
               </select>
             </div>
             <div className="form-group">
-              <label className="text-[10px] uppercase tracking-[2px] text-text-secondary mb-2 block">Amount (LKR)</label>
+              <label className="text-xs font-medium text-text-secondary mb-2 block">Amount (LKR)</label>
               <input 
                 type="number" className="form-control" required min="1"
                 value={newRequest.amount || ''} onChange={e => setNewRequest({...newRequest, amount: Number(e.target.value)})}
               />
             </div>
             <div className="form-group">
-              <label className="text-[10px] uppercase tracking-[2px] text-text-secondary mb-2 block">Description</label>
+              <label className="text-xs font-medium text-text-secondary mb-2 block">Description</label>
               <textarea 
                 className="form-control min-h-[80px]" required 
                 placeholder="Details about the request..."
@@ -166,11 +166,11 @@ export default function CashRequests({ session, data }: CashRequestsProps) {
               />
             </div>
             <div className="form-group">
-              <label className="text-[10px] uppercase tracking-[2px] text-text-secondary mb-2 block">Attachment (PDF/Image, max 700KB)</label>
+              <label className="text-xs font-medium text-text-secondary mb-2 block">Attachment (PDF/Image, max 700KB)</label>
               <input 
                 type="file" 
                 accept=".pdf,image/*"
-                className="form-control file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-[10px] file:uppercase file:tracking-[1px] file:bg-brand-accent/10 file:text-brand-accent hover:file:bg-brand-accent/20"
+                className="form-control file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-xs file:font-medium file:bg-brand-accent file:text-white hover:file:bg-blue-700"
                 onChange={handleFileChange}
               />
             </div>
@@ -182,26 +182,28 @@ export default function CashRequests({ session, data }: CashRequestsProps) {
 
         <div className="w-full lg:w-2/3 space-y-8">
           {canManageCash && (
-            <div className="flex flex-wrap gap-4">
-              <button onClick={() => exportToExcel('full')} className="btn btn-outline flex items-center gap-2 text-[10px]">
-                <FileDown className="w-3 h-3" /> Export Full History
+            <div className="flex flex-wrap gap-3">
+              <button onClick={() => exportToExcel('full')} className="btn btn-outline flex items-center gap-2 text-xs py-2 px-4 h-auto">
+                <FileDown className="w-3.5 h-3.5" /> Full History
               </button>
-              <button onClick={() => exportToExcel('monthly')} className="btn btn-outline flex items-center gap-2 text-[10px]">
-                <FileDown className="w-3 h-3" /> Export Monthly
+              <button onClick={() => exportToExcel('monthly')} className="btn btn-outline flex items-center gap-2 text-xs py-2 px-4 h-auto">
+                <FileDown className="w-3.5 h-3.5" /> Monthly
               </button>
-              <button onClick={() => exportToExcel('weekly')} className="btn btn-outline flex items-center gap-2 text-[10px]">
-                <FileDown className="w-3 h-3" /> Export Weekly
+              <button onClick={() => exportToExcel('weekly')} className="btn btn-outline flex items-center gap-2 text-xs py-2 px-4 h-auto">
+                <FileDown className="w-3.5 h-3.5" /> Weekly
               </button>
-              <button onClick={() => exportToExcel('by_member')} className="btn btn-outline flex items-center gap-2 text-[10px]">
-                <FileDown className="w-3 h-3" /> Export By Member
+              <button onClick={() => exportToExcel('by_member')} className="btn btn-outline flex items-center gap-2 text-xs py-2 px-4 h-auto">
+                <FileDown className="w-3.5 h-3.5" /> By Member
               </button>
             </div>
           )}
 
           <div className="table-container">
-            <h3 className="text-[11px] uppercase tracking-[3px] text-brand-accent mb-8">
-              {canManageCash ? 'All Cash Requests' : 'My Cash Requests'}
-            </h3>
+            <div className="p-6 border-b border-border-accent">
+              <h3 className="text-sm font-semibold text-text-primary">
+                {canManageCash ? 'All Cash Requests' : 'My Cash Requests'}
+              </h3>
+            </div>
             <table>
               <thead>
                 <tr>
@@ -220,20 +222,20 @@ export default function CashRequests({ session, data }: CashRequestsProps) {
                   
                   return (
                     <tr key={r.id}>
-                      <td className="font-serif text-text-secondary text-[11px]">{r.date}</td>
+                      <td className="font-mono text-sm text-text-secondary">{r.date}</td>
                       <td>
-                        <div className="uppercase tracking-[1px] text-[12px] font-medium">{emp?.name || r.empId}</div>
-                        <div className="text-[10px] text-text-secondary uppercase tracking-[1px] mt-1 flex items-center gap-2">
+                        <div className="font-medium text-text-primary">{emp?.name || r.empId}</div>
+                        <div className="text-xs text-text-secondary font-medium mt-1 flex items-center gap-2">
                           {r.description}
                           {r.attachment && (
-                            <a href={r.attachment} download={`Cash_Request_${r.empId}.pdf`} className="text-brand-accent hover:text-brand-secondary flex items-center gap-1" title="View Attachment">
+                            <a href={r.attachment} download={`Cash_Request_${r.empId}.pdf`} className="text-brand-accent hover:text-blue-700 flex items-center gap-1" title="View Attachment">
                               <Paperclip className="w-3 h-3" />
                             </a>
                           )}
                         </div>
                       </td>
-                      <td className="text-[11px] uppercase tracking-[1px] text-text-secondary">{r.category}</td>
-                      <td className="font-serif text-brand-accent">LKR {r.amount.toLocaleString()}</td>
+                      <td className="text-sm text-text-secondary">{r.category}</td>
+                      <td className="font-mono text-sm text-brand-accent font-semibold">LKR {r.amount.toLocaleString()}</td>
                       <td><span className={`badge ${statusCls}`}>{r.status}</span></td>
                       {canManageCash && (
                         <td>

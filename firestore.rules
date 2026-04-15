@@ -70,7 +70,7 @@ service cloud.firestore {
     }
 
     function isValidAttendance(data) {
-      return data.empId is string && data.date is string && data.status in ['Present', 'Absent', 'Late', 'Leave'];
+      return data.empId is string && data.date is string && data.status in ['Present', 'Absent', 'Late', 'Leave', 'Half Day'];
     }
 
     // ===============================================================
@@ -88,7 +88,7 @@ service cloud.firestore {
 
     match /attendance/{id} {
       allow read: if isAuthenticated() && (isOwner(resource.data.empId) || isAdmin());
-      allow create: if isAuthenticated() && (isOwner(request.resource.data.empId) || isAdmin());
+      allow create: if isAuthenticated() && (isOwner(request.resource.data.empId) || isAdmin()) && isValidAttendance(request.resource.data);
       allow update, delete: if isAdmin();
     }
 

@@ -33,7 +33,7 @@ export interface Attendance {
   id: number;
   empId: string;
   date: string;
-  status: 'Present' | 'Absent' | 'Half Day' | 'Late';
+  status: 'Present' | 'Absent' | 'Half Day' | 'Late' | 'Leave';
   checkIn: string;
   checkOut: string;
 }
@@ -111,6 +111,20 @@ export interface AppSettings {
     secondary: string;
     textPrimary: string;
     textSecondary: string;
+  };
+  backgroundBlobs?: {
+    enabled: boolean;
+    blur: number;
+    opacity: number;
+  };
+  loginHero?: {
+    titleLine1: string;
+    titleLine2: string;
+    stat1Value: string;
+    stat1Label: string;
+    stat2Value: string;
+    stat2Label: string;
+    backgroundImage?: string;
   };
 }
 

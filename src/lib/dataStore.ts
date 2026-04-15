@@ -111,6 +111,20 @@ const initialData: AppData = {
       secondary: '#10b981',
       textPrimary: '#f8fafc',
       textSecondary: '#94a3b8'
+    },
+    backgroundBlobs: {
+      enabled: true,
+      blur: 150,
+      opacity: 5
+    },
+    loginHero: {
+      titleLine1: 'Empowering Your',
+      titleLine2: 'Financial Future',
+      stat1Value: '100%',
+      stat1Label: 'Secure',
+      stat2Value: '24/7',
+      stat2Label: 'Access',
+      backgroundImage: 'https://images.unsplash.com/photo-1497366216548-37526070297c?q=80&w=2069&auto=format&fit=crop'
     }
   },
   auditLogs: [],
@@ -198,7 +212,7 @@ export const DataStore = {
   async logAction(action: string, details: string, type: AuditLog['type'], userOverride?: string) {
     const session = this.getSession();
     const log: AuditLog = {
-      id: Date.now(),
+      id: Date.now() + Math.floor(Math.random() * 1000),
       timestamp: new Date().toISOString(),
       user: userOverride || (session ? `${session.name} (${session.empId})` : 'System'),
       action,
@@ -294,6 +308,9 @@ export const DataStore = {
         // Fallback for master admin if record not found by email
         empId = 'EMP003';
         name = 'Master Administrator';
+      } else {
+        await this.logAction('Google Login Failed', `Unauthorized email: ${user.email}`, 'Auth', user.email || 'Unknown');
+        return { success: false, error: 'Unauthorized: Your Google account is not registered in the system.' };
       }
 
       const session: Session = {
@@ -471,20 +488,37 @@ export const DataStore = {
   async checkIn(empId: string, status: 'Present' | 'Late', displayTime: string) {
     const today = new Date();
     const dateStr = today.toISOString().split('T')[0];
-    const id = Date.now();
+    
     try {
       await this.ensureAuth();
-      await setDoc(doc(db, 'attendance', id.toString()), {
-        id,
-        empId,
-        date: dateStr,
-        status,
-        checkIn: displayTime,
-        checkOut: '--'
-      });
+      
+      // Check if record already exists for today
+      const q = query(collection(db, 'attendance'), where('empId', '==', empId), where('date', '==', dateStr));
+      const snap = await getDocs(q);
+      
+      if (!snap.empty) {
+        // Update existing record
+        const docRef = snap.docs[0].ref;
+        await updateDoc(docRef, {
+          status,
+          checkIn: displayTime,
+          checkOut: '--'
+        });
+      } else {
+        // Create new record
+        const id = Date.now();
+        await setDoc(doc(db, 'attendance', id.toString()), {
+          id,
+          empId,
+          date: dateStr,
+          status,
+          checkIn: displayTime,
+          checkOut: '--'
+        });
+      }
       await this.logAction('Attendance In', `Employee ${empId} marked as ${status} at ${displayTime}`, 'Attendance');
     } catch (error) {
-      handleFirestoreError(error, OperationType.CREATE, `attendance/${id}`);
+      handleFirestoreError(error, OperationType.WRITE, `attendance`);
     }
   },
 
@@ -516,6 +550,49 @@ export const DataStore = {
       const leaveData = leaveDoc.data() as LeaveRequest;
       
       await updateDoc(leaveRef, { status });
+
+      // If approved, create attendance records for each day in the range
+      if (status === 'Approved') {
+        const start = new Date(leaveData.from);
+        const end = new Date(leaveData.to);
+        const current = new Date(start);
+        
+        while (current <= end) {
+          const dateStr = current.toISOString().split('T')[0];
+          const attId = Date.now() + Math.floor(Math.random() * 1000);
+          
+          // Check if attendance already exists for this day/emp
+          const attQuery = query(
+            collection(db, 'attendance'), 
+            where('empId', '==', leaveData.empId), 
+            where('date', '==', dateStr)
+          );
+          const attSnap = await getDocs(attQuery);
+          
+          if (attSnap.empty) {
+            await setDoc(doc(db, 'attendance', attId.toString()), {
+              id: attId,
+              empId: leaveData.empId,
+              date: dateStr,
+              status: 'Leave',
+              checkIn: '--',
+              checkOut: '--'
+            });
+          } else {
+            const existingDoc = attSnap.docs[0];
+            await updateDoc(existingDoc.ref, { 
+              status: 'Leave', 
+              checkIn: '--', 
+              checkOut: '--' 
+            });
+          }
+          
+          current.setDate(current.getDate() + 1);
+          // Small delay to ensure unique IDs if loop is fast
+          await new Promise(resolve => setTimeout(resolve, 1));
+        }
+      }
+
       await this.logAction('Leave Decision', `${status} ${leaveData.type} leave for ${leaveData.empId} (${leaveData.from} to ${leaveData.to})`, 'Leave');
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, `leaves/${id}`);

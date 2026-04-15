@@ -192,13 +192,13 @@ export default function App() {
           <div className="absolute inset-0 border-4 border-brand-accent/30 rounded-full animate-ping" style={{ animationDuration: '2s' }} />
         </div>
         <div className="flex flex-col items-center gap-3">
-          <h2 className="text-text-primary font-serif text-2xl tracking-[6px] uppercase">{appData.settings.companyName || 'Zion HR'}</h2>
+          <h2 className="text-text-primary font-serif text-3xl font-bold">{appData.settings.companyName || 'Zion HR'}</h2>
           <div className="flex items-center gap-2">
-            <div className="w-1.5 h-1.5 bg-brand-accent rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-            <div className="w-1.5 h-1.5 bg-brand-accent rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-            <div className="w-1.5 h-1.5 bg-brand-accent rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+            <div className="w-2 h-2 bg-brand-accent rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+            <div className="w-2 h-2 bg-brand-accent rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+            <div className="w-2 h-2 bg-brand-accent rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
           </div>
-          <p className="text-text-secondary text-[10px] uppercase tracking-[3px] mt-2">Synchronizing with Cloud...</p>
+          <p className="text-text-secondary text-sm font-medium mt-2">Synchronizing with Cloud...</p>
         </div>
       </div>
     );
@@ -262,25 +262,44 @@ export default function App() {
   };
 
   const theme = appData.settings.theme;
-  const primaryColor = theme?.primary || '#6366f1';
-  const accentColor = theme?.accent || '#818cf8';
-  const bgColor = theme?.background || '#0f172a';
+  const primaryColor = theme?.primary || '#2563eb';
+  const accentColor = theme?.accent || '#e5e7eb';
+  const bgColor = theme?.background || '#f3f4f6';
   const secondaryColor = theme?.secondary || '#10b981';
-  const textPrimary = theme?.textPrimary || '#f8fafc';
-  const textSecondary = theme?.textSecondary || '#94a3b8';
+  const textPrimary = theme?.textPrimary || '#111827';
+  const textSecondary = theme?.textSecondary || '#6b7280';
+  const blobs = appData.settings.backgroundBlobs || { enabled: true, blur: 150, opacity: 5 };
 
   return (
-    <div className="app-container bg-bg-primary">
+    <div className="app-container bg-bg-primary relative overflow-hidden">
+      {/* Background Decorative Blobs */}
+      {blobs.enabled && (
+        <>
+          <div 
+            className="fixed top-[-10%] left-[-10%] w-[40%] h-[40%] bg-brand-accent rounded-full pointer-events-none z-0 transition-all duration-1000" 
+            style={{ filter: `blur(${blobs.blur}px)`, opacity: blobs.opacity / 100 }}
+          />
+          <div 
+            className="fixed bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-brand-secondary rounded-full pointer-events-none z-0 transition-all duration-1000" 
+            style={{ filter: `blur(${blobs.blur}px)`, opacity: blobs.opacity / 100 }}
+          />
+          <div 
+            className="fixed top-[20%] right-[10%] w-[30%] h-[30%] bg-blue-400 rounded-full pointer-events-none z-0 transition-all duration-1000" 
+            style={{ filter: `blur(${blobs.blur * 0.8}px)`, opacity: blobs.opacity / 100 }}
+          />
+        </>
+      )}
+
       <style>
         {`
           :root {
-            --brand-accent: ${primaryColor};
-            --brand-secondary: ${secondaryColor};
-            --border-accent: ${accentColor}4d;
-            --bg-primary: ${bgColor};
-            --bg-secondary: ${bgColor}ee;
-            --text-primary: ${textPrimary};
-            --text-secondary: ${textSecondary};
+            --color-brand-accent: ${primaryColor};
+            --color-brand-secondary: ${secondaryColor};
+            --color-border-accent: ${accentColor};
+            --color-bg-primary: ${bgColor};
+            --color-bg-secondary: #ffffff;
+            --color-text-primary: ${textPrimary};
+            --color-text-secondary: ${textSecondary};
           }
         `}
       </style>
@@ -298,19 +317,21 @@ export default function App() {
       />
       
       <main className="main-content">
-        <header className="px-6 md:px-12 py-6 md:py-10 flex justify-between items-center border-b border-border-accent mb-8 md:mb-12">
+        <header className="px-6 md:px-12 py-6 md:py-8 flex justify-between items-center border-b border-border-accent bg-white/50 backdrop-blur-md sticky top-0 z-30">
           <div className="flex items-center gap-4">
             <button 
               onClick={() => setIsSidebarOpen(true)}
-              className="md:hidden p-2 text-text-secondary hover:text-brand-accent"
+              className="md:hidden p-2 text-text-secondary hover:text-brand-accent transition-colors"
             >
               <Menu className="w-6 h-6" />
             </button>
-            <h1 className="font-serif text-2xl md:text-5xl font-normal text-text-primary">{getPageTitle()}</h1>
+            <h1 className="text-xl md:text-3xl font-bold text-text-primary tracking-tight">{getPageTitle()}</h1>
           </div>
-          <div className="hidden md:flex text-[11px] text-text-secondary uppercase tracking-[3px] items-center gap-3">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-            {currentTime.toLocaleDateString('en-GB')} &bull; {currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+          <div className="hidden md:flex text-xs font-bold text-text-secondary items-center gap-3 bg-gray-50 px-4 py-2 rounded-full border border-border-accent">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+            <span className="uppercase tracking-widest">{currentTime.toLocaleDateString('en-GB')}</span>
+            <span className="text-brand-accent">|</span>
+            <span className="font-mono">{currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
           </div>
         </header>
 
