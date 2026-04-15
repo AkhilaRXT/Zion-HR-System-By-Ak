@@ -144,8 +144,9 @@ export default function Login({ onLogin, data }: LoginProps) {
                 } else {
                   setError(result.error || 'Google login failed.');
                 }
-              } catch (err) {
-                setError('Google login failed.');
+              } catch (err: any) {
+                console.error('Login component error:', err);
+                setError(err.message || 'Google login failed.');
               } finally {
                 setIsLoading(false);
               }

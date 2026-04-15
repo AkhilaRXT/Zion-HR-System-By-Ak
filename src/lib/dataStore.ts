@@ -306,10 +306,11 @@ export const DataStore = {
 
       await this.logAction('Google Login', `User ${user.email} logged in via Google.`, 'Auth');
       return { success: true, session };
-    } catch (error) {
-      await this.logAction('Google Login Failed', error instanceof Error ? error.message : 'Unknown error', 'Auth');
+    } catch (error: any) {
+      const errorMessage = error instanceof Error ? error.message : (error?.message || 'Unknown error');
+      await this.logAction('Google Login Failed', errorMessage, 'Auth');
       console.error('Google Login Error:', error);
-      return { success: false, error: 'Failed to sign in with Google.' };
+      return { success: false, error: `Google Sign-In Error: ${errorMessage}` };
     }
   },
 
