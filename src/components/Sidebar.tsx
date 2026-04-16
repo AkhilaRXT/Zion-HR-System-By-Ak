@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Session, AppData } from '../types';
+import ConfirmModal from './ConfirmModal';
 import { 
   PieChart, 
   Users, 
@@ -53,6 +54,7 @@ function Logo({ src }: { src?: string }) {
 }
 
 export default function Sidebar({ session, data, activeRoute, onNavigate, onLogout, isOpen, onClose }: SidebarProps) {
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const isAdmin = session.isAdmin;
 
   const isMasterAdmin = session.email === "zioncommercialcreditampara@gmail.com";
@@ -151,7 +153,7 @@ export default function Sidebar({ session, data, activeRoute, onNavigate, onLogo
           <span className="text-xs text-text-secondary">{isAdmin ? 'Administrator' : 'Member'}</span>
         </div>
         <button 
-          onClick={onLogout}
+          onClick={() => setShowLogoutConfirm(true)}
           title="Logout"
           className="p-2 text-text-secondary hover:text-red-500 transition-colors"
         >
@@ -159,6 +161,15 @@ export default function Sidebar({ session, data, activeRoute, onNavigate, onLogo
         </button>
       </div>
     </aside>
+
+    <ConfirmModal 
+      isOpen={showLogoutConfirm}
+      title="Confirm Logout"
+      message="Are you sure you want to sign out of your account?"
+      onConfirm={onLogout}
+      onCancel={() => setShowLogoutConfirm(false)}
+      confirmText="Sign Out"
+    />
   </>
   );
 }

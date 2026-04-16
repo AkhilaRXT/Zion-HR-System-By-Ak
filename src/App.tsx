@@ -24,15 +24,21 @@ export default function App() {
   const [appData, setAppData] = useState<AppData>(DataStore.getData());
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [isAuthReady, setIsAuthReady] = useState(false);
 
   useEffect(() => {
     DataStore.init();
     const existing = DataStore.getSession();
     if (existing) setSession(existing);
 
+    const unsubAuth = auth.onAuthStateChanged((user) => {
+      setIsAuthReady(true);
+    });
+
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => {
       clearInterval(timer);
+      unsubAuth();
     };
   }, []);
 
@@ -59,7 +65,12 @@ export default function App() {
 
   useEffect(() => {
     if (!session) {
-      setIsLoading(false);
+      if (isAuthReady) setIsLoading(false);
+      return;
+    }
+    
+    if (!isAuthReady) {
+      setIsLoading(true);
       return;
     }
 
@@ -157,7 +168,7 @@ export default function App() {
       unsubscribers.forEach(unsub => unsub());
       clearTimeout(loadTimer);
     };
-  }, [session]);
+  }, [session, isAuthReady]);
 
   const refreshData = () => {
     // No longer needed with real-time sync, but keeping for compatibility
