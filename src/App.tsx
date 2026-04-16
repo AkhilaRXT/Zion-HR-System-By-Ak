@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import { DataStore } from './lib/dataStore';
 import { Session, AppData, Employee, Attendance, LeaveRequest, AdvanceRequest, Target, AuditLog, AppSettings, CashRequest } from './types';
 import { db, auth } from './lib/firebase';
@@ -29,22 +30,31 @@ export default function App() {
     const existing = DataStore.getSession();
     if (existing) setSession(existing);
 
-    const unsubAuth = auth.onAuthStateChanged((user) => {
-      if (user && user.email === "zioncommercialcreditampara@gmail.com") {
-        const current = DataStore.getSession();
-        if (current && !current.email) {
-          const updated = { ...current, email: user.email };
-          DataStore.setSession(updated);
-          setSession(updated);
-        }
-      }
-    });
-
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => {
       clearInterval(timer);
-      unsubAuth();
     };
+  }, []);
+
+  useEffect(() => {
+    // Always sync settings, even before login
+    const unsubSettings = onSnapshot(doc(db, 'settings', 'global'), (snap) => {
+      if (snap.exists()) {
+        const newSettings = snap.data() as AppSettings;
+        setAppData(prev => ({ ...prev, settings: newSettings }));
+        // Cache settings to localStorage to prevent theme flash on next load
+        try {
+          const raw = localStorage.getItem('zion_hr_data');
+          const localData = raw ? JSON.parse(raw) : DataStore.getData();
+          localData.settings = newSettings;
+          localStorage.setItem('zion_hr_data', JSON.stringify(localData));
+        } catch (e) {
+          console.warn('Failed to cache settings locally');
+        }
+      }
+    }, (err) => console.warn('Permission denied for settings'));
+
+    return () => unsubSettings();
   }, []);
 
   useEffect(() => {
@@ -139,15 +149,9 @@ export default function App() {
       });
     }
 
-    const unsubSettings = onSnapshot(doc(db, 'settings', 'global'), (snap) => {
-      if (snap.exists()) {
-        updatePart({ settings: snap.data() as AppSettings });
-      }
-    }, (err) => console.warn('Permission denied for settings'));
-    unsubscribers.push(unsubSettings);
-
-    // Initial loading check
-    const loadTimer = setTimeout(() => setIsLoading(false), 1500);
+    // Allow 800ms for initial collections to trigger their cached snapshots.
+    // Since we now cache settings and have no dummy data, this guarantees a smooth, flash-free transition.
+    const loadTimer = setTimeout(() => setIsLoading(false), 800);
 
     return () => {
       unsubscribers.forEach(unsub => unsub());
@@ -211,11 +215,16 @@ export default function App() {
   const renderView = () => {
     // Basic permission check for rendering
     const hasAccess = (id: string) => {
+      const isMasterAdmin = session.email === "zioncommercialcreditampara@gmail.com";
+      
+      // Specifically protect settings
+      if (id === 'settings') {
+        return isMasterAdmin;
+      }
+
       // Always accessible for everyone
       if (id === 'dashboard' || id === 'myprofile' || id === 'leave' || id === 'payroll' || id === 'cash_requests') return true;
       
-      // Master Admin (Google Login) gets everything
-      const isMasterAdmin = session.email === "zioncommercialcreditampara@gmail.com";
       if (isMasterAdmin) return true;
 
       // Regular members cannot see anything else
@@ -335,8 +344,18 @@ export default function App() {
           </div>
         </header>
 
-        <div className="px-6 md:px-12 pb-12">
-          {renderView()}
+        <div className="px-6 md:px-12 pb-12 overflow-x-hidden">
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={route}
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -15 }}
+              transition={{ duration: 0.25, ease: "easeOut" }}
+            >
+              {renderView()}
+            </motion.div>
+          </AnimatePresence>
         </div>
       </main>
     </div>

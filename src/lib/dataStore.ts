@@ -69,26 +69,14 @@ function handleFirestoreError(error: unknown, operationType: OperationType, path
 }
 
 const initialData: AppData = {
-  employees: [
-    { id: 'EMP001', name: 'Akila Madhusanka', email: 'akila@nexus.com', role: 'Loan Officer', department: 'Lending', branch: 'Colombo', baseSalary: 75000, travelingAllowance: 5000, vehicleAllowance: 0, performanceAllowance: 8000, petrolLitres: 7.5, attendanceBonus: 1500, overtime: 2000, bikeInstallment: 0, staffLoan: 0, bankName: 'Commercial Bank', bankBranch: 'Colombo 07', accountNo: '8001234567', hasEPF: true },
-    { id: 'EMP002', name: 'Sarah Jenkins', email: 'sarah@nexus.com', role: 'Recovery Agent', department: 'Collections', branch: 'Kandy', baseSalary: 65000, travelingAllowance: 4000, vehicleAllowance: 0, performanceAllowance: 5000, petrolLitres: 6.2, attendanceBonus: 1500, overtime: 0, bikeInstallment: 5000, staffLoan: 0, bankName: 'HNB', bankBranch: 'Kandy Central', accountNo: '9007654321', hasEPF: true },
-    { id: 'EMP003', name: 'Admin User', email: 'zioncommercialcreditampara@gmail.com', role: 'HR Manager', department: 'HR', branch: 'Head Office', baseSalary: 120000, travelingAllowance: 6000, vehicleAllowance: 10000, performanceAllowance: 15000, petrolLitres: 12.5, attendanceBonus: 0, overtime: 0, bikeInstallment: 0, staffLoan: 0, bankName: 'Sampath Bank', bankBranch: 'Head Office', accountNo: '1001122334', hasEPF: true }
-  ],
-  credentials: [
-    { empId: 'EMP003', username: 'admin', password: 'admin123', isAdmin: true },
-    { empId: 'EMP001', username: 'akila', password: 'pass123', isAdmin: false },
-    { empId: 'EMP002', username: 'sarah', password: 'pass123', isAdmin: false }
-  ],
+  employees: [],
+  credentials: [],
   attendance: [],
   leaves: [],
   targets: [],
   advances: [],
   cashRequests: [],
-  leaveBalances: {
-    'EMP001': { annual: 24, casual: 10, sick: 14 },
-    'EMP002': { annual: 24, casual: 10, sick: 14 },
-    'EMP003': { annual: 24, casual: 10, sick: 14 }
-  },
+  leaveBalances: {},
   settings: {
     companyName: 'Zion HR',
     companySubtitle: 'Human Resources',
@@ -357,6 +345,7 @@ export const DataStore = {
       this.logAction('Logout', `User ${session.name} (${session.empId}) logged out.`, 'Auth');
     }
     sessionStorage.removeItem(AUTH_KEY);
+    auth.signOut().catch(console.error);
   },
 
   async updateSettings(newSettings: AppSettings) {

@@ -157,12 +157,17 @@ export default function Dashboard({ session, data, onRefresh }: DashboardProps) 
           <>
             <StatCard 
               icon={CalendarDays} 
-              title="My Attendance" 
+              title="Today's Status" 
               value={myAttendance ? myAttendance.status : 'Absent'} 
               color={myAttendance ? 'text-emerald-500' : 'text-red-500'}
             />
+            <StatCard 
+              icon={LogIn} 
+              title="Clock In Time" 
+              value={myAttendance ? myAttendance.checkIn : '--:--'} 
+              color="text-brand-primary"
+            />
             <StatCard icon={MailWarning} title="My Pending Leaves" value={myPendingLeaves} color="text-brand-accent" />
-            <StatCard icon={HandCoins} title="My Approved Advances" value={myApprovedAdvances} />
             <StatCard icon={TrendingUp} title="Leave Balance" value={myBalance} />
           </>
         )}

@@ -425,8 +425,7 @@ export default function StaffManagement({ session, data, onRefresh }: StaffManag
                           { id: 'attendance', label: 'Attendance' },
                           { id: 'leave', label: 'Leave Management' },
                           { id: 'payroll', label: 'Payroll' },
-                          { id: 'cash_requests', label: 'Cash Requests' },
-                          { id: 'settings', label: 'Control Panel' }
+                          { id: 'cash_requests', label: 'Cash Requests' }
                         ].map(perm => (
                           <label key={perm.id} className="flex items-center gap-2 cursor-pointer group">
                             <input 
@@ -765,8 +764,7 @@ export default function StaffManagement({ session, data, onRefresh }: StaffManag
                             { id: 'attendance', label: 'Attendance' },
                             { id: 'leave', label: 'Leave Management' },
                             { id: 'payroll', label: 'Payroll' },
-                            { id: 'cash_requests', label: 'Cash Requests' },
-                            { id: 'settings', label: 'Control Panel' }
+                            { id: 'cash_requests', label: 'Cash Requests' }
                           ].map(perm => (
                             <label key={perm.id} className="flex items-center gap-2 cursor-pointer group">
                               <input 

@@ -55,24 +55,33 @@ function Logo({ src }: { src?: string }) {
 export default function Sidebar({ session, data, activeRoute, onNavigate, onLogout, isOpen, onClose }: SidebarProps) {
   const isAdmin = session.isAdmin;
 
+  const isMasterAdmin = session.email === "zioncommercialcreditampara@gmail.com";
+  const hasPayrollPerm = isAdmin && (isMasterAdmin || session.permissions?.includes('payroll'));
+  const hasLeavePerm = isAdmin && (isMasterAdmin || session.permissions?.includes('leave'));
+  const hasCashPerm = isAdmin && (isMasterAdmin || session.permissions?.includes('cash_requests'));
+
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: PieChart },
     { id: 'staff', label: 'Staff Mgmt', icon: Users },
     { id: 'attendance', label: 'Attendance', icon: CalendarCheck },
-    { id: 'leave', label: 'Leave Mgmt', icon: PlaneTakeoff },
-    { id: 'payroll', label: isAdmin ? 'Payroll' : 'Salary Advance', icon: FileText },
-    { id: 'cash_requests', label: 'Cash Requests', icon: FileText },
+    { id: 'leave', label: hasLeavePerm ? 'Leave Mgmt' : 'My Leaves', icon: PlaneTakeoff },
+    { id: 'payroll', label: hasPayrollPerm ? 'Payroll' : 'Salary Advance', icon: FileText },
+    { id: 'cash_requests', label: hasCashPerm ? 'Cash Requests' : 'My Cash Requests', icon: FileText },
     { id: 'audit', label: 'Audit Logs', icon: History },
-    { id: 'settings', label: 'Control Panel', icon: Settings },
+    ...(isMasterAdmin ? [{ id: 'settings', label: 'Control Panel', icon: Settings }] : []),
     { id: 'myprofile', label: 'My Profile', icon: UserCircle },
   ];
 
   const hasPermission = (id: string) => {
+    // Specifically protect settings
+    if (id === 'settings') {
+      return isMasterAdmin;
+    }
+
     // Always accessible for everyone
     if (id === 'dashboard' || id === 'myprofile' || id === 'leave' || id === 'payroll' || id === 'cash_requests') return true;
     
     // Master Admin (Google Login) gets everything
-    const isMasterAdmin = session.email === "zioncommercialcreditampara@gmail.com";
     if (isMasterAdmin) return true;
 
     // Regular members cannot see anything else
