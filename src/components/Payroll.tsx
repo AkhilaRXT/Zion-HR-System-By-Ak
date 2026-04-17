@@ -115,7 +115,7 @@ export default function Payroll({ session, data, onRefresh }: PayrollProps) {
 
   const handleAdvanceStatus = async (id: number, status: 'Approved' | 'Rejected') => {
     try {
-      await DataStore.updateAdvanceStatus(id, status);
+      await DataStore.updateAdvanceStatus(id, status, session.name);
       showNotification(`Advance request ${status.toLowerCase()}.`);
     } catch (err) {
       showNotification('Failed to update advance status.', 'error');
@@ -424,6 +424,9 @@ export default function Payroll({ session, data, onRefresh }: PayrollProps) {
                           <div className="flex flex-col gap-1">
                             <span className={`badge ${statusCls}`}>{a.status}</span>
                             {a.isPaid && <span className="badge bg-emerald-500/10 text-emerald-500 border-emerald-500/30">Paid</span>}
+                            {a.actionedBy && a.status !== 'Pending' && (
+                              <div className="text-[10px] text-text-secondary mt-1">by {a.actionedBy}</div>
+                            )}
                           </div>
                         </td>
                         {isAdmin && (

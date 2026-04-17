@@ -71,7 +71,7 @@ export default function CashRequests({ session, data }: CashRequestsProps) {
 
   const handleStatus = async (id: number, status: 'Approved' | 'Rejected') => {
     try {
-      await DataStore.updateCashRequestStatus(id, status);
+      await DataStore.updateCashRequestStatus(id, status, session.name);
       showNotification(`Cash request ${status.toLowerCase()}.`);
     } catch (err) {
       showNotification('Failed to update status.', 'error');
@@ -236,7 +236,12 @@ export default function CashRequests({ session, data }: CashRequestsProps) {
                       </td>
                       <td className="text-sm text-text-secondary">{r.category}</td>
                       <td className="font-mono text-sm text-brand-accent font-semibold">LKR {r.amount.toLocaleString()}</td>
-                      <td><span className={`badge ${statusCls}`}>{r.status}</span></td>
+                      <td>
+                        <span className={`badge ${statusCls}`}>{r.status}</span>
+                        {r.actionedBy && r.status !== 'Pending' && (
+                          <div className="text-[10px] text-text-secondary mt-1">by {r.actionedBy}</div>
+                        )}
+                      </td>
                       {canManageCash && (
                         <td>
                           {r.status === 'Pending' ? (

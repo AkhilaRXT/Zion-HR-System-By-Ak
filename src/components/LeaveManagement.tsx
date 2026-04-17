@@ -82,7 +82,7 @@ export default function LeaveManagement({ session, data, onRefresh }: LeaveManag
 
   const handleStatus = async (id: number, status: 'Approved' | 'Rejected') => {
     try {
-      await DataStore.updateLeaveStatus(id, status);
+      await DataStore.updateLeaveStatus(id, status, session.name);
       showNotification(`Leave request ${status.toLowerCase()}.`);
     } catch (err) {
       showNotification('Failed to update leave status.', 'error');
@@ -210,7 +210,12 @@ export default function LeaveManagement({ session, data, onRefresh }: LeaveManag
                         </div>
                       )}
                     </td>
-                    <td><span className={`badge ${statusCls}`}>{l.status}</span></td>
+                    <td>
+                      <span className={`badge ${statusCls}`}>{l.status}</span>
+                      {l.actionedBy && l.status !== 'Pending' && (
+                        <div className="text-[10px] text-text-secondary mt-1">by {l.actionedBy}</div>
+                      )}
+                    </td>
                     {canManageLeaves && (
                       <td>
                         {l.status === 'Pending' ? (

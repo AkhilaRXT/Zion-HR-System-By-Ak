@@ -61,12 +61,8 @@ service cloud.firestore {
         isMasterAdmin() ||
         (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.empId == empId) ||
-        (resource != null && resource.data.email == request.auth.token.email)
+        (request.auth.token.email != null && resource != null && 'email' in resource.data && resource.data.email == request.auth.token.email)
       );
-    }
-
-    function isValidEmployee(data) {
-      return data.id is string && data.name is string && data.name.size() < 100;
     }
 
     function isValidAttendance(data) {
@@ -78,11 +74,7 @@ service cloud.firestore {
     // ===============================================================
 
     match /employees/{empId} {
-      allow read: if isAuthenticated() && (
-        isOwner(empId) || 
-        isAdmin() || 
-        request.auth.token.firebase.sign_in_provider == 'anonymous'
-      );
+      allow read: if isAuthenticated() && (isOwner(empId) || isAdmin());
       allow write: if isAdmin();
     }
 
@@ -136,7 +128,9 @@ service cloud.firestore {
     }
 
     match /credentials/{username} {
-      allow read: if true;
+      // Get by explicit username is allowed so login can function, but enumeration/listing is blocked
+      allow get: if true;
+      allow list: if isAdmin();
       allow write: if isAdmin();
     }
 
@@ -144,9 +138,41 @@ service cloud.firestore {
       allow read: if true;
     }
     
+    match /directory/{empId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+    
     match /users/{uid} {
       allow read: if isAuthenticated() && (request.auth.uid == uid || isMasterAdmin());
-      allow write: if isAuthenticated() && (request.auth.uid == uid || isMasterAdmin());
+      allow write: if isAuthenticated() && request.auth.uid == uid && (
+        isMasterAdmin() ||
+        ( 
+          'username' in request.resource.data &&
+          'passToken' in request.resource.data &&
+          exists(/databases/$(database)/documents/credentials/$(request.resource.data.username)) &&
+          get(/databases/$(database)/documents/credentials/$(request.resource.data.username)).data.password == request.resource.data.passToken &&
+          get(/databases/$(database)/documents/credentials/$(request.resource.data.username)).data.empId == request.resource.data.empId &&
+          (request.resource.data.role == 'admin' ? get(/databases/$(database)/documents/credentials/$(request.resource.data.username)).data.isAdmin == true : true)
+        ) ||
+        (
+          'email' in request.resource.data && 
+          request.auth.token.email != null &&
+          request.resource.data.email == request.auth.token.email
+        )
+      );
+    }
+
+    match /messages/{id} {
+      allow read: if isAuthenticated() && (
+        isMasterAdmin() || 
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.empId in resource.data.participants) ||
+        resource.data.senderId == request.auth.uid
+      );
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated();
+      allow delete: if isAdmin();
     }
   }
 }

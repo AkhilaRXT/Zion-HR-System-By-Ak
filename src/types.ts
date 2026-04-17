@@ -47,6 +47,7 @@ export interface LeaveRequest {
   status: 'Pending' | 'Approved' | 'Rejected';
   reason: string;
   attachment?: string;
+  actionedBy?: string;
 }
 
 export interface Target {
@@ -67,6 +68,7 @@ export interface AdvanceRequest {
   reason: string;
   isPaid?: boolean;
   attachment?: string;
+  actionedBy?: string;
 }
 
 export interface CashRequest {
@@ -78,6 +80,7 @@ export interface CashRequest {
   date: string;
   status: 'Pending' | 'Approved' | 'Rejected';
   attachment?: string;
+  actionedBy?: string;
 }
 
 export interface LeaveBalances {
@@ -137,6 +140,25 @@ export interface AuditLog {
   type: 'Employee' | 'Attendance' | 'Leave' | 'Advance' | 'Target' | 'Settings' | 'Auth' | 'Cash' | 'Payroll';
 }
 
+export interface InternalMessage {
+  id: string;
+  senderId: string;
+  senderName: string;
+  to: string[];
+  cc: string[];
+  bcc: string[];
+  subject: string;
+  body: string;
+  timestamp: string;
+  readBy: string[];
+  participants: string[]; // flattened array for easy querying (sender, to, cc, bcc)
+}
+
+export interface DirectoryEntry {
+  id: string;
+  name: string;
+}
+
 export interface AppData {
   employees: Employee[];
   credentials: Credential[];
@@ -149,6 +171,8 @@ export interface AppData {
   settings: AppSettings;
   auditLogs: AuditLog[];
   paidDeductions?: { [empId: string]: string[] };
+  internalMessages: InternalMessage[];
+  directory?: DirectoryEntry[];
 }
 
 export interface Session {

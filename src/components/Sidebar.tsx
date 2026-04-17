@@ -13,7 +13,8 @@ import {
   LogOut,
   ChevronRight,
   X,
-  History
+  History,
+  Mail
 } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -64,6 +65,7 @@ export default function Sidebar({ session, data, activeRoute, onNavigate, onLogo
 
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: PieChart },
+    { id: 'mail', label: 'Mail', icon: Mail },
     { id: 'staff', label: 'Staff Mgmt', icon: Users },
     { id: 'attendance', label: 'Attendance', icon: CalendarCheck },
     { id: 'leave', label: hasLeavePerm ? 'Leave Mgmt' : 'My Leaves', icon: PlaneTakeoff },
@@ -81,7 +83,7 @@ export default function Sidebar({ session, data, activeRoute, onNavigate, onLogo
     }
 
     // Always accessible for everyone
-    if (id === 'dashboard' || id === 'myprofile' || id === 'leave' || id === 'payroll' || id === 'cash_requests') return true;
+    if (id === 'dashboard' || id === 'mail' || id === 'myprofile' || id === 'leave' || id === 'payroll' || id === 'cash_requests') return true;
     
     // Master Admin (Google Login) gets everything
     if (isMasterAdmin) return true;

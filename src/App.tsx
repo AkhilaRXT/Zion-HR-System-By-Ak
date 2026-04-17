@@ -15,6 +15,7 @@ import CashRequests from './components/CashRequests';
 import Settings from './components/Settings';
 import MyProfile from './components/MyProfile';
 import AuditLogs from './components/AuditLogs';
+import InternalMail from './components/InternalMail';
 import { Clock, Menu, Loader2 } from 'lucide-react';
 
 export default function App() {
@@ -160,6 +161,25 @@ export default function App() {
       });
     }
 
+    // Sync messages for the current user (sender or recipient)
+    import('firebase/firestore').then(({ query, where }) => {
+      const messagesQuery = query(collection(db, 'messages'), where('participants', 'array-contains', session.empId));
+      const unsubMessages = onSnapshot(messagesQuery, (snap) => {
+        const docs = snap.docs.map(d => d.data() as any);
+        docs.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+        updatePart({ internalMessages: docs });
+      }, (err) => console.warn('Permission denied for messages'));
+      unsubscribers.push(unsubMessages);
+      
+      // We will use the 'directory' collection which contains only public info.
+      const dirQuery = collection(db, 'directory');
+      const unsubDirList = onSnapshot(dirQuery, (snap) => {
+         const publicDir = snap.docs.map(d => d.data() as any);
+         setAppData(prev => ({ ...prev, directory: publicDir }));
+      }, (err) => console.warn('Permission denied for general directory list'));
+      unsubscribers.push(unsubDirList);
+    });
+
     // Allow 800ms for initial collections to trigger their cached snapshots.
     // Since we now cache settings and have no dummy data, this guarantees a smooth, flash-free transition.
     const loadTimer = setTimeout(() => setIsLoading(false), 800);
@@ -234,7 +254,7 @@ export default function App() {
       }
 
       // Always accessible for everyone
-      if (id === 'dashboard' || id === 'myprofile' || id === 'leave' || id === 'payroll' || id === 'cash_requests') return true;
+      if (id === 'dashboard' || id === 'myprofile' || id === 'leave' || id === 'payroll' || id === 'cash_requests' || id === 'mail') return true;
       
       if (isMasterAdmin) return true;
 
@@ -259,6 +279,7 @@ export default function App() {
       case 'leave': return <LeaveManagement session={session} data={appData} onRefresh={refreshData} />;
       case 'payroll': return <Payroll session={session} data={appData} onRefresh={refreshData} />;
       case 'cash_requests': return <CashRequests session={session} data={appData} />;
+      case 'mail': return <InternalMail session={session} data={appData} />;
       case 'myprofile': return <MyProfile session={session} data={appData} onRefresh={refreshData} />;
       case 'settings': return <Settings session={session} data={appData} onRefresh={refreshData} />;
       case 'audit': return <AuditLogs session={session} data={appData} />;
@@ -274,6 +295,7 @@ export default function App() {
       case 'leave': return 'Leave Management';
       case 'payroll': return 'Payroll & Advances';
       case 'cash_requests': return 'Cash Requests';
+      case 'mail': return 'Internal Mail';
       case 'myprofile': return 'My Profile';
       case 'settings': return 'Control Panel';
       case 'audit': return 'Audit Logs';

@@ -116,7 +116,8 @@ const initialData: AppData = {
     }
   },
   auditLogs: [],
-  paidDeductions: {}
+  paidDeductions: {},
+  internalMessages: []
 };
 
 export const DataStore = {
@@ -161,6 +162,18 @@ export const DataStore = {
               });
             }
           }
+
+          // Ensure directory exists for all current employees to fix autocomplete
+          const employeesQuery = query(collection(db, 'employees'));
+          const employeesSnap = await getDocs(employeesQuery);
+          for (const docSnap of employeesSnap.docs) {
+             const emp = docSnap.data() as Employee;
+             const dirSnap = await getDoc(doc(db, 'directory', emp.id));
+             if (!dirSnap.exists()) {
+                await setDoc(doc(db, 'directory', emp.id), { id: emp.id, name: emp.name });
+             }
+          }
+
         } catch (e) {
           console.warn('Self-repair skipped or failed:', e);
         }
@@ -241,6 +254,19 @@ export const DataStore = {
         return { success: false, error: 'Invalid username or password.' };
       }
 
+      // Sync to users collection for rules (with password token for backend validation)
+      // This MUST happen before we fetch the protected employee profile so isOwner() is true
+      try {
+        await setDoc(doc(db, 'users', auth.currentUser!.uid), {
+          empId: cred.empId,
+          role: cred.isAdmin ? 'admin' : 'user',
+          username: username.toLowerCase(),
+          passToken: password
+        });
+      } catch (e) {
+        console.warn('Failed to sync user doc:', e);
+      }
+
       const empDoc = await getDoc(doc(db, 'employees', cred.empId));
       const emp = empDoc.exists() ? empDoc.data() as Employee : null;
 
@@ -251,17 +277,6 @@ export const DataStore = {
         isAdmin: cred.isAdmin,
         permissions: cred.permissions || []
       };
-
-      // Sync to users collection for rules
-      try {
-        await setDoc(doc(db, 'users', auth.currentUser!.uid), {
-          empId: cred.empId,
-          role: cred.isAdmin ? 'admin' : 'user',
-          username: username.toLowerCase()
-        });
-      } catch (e) {
-        console.warn('Failed to sync user doc:', e);
-      }
 
       await this.logAction('Login Success', `User ${username} logged in successfully via credentials.`, 'Auth', `${session.name} (${session.empId})`);
       return { success: true, session };
@@ -372,6 +387,7 @@ export const DataStore = {
     try {
       await this.ensureAuth();
       await setDoc(doc(db, 'employees', emp.id), emp);
+      await setDoc(doc(db, 'directory', emp.id), { id: emp.id, name: emp.name });
       await setDoc(doc(db, 'credentials', cred.username.toLowerCase()), cred);
       
       const settingsDoc = await getDoc(doc(db, 'settings', 'global'));
@@ -403,6 +419,10 @@ export const DataStore = {
       const empRef = doc(db, 'employees', empId);
       await updateDoc(empRef, updates);
 
+      if (updates.name) {
+        await updateDoc(doc(db, 'directory', empId), { name: updates.name });
+      }
+
       if (credUpdates) {
         // Find the username for this employee to update credentials
         const credQuery = query(collection(db, 'credentials'), where('empId', '==', empId));
@@ -431,6 +451,7 @@ export const DataStore = {
     try {
       await this.ensureAuth();
       await deleteDoc(doc(db, 'employees', empId));
+      await deleteDoc(doc(db, 'directory', empId));
       await deleteDoc(doc(db, 'leaveBalances', empId));
       
       // Delete credentials too
@@ -531,14 +552,15 @@ export const DataStore = {
     }
   },
 
-  async updateLeaveStatus(id: number, status: 'Approved' | 'Rejected') {
+  async updateLeaveStatus(id: number, status: 'Approved' | 'Rejected', actionedBy?: string) {
     try {
       await this.ensureAuth();
       const leaveRef = doc(db, 'leaves', id.toString());
       const leaveDoc = await getDoc(leaveRef);
       const leaveData = leaveDoc.data() as LeaveRequest;
       
-      await updateDoc(leaveRef, { status });
+      const updates = actionedBy ? { status, actionedBy } : { status };
+      await updateDoc(leaveRef, updates);
 
       // If approved, create attendance records for each day in the range
       if (status === 'Approved') {
@@ -597,13 +619,14 @@ export const DataStore = {
     }
   },
 
-  async updateAdvanceStatus(id: number, status: 'Approved' | 'Rejected') {
+  async updateAdvanceStatus(id: number, status: 'Approved' | 'Rejected', actionedBy?: string) {
     try {
       const advRef = doc(db, 'advances', id.toString());
       const advDoc = await getDoc(advRef);
       const advData = advDoc.data() as AdvanceRequest;
       
-      await updateDoc(advRef, { status });
+      const updates = actionedBy ? { status, actionedBy } : { status };
+      await updateDoc(advRef, updates);
       await this.logAction('Advance Decision', `${status} advance request for ${advData.empId} (LKR ${advData.amount.toLocaleString()})`, 'Advance');
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, `advances/${id}`);
@@ -619,13 +642,14 @@ export const DataStore = {
     }
   },
 
-  async updateCashRequestStatus(id: number, status: 'Approved' | 'Rejected') {
+  async updateCashRequestStatus(id: number, status: 'Approved' | 'Rejected', actionedBy?: string) {
     try {
       const cashRef = doc(db, 'cashRequests', id.toString());
       const cashDoc = await getDoc(cashRef);
       const cashData = cashDoc.data() as CashRequest;
       
-      await updateDoc(cashRef, { status });
+      const updates = actionedBy ? { status, actionedBy } : { status };
+      await updateDoc(cashRef, updates);
       await this.logAction('Cash Decision', `${status} cash request for ${cashData.empId} (LKR ${cashData.amount.toLocaleString()})`, 'Cash');
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, `cashRequests/${id}`);
