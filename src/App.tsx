@@ -100,6 +100,7 @@ export default function App() {
 
     if (session.isAdmin) {
       syncCollection('employees', (docs) => updatePart({ employees: docs as Employee[] }));
+      syncCollection('credentials', (docs) => updatePart({ credentials: docs as Credential[] }));
       syncCollection('attendance', (docs) => updatePart({ attendance: docs as Attendance[] }));
       syncCollection('leaves', (docs) => updatePart({ leaves: docs as LeaveRequest[] }));
       syncCollection('advances', (docs) => updatePart({ advances: docs as AdvanceRequest[] }));

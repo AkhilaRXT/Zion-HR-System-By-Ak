@@ -427,9 +427,31 @@ export const DataStore = {
         // Find the username for this employee to update credentials
         const credQuery = query(collection(db, 'credentials'), where('empId', '==', empId));
         const credSnap = await getDocs(credQuery);
+        
         if (!credSnap.empty) {
           const credDoc = credSnap.docs[0];
-          await updateDoc(credDoc.ref, credUpdates);
+          const oldData = credDoc.data() as Credential;
+          const oldDocId = credDoc.id;
+          
+          if (credUpdates.username && credUpdates.username.toLowerCase() !== oldDocId.toLowerCase()) {
+            // Username changed, need to recreate document since ID cannot be changed
+            const newDocId = credUpdates.username.toLowerCase();
+            await setDoc(doc(db, 'credentials', newDocId), { ...oldData, ...credUpdates, empId });
+            await deleteDoc(credDoc.ref);
+          } else {
+            // Update in place
+            await updateDoc(credDoc.ref, credUpdates);
+          }
+        } else if (credUpdates.username && credUpdates.password) {
+          // Creating credentials for an existing employee who didn't have them
+          const newDocId = credUpdates.username.toLowerCase();
+          await setDoc(doc(db, 'credentials', newDocId), { 
+            empId,
+            username: credUpdates.username,
+            password: credUpdates.password,
+            isAdmin: credUpdates.isAdmin || false,
+            permissions: credUpdates.permissions || []
+          });
         }
       }
 

@@ -44,8 +44,9 @@ service cloud.firestore {
 
     function isMasterAdmin() {
       return isAuthenticated() && 
+        request.auth.token != null &&
         request.auth.token.email != null && 
-        request.auth.token.email.lower() == "zioncommercialcreditampara@gmail.com";
+        request.auth.token.email == "zioncommercialcreditampara@gmail.com";
     }
 
     function isAdmin() {

@@ -141,8 +141,8 @@ export default function StaffManagement({ session, data, onRefresh }: StaffManag
         await DataStore.deleteEmployee(confirmDelete);
         showNotification('Employee deleted successfully.');
         setConfirmDelete(null);
-      } catch (err) {
-        showNotification('Failed to delete employee.', 'error');
+      } catch (err: any) {
+        showNotification(err.message || 'Failed to delete employee.', 'error');
       }
     }
   };
