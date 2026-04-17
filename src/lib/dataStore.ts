@@ -420,7 +420,7 @@ export const DataStore = {
       await updateDoc(empRef, updates);
 
       if (updates.name) {
-        await updateDoc(doc(db, 'directory', empId), { name: updates.name });
+        await setDoc(doc(db, 'directory', empId), { id: empId, name: updates.name }, { merge: true });
       }
 
       if (credUpdates) {
