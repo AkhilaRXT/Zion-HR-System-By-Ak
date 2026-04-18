@@ -126,7 +126,7 @@ export default function StaffManagement({ session, data, onRefresh }: StaffManag
         empNo: '', name: '', email: '', role: '', department: 'Lending', branch: '',
         baseSalary: 0, travelingAllowance: 0, vehicleAllowance: 0, performanceAllowance: 0,
         petrolLitres: 0, attendanceBonus: 0, overtime: 0, bikeInstallment: 0, staffLoan: 0,
-        bankName: '', bankBranch: '', accountNo: '', profilePic: '',
+        bankName: '', bankBranch: '', accountNo: '', profilePic: '', hasEPF: true,
         username: '', password: '', isSystemAdmin: false, permissions: []
       });
     } catch (err: any) {
