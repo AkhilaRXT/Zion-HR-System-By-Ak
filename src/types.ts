@@ -21,7 +21,7 @@ export interface Employee {
   hasEPF?: boolean;
 }
 
-export interface Credential {
+export interface UserCredential {
   empId: string;
   username: string;
   password?: string;
@@ -161,7 +161,7 @@ export interface DirectoryEntry {
 
 export interface AppData {
   employees: Employee[];
-  credentials: Credential[];
+  credentials: UserCredential[];
   attendance: Attendance[];
   leaves: LeaveRequest[];
   targets: Target[];

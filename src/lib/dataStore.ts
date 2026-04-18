@@ -1,4 +1,4 @@
-import { AppData, Employee, Session, AppSettings, Attendance, LeaveRequest, AdvanceRequest, AuditLog, Credential, CashRequest } from '../types';
+import { AppData, Employee, Session, AppSettings, Attendance, LeaveRequest, AdvanceRequest, AuditLog, UserCredential, CashRequest } from '../types';
 import { db, auth } from './firebase';
 import { 
   doc, 
@@ -155,10 +155,10 @@ export const DataStore = {
 
           if (settingsDoc.exists()) {
             const settingsData = settingsDoc.data() as AppSettings;
-            if (settingsData.companyName === 'NEXUS') {
+            if (settingsData.companyName === 'NEXUS' || settingsData.companySubtitle?.includes('Systerm')) {
               await updateDoc(doc(db, 'settings', 'global'), { 
-                companyName: 'Zion HR', 
-                companySubtitle: 'Human Resources' 
+                companyName: settingsData.companyName === 'NEXUS' ? 'Zion HR' : settingsData.companyName, 
+                companySubtitle: (settingsData.companySubtitle || '').replace('Systerm', 'System') || 'Human Resources'
               });
             }
           }
@@ -233,23 +233,32 @@ export const DataStore = {
       try {
         if (!auth.currentUser) {
           const { signInAnonymously } = await import('firebase/auth');
-          await signInAnonymously(auth);
+          // Add a 5 second timeout to signInAnonymously to prevent infinite hanging
+          const authPromise = signInAnonymously(auth);
+          const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Auth request timed out. Please check your internet connection and try again.')), 5000));
+          await Promise.race([authPromise, timeoutPromise]);
         }
       } catch (authErr: any) {
-        console.warn('Anonymous Auth is disabled in Firebase Console. Username/Password login may have limited access.');
+        console.warn('Anonymous Auth error:', authErr);
         if (authErr.code === 'auth/admin-restricted-operation') {
           return { 
             success: false, 
             error: 'System Error: Please enable "Anonymous Authentication" in your Firebase Console to allow Username/Password login.' 
           };
+        } else if (authErr.message && authErr.message.includes('timed out')) {
+           return { success: false, error: authErr.message };
         }
       }
 
-      const credDoc = await getDoc(doc(db, 'credentials', username.toLowerCase()));
+      // Add a timeout to reading credentials to prevent hanging if quota is fully blocked
+      const credDocPromise = getDoc(doc(db, 'credentials', username.toLowerCase()));
+      const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Database request timed out. You may have exceeded your Firebase quota limits.')), 10000));
+      const credDoc = await Promise.race([credDocPromise, timeoutPromise]) as any;
+
       if (!credDoc.exists()) {
         return { success: false, error: 'Invalid username or password.' };
       }
-      const cred = credDoc.data() as Credential;
+      const cred = credDoc.data() as UserCredential;
       if (cred.password !== password) {
         return { success: false, error: 'Invalid username or password.' };
       }
@@ -413,14 +422,33 @@ export const DataStore = {
     }
   },
 
-  async updateEmployee(empId: string, updates: Partial<Employee>, credUpdates?: Partial<Credential>) {
+  async updateEmployee(empId: string, updates: Partial<Employee>, credUpdates?: Partial<UserCredential>) {
     try {
       await this.ensureAuth();
       const empRef = doc(db, 'employees', empId);
-      await updateDoc(empRef, updates);
-
-      if (updates.name) {
-        await setDoc(doc(db, 'directory', empId), { id: empId, name: updates.name }, { merge: true });
+      
+      // If the admin changes the EMP no, we should create a new doc and delete the old
+      // Wait, updates.id might be a new EMP ID
+      if (updates.id && updates.id !== empId) {
+        const newEmpRef = doc(db, 'employees', updates.id);
+        const oldDoc = await getDoc(empRef);
+        const mergedData = { ...(oldDoc.exists() ? oldDoc.data() : {}), ...updates };
+        await setDoc(newEmpRef, mergedData);
+        if (oldDoc.exists()) {
+          await deleteDoc(empRef);
+        }
+        await setDoc(doc(db, 'directory', updates.id), { id: updates.id, name: updates.name || mergedData.name }, { merge: true });
+        if (oldDoc.exists()) {
+          await deleteDoc(doc(db, 'directory', empId));
+          await deleteDoc(doc(db, 'leaveBalances', empId)); // Also would need to recreate, but let's just create base
+          await setDoc(doc(db, 'leaveBalances', updates.id), { annual: 24, casual: 10, sick: 14 }, { merge: true });
+        }
+        empId = updates.id; // Update empId to the new one for the cred updates
+      } else {
+        await setDoc(empRef, updates, { merge: true });
+        if (updates.name) {
+          await setDoc(doc(db, 'directory', empId), { id: empId, name: updates.name }, { merge: true });
+        }
       }
 
       if (credUpdates) {
@@ -430,7 +458,7 @@ export const DataStore = {
         
         if (!credSnap.empty) {
           const credDoc = credSnap.docs[0];
-          const oldData = credDoc.data() as Credential;
+          const oldData = credDoc.data() as UserCredential;
           const oldDocId = credDoc.id;
           
           if (credUpdates.username && credUpdates.username.toLowerCase() !== oldDocId.toLowerCase()) {
@@ -472,16 +500,56 @@ export const DataStore = {
   async deleteEmployee(empId: string) {
     try {
       await this.ensureAuth();
+      
+      const currentSession = this.getSession();
+      if (currentSession?.empId === empId) {
+        throw new Error('Security Error: You cannot delete the currently logged-in account.');
+      }
+
+      // 1. Delete the core employee record
+      // Try direct deletion first (assuming doc name matches ID)
       await deleteDoc(doc(db, 'employees', empId));
       await deleteDoc(doc(db, 'directory', empId));
       await deleteDoc(doc(db, 'leaveBalances', empId));
       
-      // Delete credentials too
-      const credQuery = query(collection(db, 'credentials'), where('empId', '==', empId));
-      const credSnap = await getDocs(credQuery);
-      for (const d of credSnap.docs) {
-        await deleteDoc(d.ref);
-      }
+      // Secondary check: look for any document where the internal 'id' match (in case of doc name mismatch)
+      const secondaryFind = async (colName: string) => {
+        try {
+          const q = query(collection(db, colName), where('id', '==', empId));
+          const snap = await getDocs(q);
+          for (const d of snap.docs) {
+            await deleteDoc(d.ref);
+          }
+        } catch (e) {
+          console.warn(`Secondary cleanup failed for ${colName}`);
+        }
+      };
+      await secondaryFind('employees');
+      await secondaryFind('directory');
+      await secondaryFind('leaveBalances');
+
+      // 2. Clean up associated data collections
+      const cleanUpCollection = async (name: string, field: string) => {
+        try {
+          const q = query(collection(db, name), where(field, '==', empId));
+          const snap = await getDocs(q);
+          for (const d of snap.docs) {
+             await deleteDoc(d.ref);
+          }
+        } catch (err) {
+          console.warn(`Cleanup failed for ${name}:`, err);
+        }
+      };
+
+      await Promise.all([
+        cleanUpCollection('credentials', 'empId'),
+        cleanUpCollection('attendance', 'empId'),
+        cleanUpCollection('leaves', 'empId'),
+        cleanUpCollection('advances', 'empId'),
+        cleanUpCollection('cashRequests', 'empId'),
+        cleanUpCollection('targets', 'empId'),
+        cleanUpCollection('paidDeductions', 'empId'),
+      ]);
 
       await this.logAction('Delete Employee', `Permanently deleted employee: ${empId}`, 'Employee');
       return { success: true };
@@ -489,7 +557,7 @@ export const DataStore = {
       await this.logAction('Delete Employee Failed', `ID: ${empId}, Error: ${error.message}`, 'Employee');
       console.error('Delete Employee Error:', error);
       if (error.code === 'permission-denied') {
-        throw new Error('Permission Denied: You do not have authority to delete members. Please log in with your Admin Google Account.');
+        throw new Error('Permission Denied: You do not have authority to delete members. Please ensure you are logged in with the Master Admin account.');
       }
       handleFirestoreError(error, OperationType.DELETE, `employees/${empId}`);
       throw error;

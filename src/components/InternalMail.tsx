@@ -29,7 +29,11 @@ export default function InternalMail({ session, data }: InternalMailProps) {
 
   // Derive mail lists
   const myMessages = data.internalMessages || [];
-  const inbox = myMessages.filter(m => m.to.includes(session.empId) || m.cc.includes(session.empId) || m.bcc.includes(session.empId));
+  const inbox = myMessages.filter(m => 
+    (m.to && m.to.includes(session.empId)) || 
+    (m.cc && m.cc.includes(session.empId)) || 
+    (m.bcc && m.bcc.includes(session.empId))
+  );
   const sent = myMessages.filter(m => m.senderId === session.empId);
 
   // Utility to get employee name by ID or matched string
@@ -269,9 +273,9 @@ export default function InternalMail({ session, data }: InternalMailProps) {
                   {activeInput && suggestions.length > 0 && (
                     <div className="absolute z-10 w-64 bg-white border border-border-accent rounded-xl shadow-xl overflow-hidden" 
                          style={{ top: activeInput === 'to' ? '50px' : activeInput === 'cc' ? '106px' : '162px', left: '16px' }}>
-                      {suggestions.map(s => (
+                      {suggestions.map((s, idx) => (
                         <div 
-                          key={s.id} 
+                          key={`sugg-${s.id}-${idx}`} 
                           className="px-4 py-3 hover:bg-gray-50 cursor-pointer flex flex-col"
                           onClick={() => applySuggestion(s)}
                         >

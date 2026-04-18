@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { DataStore } from './lib/dataStore';
-import { Session, AppData, Employee, Attendance, LeaveRequest, AdvanceRequest, Target, AuditLog, AppSettings, CashRequest } from './types';
+import { Session, AppData, Employee, Attendance, LeaveRequest, AdvanceRequest, Target, AuditLog, AppSettings, CashRequest, UserCredential } from './types';
 import { db, auth } from './lib/firebase';
-import { collection, onSnapshot, doc } from 'firebase/firestore';
+import { collection, onSnapshot, doc, query, limit, orderBy, QuerySnapshot, DocumentData } from 'firebase/firestore';
 import Login from './components/Login';
 import Sidebar from './components/Sidebar';
 import Dashboard from './components/Dashboard';
@@ -26,6 +26,20 @@ export default function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isAuthReady, setIsAuthReady] = useState(false);
+  const [isSettingsReady, setIsSettingsReady] = useState(false);
+
+  // Safety fallback for all loading states
+  useEffect(() => {
+    if (isLoading) {
+      const timer = setTimeout(() => {
+        console.warn('Loading fallback triggered after 6s. Database may be unresponsive.');
+        setIsLoading(false);
+        setIsAuthReady(true);
+        setIsSettingsReady(true);
+      }, 6000);
+      return () => clearTimeout(timer);
+    }
+  }, [isLoading]);
 
   useEffect(() => {
     DataStore.init();
@@ -37,6 +51,7 @@ export default function App() {
     });
 
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
+
     return () => {
       clearInterval(timer);
       unsubAuth();
@@ -49,6 +64,7 @@ export default function App() {
       if (snap.exists()) {
         const newSettings = snap.data() as AppSettings;
         setAppData(prev => ({ ...prev, settings: newSettings }));
+        setIsSettingsReady(true);
         // Cache settings to localStorage to prevent theme flash on next load
         try {
           const raw = localStorage.getItem('zion_hr_data');
@@ -58,15 +74,20 @@ export default function App() {
         } catch (e) {
           console.warn('Failed to cache settings locally');
         }
+      } else {
+        setIsSettingsReady(true);
       }
-    }, (err) => console.warn('Permission denied for settings'));
+    }, (err) => {
+      console.warn('Permission denied or error fetching settings:', err);
+      setIsSettingsReady(true);
+    });
 
     return () => unsubSettings();
   }, []);
 
   useEffect(() => {
     if (!session) {
-      if (isAuthReady) setIsLoading(false);
+      if (isAuthReady && isSettingsReady) setIsLoading(false);
       return;
     }
     
@@ -75,7 +96,6 @@ export default function App() {
       return;
     }
 
-    setIsLoading(true);
     const unsubscribers: (() => void)[] = [];
     
     const updatePart = (part: Partial<AppData>) => {
@@ -84,12 +104,18 @@ export default function App() {
 
     // If admin, listen to everything. If employee, listen to restricted set.
     // For now, we'll try to listen to all, but we need to handle permission errors gracefully.
-    const syncCollection = (name: string, setter: (data: any[]) => void) => {
+    const syncCollection = (name: string, setter: (data: any[]) => void, queryRef?: any) => {
       try {
-        const unsub = onSnapshot(collection(db, name), (snapshot) => {
-          const docs = snapshot.docs.map(doc => ({ ...doc.data() }));
+        const ref = queryRef || collection(db, name);
+        const unsub = onSnapshot(ref, (snapshot: QuerySnapshot<DocumentData>) => {
+          const docs = snapshot.docs.map((doc: any) => {
+            const data = doc.data();
+            // Ensure the document ID is always present in the object, 
+            // prioritizing the actual document name for total accuracy.
+            return { ...data, id: doc.id };
+          });
           setter(docs);
-        }, (error) => {
+        }, (error: any) => {
           console.warn(`Permission denied for collection ${name}. This is expected for non-admin users.`);
         });
         unsubscribers.push(unsub);
@@ -99,21 +125,34 @@ export default function App() {
     };
 
     if (session.isAdmin) {
+      // Core global collections (Always needed for names and dashboard)
       syncCollection('employees', (docs) => updatePart({ employees: docs as Employee[] }));
-      syncCollection('credentials', (docs) => updatePart({ credentials: docs as Credential[] }));
-      syncCollection('attendance', (docs) => updatePart({ attendance: docs as Attendance[] }));
-      syncCollection('leaves', (docs) => updatePart({ leaves: docs as LeaveRequest[] }));
-      syncCollection('advances', (docs) => updatePart({ advances: docs as AdvanceRequest[] }));
-      syncCollection('cashRequests', (docs) => updatePart({ cashRequests: docs as CashRequest[] }));
-      syncCollection('targets', (docs) => updatePart({ targets: docs as Target[] }));
-      syncCollection('auditLogs', (docs) => updatePart({ auditLogs: (docs as AuditLog[]).sort((a, b) => b.id - a.id) }));
+      syncCollection('credentials', (docs) => updatePart({ credentials: docs as UserCredential[] }));
       
-      const unsubPaid = onSnapshot(collection(db, 'paidDeductions'), (snap) => {
-        const paid: { [key: string]: string[] } = {};
-        snap.docs.forEach(d => { paid[d.id] = d.data().months || []; });
-        updatePart({ paidDeductions: paid });
-      }, (err) => console.warn('Permission denied for paidDeductions'));
-      unsubscribers.push(unsubPaid);
+      // Limit attendance for the dashboard to recent items
+      const attendanceQuery = query(collection(db, 'attendance'), orderBy('id', 'desc'), limit(150));
+      syncCollection('attendance', (docs) => updatePart({ attendance: docs as Attendance[] }), attendanceQuery);
+      
+      syncCollection('leaves', (docs) => updatePart({ leaves: docs as LeaveRequest[] }));
+
+      // Lazy load modules based on current route
+      if (route === 'payroll' || route === 'settings') {
+        syncCollection('advances', (docs) => updatePart({ advances: docs as AdvanceRequest[] }));
+        syncCollection('cashRequests', (docs) => updatePart({ cashRequests: docs as CashRequest[] }));
+        syncCollection('targets', (docs) => updatePart({ targets: docs as Target[] }));
+        
+        const unsubPaid = onSnapshot(collection(db, 'paidDeductions'), (snap) => {
+          const paid: { [key: string]: string[] } = {};
+          snap.docs.forEach(d => { paid[d.id] = d.data().months || []; });
+          updatePart({ paidDeductions: paid });
+        }, (err) => console.warn('Permission denied for paidDeductions'));
+        unsubscribers.push(unsubPaid);
+      }
+      
+      if (route === 'audit') {
+        const auditQuery = query(collection(db, 'auditLogs'), orderBy('id', 'desc'), limit(70));
+        syncCollection('auditLogs', (docs) => updatePart({ auditLogs: docs as AuditLog[] }), auditQuery);
+      }
     } else {
       // Regular employee: only sync their own data
       const unsubEmp = onSnapshot(doc(db, 'employees', session.empId), (snap) => {
@@ -163,23 +202,25 @@ export default function App() {
     }
 
     // Sync messages for the current user (sender or recipient)
-    import('firebase/firestore').then(({ query, where }) => {
-      const messagesQuery = query(collection(db, 'messages'), where('participants', 'array-contains', session.empId));
-      const unsubMessages = onSnapshot(messagesQuery, (snap) => {
-        const docs = snap.docs.map(d => d.data() as any);
-        docs.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-        updatePart({ internalMessages: docs });
-      }, (err) => console.warn('Permission denied for messages'));
-      unsubscribers.push(unsubMessages);
-      
-      // We will use the 'directory' collection which contains only public info.
-      const dirQuery = collection(db, 'directory');
-      const unsubDirList = onSnapshot(dirQuery, (snap) => {
-         const publicDir = snap.docs.map(d => d.data() as any);
-         setAppData(prev => ({ ...prev, directory: publicDir }));
-      }, (err) => console.warn('Permission denied for general directory list'));
-      unsubscribers.push(unsubDirList);
-    });
+    if (route === 'mail' || route === 'dashboard') {
+      import('firebase/firestore').then(({ query, where, limit }) => {
+        const messagesQuery = query(collection(db, 'messages'), where('participants', 'array-contains', session.empId), limit(50));
+        const unsubMessages = onSnapshot(messagesQuery, (snap) => {
+          const docs = snap.docs.map(d => d.data() as any);
+          docs.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+          updatePart({ internalMessages: docs });
+        }, (err) => console.warn('Permission denied for messages'));
+        unsubscribers.push(unsubMessages);
+      });
+    }
+
+    // Always fetch directory for autocomplete
+    const dirQuery = collection(db, 'directory');
+    const unsubDirList = onSnapshot(dirQuery, (snap) => {
+       const publicDir = snap.docs.map(d => d.data() as any);
+       setAppData(prev => ({ ...prev, directory: publicDir }));
+    }, (err) => console.warn('Permission denied for general directory list'));
+    unsubscribers.push(unsubDirList);
 
     // Allow 800ms for initial collections to trigger their cached snapshots.
     // Since we now cache settings and have no dummy data, this guarantees a smooth, flash-free transition.
@@ -189,7 +230,7 @@ export default function App() {
       unsubscribers.forEach(unsub => unsub());
       clearTimeout(loadTimer);
     };
-  }, [session, isAuthReady]);
+  }, [session, isAuthReady, isSettingsReady, route]);
 
   const refreshData = () => {
     // No longer needed with real-time sync, but keeping for compatibility

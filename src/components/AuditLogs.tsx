@@ -13,7 +13,8 @@ interface AuditLogsProps {
 export default function AuditLogs({ session, data }: AuditLogsProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState<string>('All');
-  const [filterDate, setFilterDate] = useState('');
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
 
   const logs = data.auditLogs || [];
 
@@ -26,10 +27,11 @@ export default function AuditLogs({ session, data }: AuditLogsProps) {
     const matchesType = filterType === 'All' || log.type === filterType;
     
     let matchesDate = true;
-    if (filterDate) {
+    if (fromDate || toDate) {
       const logDate = new Date(log.timestamp);
       const localDateStr = `${logDate.getFullYear()}-${String(logDate.getMonth() + 1).padStart(2, '0')}-${String(logDate.getDate()).padStart(2, '0')}`;
-      matchesDate = localDateStr === filterDate;
+      if (fromDate && localDateStr < fromDate) matchesDate = false;
+      if (toDate && localDateStr > toDate) matchesDate = false;
     }
 
     return matchesSearch && matchesType && matchesDate;
@@ -83,7 +85,7 @@ export default function AuditLogs({ session, data }: AuditLogsProps) {
       </div>
 
       <div className="glass-panel p-8 space-y-8">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
           <div className="form-group">
             <label className="text-xs font-medium text-text-secondary mb-2 block">Search Logs</label>
             <div className="relative">
@@ -105,10 +107,17 @@ export default function AuditLogs({ session, data }: AuditLogsProps) {
             </select>
           </div>
           <div className="form-group">
-            <label className="text-xs font-medium text-text-secondary mb-2 block">Filter by Date</label>
+            <label className="text-xs font-medium text-text-secondary mb-2 block">From Date</label>
             <input 
               type="date" className="form-control"
-              value={filterDate} onChange={e => setFilterDate(e.target.value)}
+              value={fromDate} onChange={e => setFromDate(e.target.value)}
+            />
+          </div>
+          <div className="form-group">
+            <label className="text-xs font-medium text-text-secondary mb-2 block">To Date</label>
+            <input 
+              type="date" className="form-control"
+              value={toDate} onChange={e => setToDate(e.target.value)}
             />
           </div>
         </div>
