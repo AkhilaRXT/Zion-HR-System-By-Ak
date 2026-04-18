@@ -186,17 +186,76 @@ export const DataStore = {
   },
 
   async resetData() {
-    // This is dangerous in production, but for the user's request:
-    const data = initialData;
     try {
-      // Reset settings
-      await setDoc(doc(db, 'settings', 'global'), data.settings);
+      await this.ensureAuth();
+      const currentSession = this.getSession();
       
-      // Clear other collections would require batching or individual deletes
-      // For now, we'll just log it
-      await this.logAction('Database Reset', 'System data reset initiated.', 'Settings');
+      // 1. Log the initiation
+      await this.logAction('Factory Reset', 'Full system database wipe initiated by user.', 'Settings');
+
+      // 2. Collections to wipe completely
+      const transactionalCollections = [
+        'attendance',
+        'leaves',
+        'advances',
+        'cashRequests',
+        'targets',
+        'auditLogs',
+        'paidDeductions'
+      ];
+
+      const wipeCollection = async (name: string) => {
+        try {
+          const q = query(collection(db, name));
+          const snap = await getDocs(q);
+          const batches = [];
+          for (const d of snap.docs) {
+            batches.push(deleteDoc(d.ref));
+          }
+          await Promise.all(batches);
+        } catch (e) {
+          console.warn(`Wipe failed for ${name}:`, e);
+        }
+      };
+
+      // 3. Special handling for employees & credentials (Keep Master Admin)
+      const wipeEmployees = async () => {
+        const q = query(collection(db, 'employees'));
+        const snap = await getDocs(q);
+        for (const d of snap.docs) {
+          if (d.id !== 'EMP003') { // Keep Master Admin
+            await deleteDoc(d.ref);
+            await deleteDoc(doc(db, 'directory', d.id));
+            await deleteDoc(doc(db, 'leaveBalances', d.id));
+          }
+        }
+      };
+
+      const wipeCredentials = async () => {
+        const q = query(collection(db, 'credentials'));
+        const snap = await getDocs(q);
+        for (const d of snap.docs) {
+          const data = d.data() as UserCredential;
+          if (data.empId !== 'EMP003') {
+            await deleteDoc(d.ref);
+          }
+        }
+      };
+
+      // Execute all wipes
+      await Promise.all([
+        ...transactionalCollections.map(c => wipeCollection(c)),
+        wipeEmployees(),
+        wipeCredentials()
+      ]);
+
+      // Re-log the completion (since auditLogs was wiped)
+      await this.logAction('Factory Reset Complete', 'Database cleared successfully. Master Admin preserved.', 'Settings');
+      
+      return { success: true };
     } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, 'settings/global');
+      handleFirestoreError(error, OperationType.WRITE, 'factory-reset');
+      throw error;
     }
   },
 

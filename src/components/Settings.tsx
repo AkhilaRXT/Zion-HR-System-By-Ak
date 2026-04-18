@@ -38,8 +38,9 @@ export default function Settings({ session, data, onRefresh }: SettingsProps) {
   const handleReset = async () => {
     try {
       await DataStore.resetData();
-      showNotification('Database reset to initial state.', 'warning');
+      showNotification('Database cleared successfully! You can now start fresh.', 'warning');
       setConfirmReset(false);
+      if (onRefresh) onRefresh();
     } catch (err) {
       showNotification('Failed to reset database.', 'error');
     }
@@ -192,73 +193,6 @@ export default function Settings({ session, data, onRefresh }: SettingsProps) {
                 type="text" className="form-control" required 
                 value={settings.companySubtitle} onChange={e => setSettings({...settings, companySubtitle: e.target.value})}
               />
-            </div>
-          </div>
-
-          <div className="border-t border-border-accent pt-8">
-            <h4 className="text-xs font-bold text-brand-accent uppercase tracking-wider mb-6">Login Screen Customization</h4>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              <div className="form-group">
-                <label className="text-xs font-medium text-text-secondary mb-2 block">Hero Title Line 1</label>
-                <input 
-                  type="text" className="form-control" 
-                  value={settings.loginHero?.titleLine1 || ''} 
-                  onChange={e => setSettings({...settings, loginHero: { ...(settings.loginHero || {}), titleLine1: e.target.value } as any})}
-                  placeholder="e.g. Empowering Your"
-                />
-              </div>
-              <div className="form-group">
-                <label className="text-xs font-medium text-text-secondary mb-2 block">Hero Title Line 2</label>
-                <input 
-                  type="text" className="form-control" 
-                  value={settings.loginHero?.titleLine2 || ''} 
-                  onChange={e => setSettings({...settings, loginHero: { ...(settings.loginHero || {}), titleLine2: e.target.value } as any})}
-                  placeholder="e.g. Financial Future"
-                />
-              </div>
-              <div className="form-group">
-                <label className="text-xs font-medium text-text-secondary mb-2 block">Hero Stat 1 (Value & Label)</label>
-                <div className="flex gap-4">
-                  <input 
-                    type="text" className="form-control w-1/3" 
-                    value={settings.loginHero?.stat1Value || ''} 
-                    onChange={e => setSettings({...settings, loginHero: { ...(settings.loginHero || {}), stat1Value: e.target.value } as any})}
-                    placeholder="100%"
-                  />
-                  <input 
-                    type="text" className="form-control" 
-                    value={settings.loginHero?.stat1Label || ''} 
-                    onChange={e => setSettings({...settings, loginHero: { ...(settings.loginHero || {}), stat1Label: e.target.value } as any})}
-                    placeholder="Secure"
-                  />
-                </div>
-              </div>
-              <div className="form-group">
-                <label className="text-xs font-medium text-text-secondary mb-2 block">Hero Stat 2 (Value & Label)</label>
-                <div className="flex gap-4">
-                  <input 
-                    type="text" className="form-control w-1/3" 
-                    value={settings.loginHero?.stat2Value || ''} 
-                    onChange={e => setSettings({...settings, loginHero: { ...(settings.loginHero || {}), stat2Value: e.target.value } as any})}
-                    placeholder="24/7"
-                  />
-                  <input 
-                    type="text" className="form-control" 
-                    value={settings.loginHero?.stat2Label || ''} 
-                    onChange={e => setSettings({...settings, loginHero: { ...(settings.loginHero || {}), stat2Label: e.target.value } as any})}
-                    placeholder="Access"
-                  />
-                </div>
-              </div>
-              <div className="form-group md:col-span-2">
-                <label className="text-xs font-medium text-text-secondary mb-2 block">Hero Background Image URL</label>
-                <input 
-                  type="text" className="form-control" 
-                  value={settings.loginHero?.backgroundImage || ''} 
-                  onChange={e => setSettings({...settings, loginHero: { ...(settings.loginHero || {}), backgroundImage: e.target.value } as any})}
-                  placeholder="https://images.unsplash.com/..."
-                />
-              </div>
             </div>
           </div>
 
