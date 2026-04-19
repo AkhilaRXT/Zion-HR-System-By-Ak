@@ -69,6 +69,11 @@ export interface AdvanceRequest {
   isPaid?: boolean;
   attachment?: string;
   actionedBy?: string;
+  actionHistory?: {
+    action: string;
+    by: string;
+    date: string;
+  }[];
 }
 
 export interface CashRequest {
@@ -159,6 +164,21 @@ export interface DirectoryEntry {
   name: string;
 }
 
+export interface PayrollReceipt {
+  id: string;
+  month: string;
+  timestamp: string;
+  totalPayout: number;
+  employeesPaid: number;
+  transactions: {
+    empId: string;
+    net: number;
+    notes: string;
+    components: string[];
+  }[];
+  actionedBy: string;
+}
+
 export interface AppData {
   employees: Employee[];
   credentials: UserCredential[];
@@ -170,7 +190,11 @@ export interface AppData {
   leaveBalances: LeaveBalances;
   settings: AppSettings;
   auditLogs: AuditLog[];
+  payrollReceipts: PayrollReceipt[];
   paidDeductions?: { [empId: string]: string[] };
+  paidSalaryAmounts?: { [empId: string]: { [month: string]: number } };
+  paidSalaryNotes?: { [empId: string]: { [month: string]: string } };
+  paidComponents?: { [empId: string]: { [month: string]: string[] } };
   internalMessages: InternalMessage[];
   directory?: DirectoryEntry[];
 }

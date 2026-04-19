@@ -11,7 +11,10 @@ import {
   query, 
   where,
   onSnapshot,
-  getDocFromServer
+  getDocFromServer,
+  arrayUnion,
+  runTransaction,
+  writeBatch
 } from 'firebase/firestore';
 
 export const STORAGE_KEY = 'zion_hr_data';
@@ -116,6 +119,7 @@ const initialData: AppData = {
     }
   },
   auditLogs: [],
+  payrollReceipts: [],
   paidDeductions: {},
   internalMessages: []
 };
@@ -145,6 +149,32 @@ export const DataStore = {
       } else {
         // Self-repair for master admin record and settings
         try {
+          const currentSessionStr = localStorage.getItem(AUTH_KEY);
+          if (currentSessionStr) {
+            const currentSession = JSON.parse(currentSessionStr) as Session;
+            if (currentSession.isAdmin && currentSession.empId) {
+              const myDoc = await getDoc(doc(db, 'employees', currentSession.empId));
+              if (!myDoc.exists()) {
+                 // The database reset wiped their admin employee record because their ID wasn't EMP003
+                 console.log("Restoring missing master admin account based on current session...");
+                 await setDoc(doc(db, 'employees', currentSession.empId), {
+                    id: currentSession.empId,
+                    name: currentSession.name || 'Master Administrator',
+                    email: currentSession.email || 'zioncommercialcreditampara@gmail.com',
+                    role: 'Administrator',
+                    department: 'Management',
+                    branch: 'Head Office',
+                    baseSalary: 0,
+                    hasEPF: false
+                 });
+                 await setDoc(doc(db, 'directory', currentSession.empId), {
+                    id: currentSession.empId,
+                    name: currentSession.name || 'Master Administrator'
+                 });
+              }
+            }
+          }
+
           const adminDoc = await getDoc(doc(db, 'employees', 'EMP003'));
           if (adminDoc.exists()) {
             const data = adminDoc.data() as Employee;
@@ -222,8 +252,9 @@ export const DataStore = {
       const wipeEmployees = async () => {
         const q = query(collection(db, 'employees'));
         const snap = await getDocs(q);
+        const myEmpId = currentSession?.empId;
         for (const d of snap.docs) {
-          if (d.id !== 'EMP003') { // Keep Master Admin
+          if (d.id !== 'EMP003' && d.id !== myEmpId) { // Keep Master Admin and Current User
             await deleteDoc(d.ref);
             await deleteDoc(doc(db, 'directory', d.id));
             await deleteDoc(doc(db, 'leaveBalances', d.id));
@@ -234,9 +265,10 @@ export const DataStore = {
       const wipeCredentials = async () => {
         const q = query(collection(db, 'credentials'));
         const snap = await getDocs(q);
+        const myEmpId = currentSession?.empId;
         for (const d of snap.docs) {
           const data = d.data() as UserCredential;
-          if (data.empId !== 'EMP003') {
+          if (data.empId !== 'EMP003' && data.empId !== myEmpId) {
             await deleteDoc(d.ref);
           }
         }
@@ -774,7 +806,12 @@ export const DataStore = {
       const advDoc = await getDoc(advRef);
       const advData = advDoc.data() as AdvanceRequest;
       
-      const updates = actionedBy ? { status, actionedBy } : { status };
+      const actor = actionedBy || 'System';
+      const historyItem = { action: status, by: actor, date: new Date().toISOString() };
+      
+      const updates: any = actionedBy ? { status, actionedBy } : { status };
+      updates.actionHistory = arrayUnion(historyItem);
+      
       await updateDoc(advRef, updates);
       await this.logAction('Advance Decision', `${status} advance request for ${advData.empId} (LKR ${advData.amount.toLocaleString()})`, 'Advance');
     } catch (error) {
@@ -823,9 +860,262 @@ export const DataStore = {
     }
   },
 
-  async finalizePayroll(month: string, empIds: string[]) {
-    // This would ideally be a batch or a cloud function
-    // For now, we'll just log it and maybe update a few records
-    await this.logAction('Finalize Payroll', `Payroll finalized for ${month}`, 'Settings');
+  async finalizePayroll(month: string, payments: { empId: string, net: number, notes?: string, components: string[] }[]) {
+    try {
+      await this.ensureAuth();
+      const currentSession = this.getSession();
+      const empIds = payments.map(p => p.empId);
+
+      // 1. Mark Approved advances as paid (Atomic update possible via multiple requests but we can transaction this too if needed)
+      const advancesQuery = query(collection(db, 'advances'), where('status', '==', 'Approved'));
+      const advancesSnap = await getDocs(advancesQuery);
+      
+      const advUpdatePromises: Promise<void>[] = [];
+      advancesSnap.docs.forEach(d => {
+        const adv = d.data() as AdvanceRequest;
+        const advanceMonth = new Date(adv.date).toLocaleString('default', { month: 'long', year: 'numeric' });
+        
+        // Find if this employee is in the current payment run, AND if deductions were selected for them
+        const empPayment = payments.find(p => p.empId === adv.empId);
+        
+        if (advanceMonth === month && !adv.isPaid && empPayment && empPayment.components.includes('Deductions')) {
+          const actor = currentSession?.name || 'System';
+          advUpdatePromises.push(updateDoc(d.ref, { 
+            isPaid: true, 
+            actionedBy: actor,
+            actionHistory: arrayUnion({ action: 'Settled via Payroll', by: actor, date: new Date().toISOString() })
+          }));
+        }
+      });
+      await Promise.all(advUpdatePromises);
+
+      // 2. Add this month to the paidDeductions list using Transaction for idempotency
+      await runTransaction(db, async (transaction) => {
+        const pdRefs = payments.map(p => doc(db, 'paidDeductions', p.empId));
+        // PHASE 1: Reads (MUST be done before any writes)
+        const pdDocs = await Promise.all(pdRefs.map(ref => transaction.get(ref)));
+
+        // PHASE 2: Writes
+        payments.forEach((p, index) => {
+          const pdRef = pdRefs[index];
+          const pdDoc = pdDocs[index];
+          
+          const existingData = pdDoc.exists() ? pdDoc.data() : { months: [], paidAmounts: {}, paidNotes: {}, paidComponents: {} };
+          const currentPaid = existingData.paidAmounts?.[month] || 0;
+          const currentNotes = existingData.paidNotes?.[month] || '';
+          const currentCmps = existingData.paidComponents?.[month] || [];
+          
+          // Only pay components NOT already marked as paid
+          const trulyNewCmps = p.components.filter(c => !currentCmps.includes(c));
+          
+          // If the net is 0 and no new components, we still might be "locking" a month (for EPF/etc)
+          // But if we already locked it, and net is 0, we can skip
+          const isMonthAlreadyLocked = existingData.months?.includes(month);
+          if (p.net === 0 && trulyNewCmps.length === 0 && isMonthAlreadyLocked) {
+              return; 
+          }
+
+          let newPaidAmounts = { ...(existingData.paidAmounts || {}) };
+          let newPaidNotes = { ...(existingData.paidNotes || {}) };
+          let newPaidCmps = { ...(existingData.paidComponents || {}) };
+          
+          // Add the amount only once per component run (but since we filter above, this handles partials)
+          newPaidAmounts[month] = currentPaid + p.net;
+          
+          if (p.notes && trulyNewCmps.length > 0) {
+              newPaidNotes[month] = currentNotes ? `${currentNotes} | ${p.notes}` : p.notes;
+          }
+          
+          if (trulyNewCmps.length > 0) {
+              newPaidCmps[month] = [...currentCmps, ...trulyNewCmps];
+          }
+
+          transaction.set(pdRef, {
+            months: arrayUnion(month),
+            paidAmounts: newPaidAmounts,
+            paidNotes: newPaidNotes,
+            paidComponents: newPaidCmps
+          }, { merge: true });
+        });
+      });
+      
+      const receiptId = `PRY-${Date.now()}`;
+      const payloadPayout = payments.reduce((s, p) => s + p.net, 0);
+      await setDoc(doc(db, 'payrollReceipts', receiptId), {
+        id: receiptId,
+        month,
+        timestamp: new Date().toISOString(),
+        totalPayout: payloadPayout,
+        employeesPaid: payments.length,
+        transactions: payments,
+        actionedBy: currentSession?.name || 'System'
+      });
+
+      await this.logAction('Finalize Payroll', `Payroll finalized for ${month}. Total: LKR ${payloadPayout.toLocaleString()}`, 'Payroll');
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, 'finalizePayroll');
+      throw error;
+    }
+  },
+
+  async deletePayrollReceipt(receiptId: string) {
+    try {
+      await this.ensureAuth();
+      const currentSession = this.getSession();
+      
+      const receiptDoc = await getDoc(doc(db, 'payrollReceipts', receiptId));
+      if (!receiptDoc.exists()) throw new Error('Receipt not found');
+      const receipt = receiptDoc.data();
+      const month = receipt.month;
+      const transactions = receipt.transactions || [];
+      
+      const batch = writeBatch(db);
+      
+      // 1. Rollback advances if 'Deductions' were in the components
+      const advancesSnap = await getDocs(collection(db, 'advances'));
+      advancesSnap.docs.forEach(d => {
+        const adv = d.data() as AdvanceRequest;
+        const advanceMonth = new Date(adv.date).toLocaleString('default', { month: 'long', year: 'numeric' });
+        
+        const empPayment = transactions.find((p: any) => p.empId === adv.empId);
+        const hasDeductions = empPayment && empPayment.components && empPayment.components.includes('Deductions');
+        const isLegacyReceipt = empPayment && !empPayment.components;
+        
+        if (advanceMonth === month && adv.isPaid && empPayment && (hasDeductions || isLegacyReceipt)) {
+          const actor = currentSession?.name || 'System';
+          batch.update(d.ref, { 
+             isPaid: false, 
+             actionedBy: `${actor} (Receipt Reverted)`,
+             actionHistory: arrayUnion({ action: 'Settlement Reverted', by: actor, date: new Date().toISOString() })
+          });
+        }
+      });
+
+      // 2. Rollback paidDeductions processing safely using batch mapping
+      // Unique employee IDs only
+      const uniqueEmpIds = [...new Set(transactions.map((p: any) => p.empId))] as string[];
+      const pdRefs = uniqueEmpIds.map(empId => doc(db, 'paidDeductions', empId));
+      
+      if (pdRefs.length > 0) {
+        const pdDocs = await Promise.all(pdRefs.map(ref => getDoc(ref)));
+        
+        pdDocs.forEach((pdDoc) => {
+           if (!pdDoc.exists()) return;
+           const pdRef = pdDoc.ref;
+           const data = pdDoc.data();
+           const empId = pdRef.id;
+           
+           let currentPaid = data.paidAmounts?.[month] || 0;
+           let currentNotesStr = data.paidNotes?.[month] || '';
+           let currentCmps = data.paidComponents?.[month] || [];
+           
+           transactions.filter((p: any) => p.empId === empId).forEach((p: any) => {
+               const receiptComps = p.components || [];
+               currentPaid = Math.max(0, currentPaid - p.net);
+               currentCmps = currentCmps.filter((c: string) => !receiptComps.includes(c));
+               
+               const receiptNotes = p.notes || '';
+               if (currentNotesStr === receiptNotes) {
+                  currentNotesStr = '';
+               } else if (receiptNotes) {
+                  currentNotesStr = currentNotesStr.replace(` | ${receiptNotes}`, '').replace(`${receiptNotes} | `, '').replace(receiptNotes, '');
+               }
+           });
+           
+           let updatedPaidAmounts = { ...(data.paidAmounts || {}) };
+           let updatedPaidNotes = { ...(data.paidNotes || {}) };
+           let updatedPaidComponents = { ...(data.paidComponents || {}) };
+           
+           if (currentPaid === 0 && currentCmps.length === 0) {
+              delete updatedPaidAmounts[month];
+              delete updatedPaidNotes[month];
+              delete updatedPaidComponents[month];
+              
+              batch.update(pdRef, {
+                 months: (data.months || []).filter((m: string) => m !== month),
+                 paidAmounts: updatedPaidAmounts,
+                 paidNotes: updatedPaidNotes,
+                 paidComponents: updatedPaidComponents
+              });
+           } else {
+              updatedPaidAmounts[month] = currentPaid;
+              updatedPaidNotes[month] = currentNotesStr;
+              updatedPaidComponents[month] = currentCmps;
+              
+              batch.set(pdRef, {
+                 paidAmounts: updatedPaidAmounts,
+                 paidNotes: updatedPaidNotes,
+                 paidComponents: updatedPaidComponents
+              }, { merge: true });
+           }
+        });
+      }
+      
+      // 3. Delete the receipt globally
+      batch.delete(receiptDoc.ref);
+      
+      // Execute the rollback
+      await batch.commit();
+      
+      await this.logAction('Delete Receipt', `Deleted payroll receipt ${receiptId} for ${month} and rolled back transactions.`, 'Payroll');
+
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, `payrollReceipts/${receiptId}`);
+      throw error;
+    }
+  },
+
+  async resetPayrollMonth(month: string) {
+    try {
+      await this.ensureAuth();
+      const currentSession = this.getSession();
+      
+      const advancesSnap = await getDocs(collection(db, 'advances'));
+      const advUpdatePromises: Promise<void>[] = [];
+      advancesSnap.docs.forEach(d => {
+        const adv = d.data() as AdvanceRequest;
+        const advanceMonth = new Date(adv.date).toLocaleString('default', { month: 'long', year: 'numeric' });
+        if (advanceMonth === month && adv.isPaid) {
+          const actor = currentSession?.name || 'System';
+          advUpdatePromises.push(updateDoc(d.ref, { 
+             isPaid: false, 
+             actionedBy: `${actor} (Reset)`,
+             actionHistory: arrayUnion({ action: 'Month Reset (Reverted)', by: actor, date: new Date().toISOString() })
+          }));
+        }
+      });
+      await Promise.all(advUpdatePromises);
+
+      const pdSnap = await getDocs(collection(db, 'paidDeductions'));
+      const batch = writeBatch(db);
+      
+      pdSnap.docs.forEach(d => {
+        const data = d.data();
+        if (data.months?.includes(month)) {
+           const newPaidAmounts = { ...data.paidAmounts };
+           delete newPaidAmounts[month];
+           
+           const newPaidNotes = { ...data.paidNotes };
+           delete newPaidNotes[month];
+           
+           const newPaidCmps = { ...data.paidComponents };
+           delete newPaidCmps[month];
+           
+           batch.update(d.ref, {
+             months: (data.months || []).filter((m: string) => m !== month),
+             paidAmounts: newPaidAmounts,
+             paidNotes: newPaidNotes,
+             paidComponents: newPaidCmps
+           });
+        }
+      });
+      
+      await batch.commit();
+
+      await this.logAction('Reset Payroll', `Payroll data unlocked/reset for ${month}`, 'Payroll');
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, 'resetPayrollMonth');
+      throw error;
+    }
   }
 };

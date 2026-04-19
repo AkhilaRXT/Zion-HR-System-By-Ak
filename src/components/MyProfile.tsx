@@ -1,6 +1,6 @@
 import React, { useRef, useState } from 'react';
 import { AppData, Session } from '../types';
-import { User, Wallet, CalendarCheck, PlaneTakeoff, Camera, Landmark } from 'lucide-react';
+import { User, Wallet, CalendarCheck, PlaneTakeoff, Camera, Landmark, Database } from 'lucide-react';
 import { DataStore } from '../lib/dataStore';
 import { compressImage } from '../lib/imageUtils';
 import { AnimatePresence } from 'motion/react';
@@ -86,21 +86,25 @@ export default function MyProfile({ session, data, onRefresh }: MyProfileProps) 
   const advTotal = data.advances
     .filter(a => {
       const advanceMonth = new Date(a.date).toLocaleString('default', { month: 'long', year: 'numeric' });
-      return a.empId === emp.id && a.status === 'Approved' && !a.isPaid && advanceMonth === currentMonth;
+      // In the profile view, show all approved advances for the month, regardless of isPaid, so they can see their total advance deduction for the month's breakdown
+      return a.empId === emp.id && a.status === 'Approved' && advanceMonth === currentMonth;
     })
     .reduce((s, a) => s + a.amount, 0);
   
   const isAlreadyFinalized = data.paidDeductions?.[emp.id]?.includes(currentMonth);
 
-  const epf = (emp.hasEPF && !isAlreadyFinalized) ? (emp.baseSalary || 0) * 0.08 : 0;
-  const bikeInstallment = !isAlreadyFinalized ? (emp.bikeInstallment || 0) : 0;
-  const staffLoan = !isAlreadyFinalized ? (emp.staffLoan || 0) : 0;
+  const epf = emp.hasEPF ? (emp.baseSalary || 0) * 0.08 : 0;
+  const bikeInstallment = emp.bikeInstallment || 0;
+  const staffLoan = emp.staffLoan || 0;
 
   const totalDeductions = advTotal + bikeInstallment + staffLoan + epf;
   
   const gross = (emp.baseSalary || 0) + (emp.travelingAllowance || 0) + (emp.vehicleAllowance || 0) +
                 (emp.performanceAllowance || 0) + petrolLKR + (emp.attendanceBonus || 0) + (emp.overtime || 0);
-  const netSalary = gross - totalDeductions;
+
+  const alreadyPaid = data.paidSalaryAmounts?.[emp.id]?.[currentMonth] || 0;
+  const rawNet = gross - totalDeductions - alreadyPaid;
+  const netSalary = Math.max(0, rawNet);
 
   return (
     <div className="max-w-4xl mx-auto space-y-12">
@@ -195,9 +199,22 @@ export default function MyProfile({ session, data, onRefresh }: MyProfileProps) 
                   <span className="font-mono text-red-500 font-semibold">- LKR {staffLoan.toLocaleString()}</span>
                 </div>
               )}
+              {alreadyPaid > 0 && (
+                <div className="pt-2 border-t border-border-accent/50 space-y-1">
+                  <div className="flex justify-between items-center text-sm">
+                    <span className="text-brand-primary font-medium">Banked / Transferred Amount</span>
+                    <span className="font-mono text-brand-primary font-bold">- LKR {alreadyPaid.toLocaleString()}</span>
+                  </div>
+                  {data.paidSalaryNotes?.[emp.id]?.[currentMonth] && (
+                    <div className="text-[10px] text-text-secondary italic pl-2">
+                       (Transferred Components: {data.paidSalaryNotes[emp.id][currentMonth]})
+                    </div>
+                  )}
+                </div>
+              )}
               {isAlreadyFinalized && (
                 <div className="mt-2 p-2 bg-green-50 border border-green-100 rounded text-[10px] text-green-700 font-medium text-center">
-                  Payroll finalized for this month. Recurring deductions are marked as paid.
+                  Payroll locked and processed.
                 </div>
               )}
             </div>
@@ -207,6 +224,33 @@ export default function MyProfile({ session, data, onRefresh }: MyProfileProps) 
               <span className="text-xl font-bold text-brand-accent">LKR {netSalary.toLocaleString()}</span>
             </div>
           </div>
+
+          {alreadyPaid > 0 && (
+            <div className="glass-panel p-8">
+              <h4 className="text-sm font-semibold text-text-primary mb-6 flex items-center gap-2">
+                <Database className="w-4 h-4 text-emerald-500" /> Payment History ({currentMonth})
+              </h4>
+              <div className="space-y-4">
+                {data.paidSalaryNotes[emp.id]?.[currentMonth]?.split(' | ').map((note: string, idx: number) => {
+                   const parts = note.match(/(.+) \(LKR (.+)\)/);
+                   const comps = parts ? parts[1] : note;
+                   const amt = parts ? parts[2] : '-';
+                   return (
+                     <div key={idx} className="flex justify-between items-center py-2 border-b border-border-accent last:border-0">
+                        <div className="space-y-1">
+                          <p className="text-xs font-semibold text-text-primary">Batch #{idx + 1}</p>
+                          <p className="text-[10px] text-text-secondary">{comps}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-xs font-mono font-bold text-emerald-600">LKR {amt}</p>
+                          <span className="text-[9px] px-1 bg-emerald-100 text-emerald-700 rounded uppercase font-bold tracking-tight">Paid</span>
+                        </div>
+                     </div>
+                   );
+                })}
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="space-y-8">

@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
 import { AppData, Session, AppSettings } from '../types';
 import { DataStore } from '../lib/dataStore';
-import { Save, RefreshCw, Palette, ShieldAlert, Clock, Database, Trash2, FileDown, Camera } from 'lucide-react';
+import { Save, RefreshCw, Palette, ShieldAlert, Clock, Database, Trash2, FileDown, Camera, AlertTriangle } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { motion, AnimatePresence } from 'motion/react';
 import ConfirmModal from './ConfirmModal';
 import Notification, { NotificationType } from './Notification';
 import { compressImage } from '../lib/imageUtils';
+import { collection, getDocs, doc, deleteDoc } from 'firebase/firestore';
+import { db } from '../lib/firebase';
 
 interface SettingsProps {
   session: Session;
@@ -142,6 +144,24 @@ export default function Settings({ session, data, onRefresh }: SettingsProps) {
     }
   };
 
+  const [isWiping, setIsWiping] = useState(false);
+  const handleWipePaidHistory = async () => {
+    if (!window.confirm("Are you SURE you want to factory-reset the entire partial-paid history for all employees? This will clear all paidDeductions and set everyone back to 0.")) return;
+    setIsWiping(true);
+    try {
+      const q = collection(db, 'paidDeductions');
+      const snap = await getDocs(q);
+      const prs = snap.docs.map(d => deleteDoc(d.ref));
+      await Promise.all(prs);
+      showNotification('Successfully factory-reset paid history!');
+      if (onRefresh) onRefresh();
+    } catch(err) {
+      console.error(err);
+      showNotification('Failed to wipe paid history. See console.', 'error');
+    }
+    setIsWiping(false);
+  };
+
   return (
     <div className="max-w-4xl mx-auto space-y-12">
       <div className="glass-panel p-10">
@@ -149,6 +169,17 @@ export default function Settings({ session, data, onRefresh }: SettingsProps) {
           <div>
             <h3 className="text-sm font-semibold text-text-primary">System Configuration</h3>
             <p className="text-xs text-text-secondary font-medium mt-1">Manage core application settings and branding</p>
+            <div className="mt-4">
+              <button 
+                type="button" 
+                onClick={handleWipePaidHistory}
+                disabled={isWiping}
+                className="btn text-red-500 border border-red-500 hover:bg-red-50"
+              >
+                  <AlertTriangle className="w-4 h-4 mr-2 inline" />
+                  {isWiping ? 'Wiping...' : 'Factory Reset Partial Pay History'}
+              </button>
+            </div>
           </div>
           <div className="flex flex-col items-center gap-3">
             <div className="relative group cursor-pointer">

@@ -118,6 +118,11 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    match /payrollReceipts/{id} {
+      allow read: if isAdmin();
+      allow write: if isAdmin();
+    }
+
     match /paidDeductions/{empId} {
       allow read: if isAuthenticated() && (isOwner(empId) || isAdmin());
       allow write: if isAdmin();

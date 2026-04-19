@@ -18,7 +18,8 @@ export function printPayAdvice(
     attendanceBonus: true,
     overtime: true,
     deductions: true
-  }
+  },
+  customBonus: number = 0
 ) {
   const petrolLKR = payComponents.petrolAllowance ? (employee.petrolLitres || 0) * fuelPrice : 0;
   const epf = (deductEPF && payComponents.deductions) ? (employee.baseSalary || 0) * (epfPercentage / 100) : 0;
@@ -30,7 +31,8 @@ export function printPayAdvice(
     vehicle: payComponents.vehicleAllowance ? (employee.vehicleAllowance || 0) : 0,
     petrol: petrolLKR,
     attendance: payComponents.attendanceBonus ? (employee.attendanceBonus || 0) : 0,
-    overtime: payComponents.overtime ? (employee.overtime || 0) : 0
+    overtime: payComponents.overtime ? (employee.overtime || 0) : 0,
+    adHocBonus: customBonus
   };
 
   const totalEarnings = Object.values(earnings).reduce((s, v) => s + v, 0);
@@ -48,7 +50,7 @@ export function printPayAdvice(
   };
 
   const totalDeductions = Object.values(deductions).reduce((s, v) => s + v, 0);
-  const netSalary = totalEarnings - totalDeductions;
+  const netSalary = Math.max(0, totalEarnings - totalDeductions);
 
   const printWindow = window.open('', '_blank');
   if (!printWindow) return;
@@ -241,7 +243,7 @@ export function printPayAdvice(
                 </div>
                 <div class="calc-sub-row">
                     <div>IV BONUS / INCENTIVE</div>
-                    <div>${bonusIncentive.toLocaleString(undefined, {minimumFractionDigits: 2})}</div>
+                    <div>${earnings.adHocBonus.toLocaleString(undefined, {minimumFractionDigits: 2})}</div>
                 </div>
                 <div class="calc-sub-row">
                     <div>V OTHER ALLOWANCE</div>
@@ -294,7 +296,7 @@ export function printPayAdvice(
             </div>
 
             <div class="net-salary-box">
-                <div>▪ NET SALARY</div>
+                <div>▪ NET PAYABLE</div>
                 <div>LKR ${netSalary.toLocaleString(undefined, {minimumFractionDigits: 2})}</div>
             </div>
 

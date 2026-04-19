@@ -138,13 +138,25 @@ export default function App() {
       // Lazy load modules based on current route
       if (route === 'payroll' || route === 'settings') {
         syncCollection('advances', (docs) => updatePart({ advances: docs as AdvanceRequest[] }));
+        syncCollection('payrollReceipts', (docs) => {
+          const sorted = docs.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+          updatePart({ payrollReceipts: sorted as any[] });
+        });
         syncCollection('cashRequests', (docs) => updatePart({ cashRequests: docs as CashRequest[] }));
         syncCollection('targets', (docs) => updatePart({ targets: docs as Target[] }));
         
         const unsubPaid = onSnapshot(collection(db, 'paidDeductions'), (snap) => {
           const paid: { [key: string]: string[] } = {};
-          snap.docs.forEach(d => { paid[d.id] = d.data().months || []; });
-          updatePart({ paidDeductions: paid });
+          const paidAmts: { [empId: string]: { [month: string]: number } } = {};
+          const paidNts: { [empId: string]: { [month: string]: string } } = {};
+          const paidCmps: { [empId: string]: { [month: string]: string[] } } = {};
+          snap.docs.forEach(d => { 
+            paid[d.id] = d.data().months || []; 
+            paidAmts[d.id] = d.data().paidAmounts || {};
+            paidNts[d.id] = d.data().paidNotes || {};
+            paidCmps[d.id] = d.data().paidComponents || {};
+          });
+          updatePart({ paidDeductions: paid, paidSalaryAmounts: paidAmts, paidSalaryNotes: paidNts, paidComponents: paidCmps });
         }, (err) => console.warn('Permission denied for paidDeductions'));
         unsubscribers.push(unsubPaid);
       }
