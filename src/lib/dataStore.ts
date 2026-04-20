@@ -128,10 +128,7 @@ const initialData: AppData = {
 export const DataStore = {
   async init() {
     try {
-      // Test connection
-      await getDocFromServer(doc(db, 'test', 'connection'));
-      
-      // Seed initial data if settings don't exist
+      // Basic check for settings
       const settingsDoc = await getDoc(doc(db, 'settings', 'global'));
       if (!settingsDoc.exists()) {
         console.log('Seeding initial data...');
@@ -147,72 +144,57 @@ export const DataStore = {
         for (const [empId, balance] of Object.entries(initialData.leaveBalances)) {
           await setDoc(doc(db, 'leaveBalances', empId), balance);
         }
-      } else {
-        // Self-repair for master admin record and settings
-        try {
-          const currentSessionStr = localStorage.getItem(AUTH_KEY);
-          if (currentSessionStr) {
-            const currentSession = JSON.parse(currentSessionStr) as Session;
-            if (currentSession.isAdmin && currentSession.empId) {
-              const myDoc = await getDoc(doc(db, 'employees', currentSession.empId));
-              if (!myDoc.exists()) {
-                 // The database reset wiped their admin employee record because their ID wasn't EMP003
-                 console.log("Restoring missing master admin account based on current session...");
-                 await setDoc(doc(db, 'employees', currentSession.empId), {
-                    id: currentSession.empId,
-                    name: currentSession.name || 'Master Administrator',
-                    email: currentSession.email || 'zioncommercialcreditampara@gmail.com',
-                    role: 'Administrator',
-                    department: 'Management',
-                    branch: 'Head Office',
-                    baseSalary: 0,
-                    hasEPF: false
-                 });
-                 await setDoc(doc(db, 'directory', currentSession.empId), {
-                    id: currentSession.empId,
-                    name: currentSession.name || 'Master Administrator'
-                 });
-              }
-            }
-          }
-
-          const adminDoc = await getDoc(doc(db, 'employees', 'EMP003'));
-          if (adminDoc.exists()) {
-            const data = adminDoc.data() as Employee;
-            if (data.email !== "zioncommercialcreditampara@gmail.com") {
-              await updateDoc(doc(db, 'employees', 'EMP003'), { email: "zioncommercialcreditampara@gmail.com" });
-            }
-          }
-
-          if (settingsDoc.exists()) {
-            const settingsData = settingsDoc.data() as AppSettings;
-            if (settingsData.companyName === 'NEXUS' || settingsData.companySubtitle?.includes('Systerm')) {
-              await updateDoc(doc(db, 'settings', 'global'), { 
-                companyName: settingsData.companyName === 'NEXUS' ? 'Zion HR' : settingsData.companyName, 
-                companySubtitle: (settingsData.companySubtitle || '').replace('Systerm', 'System') || 'Human Resources'
-              });
-            }
-          }
-
-          // Ensure directory exists for all current employees to fix autocomplete
-          const employeesQuery = query(collection(db, 'employees'));
-          const employeesSnap = await getDocs(employeesQuery);
-          for (const docSnap of employeesSnap.docs) {
-             const emp = docSnap.data() as Employee;
-             const dirSnap = await getDoc(doc(db, 'directory', emp.id));
-             if (!dirSnap.exists()) {
-                await setDoc(doc(db, 'directory', emp.id), { id: emp.id, name: emp.name });
-             }
-          }
-
-        } catch (e) {
-          console.warn('Self-repair skipped or failed:', e);
-        }
       }
     } catch (error) {
       if(error instanceof Error && error.message.includes('the client is offline')) {
         console.error("Please check your Firebase configuration. ");
       }
+      console.warn('Initialization issue:', error);
+    }
+  },
+
+  async runMaintenance() {
+    // Hidden maintenance function to repair database inconsistencies
+    try {
+      const currentSessionStr = localStorage.getItem(AUTH_KEY);
+      if (currentSessionStr) {
+        const currentSession = JSON.parse(currentSessionStr) as Session;
+        if (currentSession.isAdmin && currentSession.empId) {
+          const myDoc = await getDoc(doc(db, 'employees', currentSession.empId));
+          if (!myDoc.exists()) {
+             await setDoc(doc(db, 'employees', currentSession.empId), {
+                id: currentSession.empId,
+                name: currentSession.name || 'Master Administrator',
+                email: currentSession.email || 'zioncommercialcreditampara@gmail.com',
+                role: 'Administrator',
+                department: 'Management',
+                branch: 'Head Office',
+                baseSalary: 0,
+                hasEPF: false
+             });
+             await setDoc(doc(db, 'directory', currentSession.empId), {
+                id: currentSession.empId,
+                name: currentSession.name || 'Master Administrator'
+             });
+          }
+        }
+      }
+
+      const adminDoc = await getDoc(doc(db, 'employees', 'EMP003'));
+      if (adminDoc.exists()) {
+        const data = adminDoc.data() as Employee;
+        if (data.email !== "zioncommercialcreditampara@gmail.com") {
+          await updateDoc(doc(db, 'employees', 'EMP003'), { email: "zioncommercialcreditampara@gmail.com" });
+        }
+      }
+
+      const employeesSnap = await getDocs(query(collection(db, 'employees')));
+      for (const docSnap of employeesSnap.docs) {
+         const emp = docSnap.data() as Employee;
+         await setDoc(doc(db, 'directory', emp.id), { id: emp.id, name: emp.name }, { merge: true });
+      }
+    } catch (e) {
+      console.warn('Maintenance failed:', e);
     }
   },
 

@@ -49,7 +49,18 @@ export default function Dashboard({ session, data, onRefresh }: DashboardProps) 
   const myAttendance = data.attendance.find(a => a.empId === currentEmpId && a.date === today);
   const myPendingLeaves = data.leaves.filter(l => l.empId === currentEmpId && l.status === 'Pending').length;
   const myApprovedAdvances = data.advances.filter(a => a.empId === currentEmpId && a.status === 'Approved').length;
-  const myBalance = data.leaveBalances[currentEmpId]?.annual || 0;
+  
+  const calculateDays = (from: string, to: string) => {
+    if (!from || !to) return 0;
+    const start = new Date(from);
+    const end = new Date(to);
+    const diffTime = Math.abs(end.getTime() - start.getTime());
+    return Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+  };
+
+  const myApprovedLeaves = data.leaves.filter(l => l.empId === currentEmpId && l.status === 'Approved');
+  const myAnnualTaken = myApprovedLeaves.filter(l => l.type === 'Annual').reduce((acc, l) => acc + calculateDays(l.from, l.to), 0);
+  const myBalance = (data.settings.leavePolicy.annualTotal || 0) - myAnnualTaken;
 
   const [selectedEmpId, setSelectedEmpId] = useState(data.employees[0]?.id || '');
   const [empSearch, setEmpSearch] = useState('');

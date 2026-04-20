@@ -119,7 +119,7 @@ service cloud.firestore {
     }
 
     match /settings/{id} {
-      allow read: if isAuthenticated();
+      allow read: if true;
       allow write: if isAdmin();
     }
 

@@ -32,17 +32,20 @@ export default function App() {
   useEffect(() => {
     if (isLoading) {
       const timer = setTimeout(() => {
-        console.warn('Loading fallback triggered after 6s. Database may be unresponsive.');
+        console.warn('Loading fallback triggered after 4s. Database may be unresponsive.');
         setIsLoading(false);
         setIsAuthReady(true);
         setIsSettingsReady(true);
-      }, 6000);
+      }, 4000);
       return () => clearTimeout(timer);
     }
   }, [isLoading]);
 
   useEffect(() => {
-    DataStore.init();
+    DataStore.init().then(() => {
+      // Run maintenance in background without blocking
+      DataStore.runMaintenance();
+    });
     const existing = DataStore.getSession();
     if (existing) setSession(existing);
 
@@ -263,9 +266,9 @@ export default function App() {
     }, (err) => console.warn('Permission denied for general directory list'));
     unsubscribers.push(unsubDirList);
 
-    // Allow 800ms for initial collections to trigger their cached snapshots.
+    // Allow 300ms for initial collections to trigger their cached snapshots.
     // Since we now cache settings and have no dummy data, this guarantees a smooth, flash-free transition.
-    const loadTimer = setTimeout(() => setIsLoading(false), 800);
+    const loadTimer = setTimeout(() => setIsLoading(false), 300);
 
     return () => {
       unsubscribers.forEach(unsub => unsub());

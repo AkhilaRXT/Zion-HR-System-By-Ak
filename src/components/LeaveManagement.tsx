@@ -29,13 +29,21 @@ export default function LeaveManagement({ session, data, onRefresh }: LeaveManag
   const policy = data.settings.leavePolicy;
   const approvedLeaves = data.leaves.filter(l => l.empId === currentEmpId && l.status === 'Approved');
   
-  const annualTaken = approvedLeaves.filter(l => l.type === 'Annual').length;
-  const casualTaken = approvedLeaves.filter(l => l.type === 'Casual').length;
-  const sickTaken = approvedLeaves.filter(l => l.type === 'Sick').length;
+  const calculateDays = (from: string, to: string) => {
+    if (!from || !to) return 0;
+    const start = new Date(from);
+    const end = new Date(to);
+    const diffTime = Math.abs(end.getTime() - start.getTime());
+    return Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+  };
+
+  const annualTaken = approvedLeaves.filter(l => l.type === 'Annual').reduce((acc, l) => acc + calculateDays(l.from, l.to), 0);
+  const casualTaken = approvedLeaves.filter(l => l.type === 'Casual').reduce((acc, l) => acc + calculateDays(l.from, l.to), 0);
+  const sickTaken = approvedLeaves.filter(l => l.type === 'Sick').reduce((acc, l) => acc + calculateDays(l.from, l.to), 0);
 
   const casualBalance = (policy.casualTotal || 0) - casualTaken;
   const sickBalance = (policy.sickTotal || 0) - sickTaken;
-  const annualBalance = casualBalance + sickBalance - annualTaken;
+  const annualBalance = (policy.annualTotal || 0) - annualTaken;
 
   const balances = {
     annual: annualBalance,
@@ -179,13 +187,13 @@ export default function LeaveManagement({ session, data, onRefresh }: LeaveManag
                 
                 // Calculate balance for this specific employee
                 const empApprovedLeaves = data.leaves.filter(leave => leave.empId === l.empId && leave.status === 'Approved');
-                const empAnnualTaken = empApprovedLeaves.filter(leave => leave.type === 'Annual').length;
-                const empCasualTaken = empApprovedLeaves.filter(leave => leave.type === 'Casual').length;
-                const empSickTaken = empApprovedLeaves.filter(leave => leave.type === 'Sick').length;
+                const empAnnualTaken = empApprovedLeaves.filter(leave => leave.type === 'Annual').reduce((acc, leave) => acc + calculateDays(leave.from, leave.to), 0);
+                const empCasualTaken = empApprovedLeaves.filter(leave => leave.type === 'Casual').reduce((acc, leave) => acc + calculateDays(leave.from, leave.to), 0);
+                const empSickTaken = empApprovedLeaves.filter(leave => leave.type === 'Sick').reduce((acc, leave) => acc + calculateDays(leave.from, leave.to), 0);
 
                 const empCasualBalance = (policy.casualTotal || 0) - empCasualTaken;
                 const empSickBalance = (policy.sickTotal || 0) - empSickTaken;
-                const empAnnualBalance = empCasualBalance + empSickBalance - empAnnualTaken;
+                const empAnnualBalance = (policy.annualTotal || 0) - empAnnualTaken;
 
                 return (
                   <tr key={l.id}>

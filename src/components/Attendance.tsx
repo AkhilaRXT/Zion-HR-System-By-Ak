@@ -20,33 +20,66 @@ export default function Attendance({ session, data, onRefresh }: AttendanceProps
   const [notification, setNotification] = useState<{ message: string, type: NotificationType } | null>(null);
   const [exportDate, setExportDate] = useState('');
   
-  const attendances = [...data.attendance].sort((a, b) => b.id - a.id);
+  const sortedHistory = [...data.attendance].sort((a, b) => b.id - a.id);
+  
+  const displayedAttendance = exportDate 
+    ? data.employees.map(emp => {
+        const rec = data.attendance.find(a => a.date === exportDate && a.empId === emp.id);
+        return rec || {
+          id: -1,
+          empId: emp.id,
+          date: exportDate,
+          status: 'Absent' as any,
+          checkIn: '--',
+          checkOut: '--'
+        };
+      })
+    : sortedHistory;
 
   const showNotification = (message: string, type: NotificationType = 'success') => {
     setNotification({ message, type });
   };
 
   const handleExport = async () => {
-    let dataToExport = attendances;
+    let sheetData: any[] = [];
+    
     if (exportDate) {
-      dataToExport = attendances.filter(a => a.date === exportDate);
-      if (dataToExport.length === 0) {
-        showNotification(`No attendance records found for ${exportDate}`, 'error');
+      // Export for a specific date: Include all employees
+      sheetData = displayedAttendance.map(a => {
+        const emp = data.employees.find(e => e.id === a.empId);
+        return {
+          Date: a.date,
+          'EMP ID': a.empId,
+          'Employee Name': emp?.name || 'Unknown',
+          Status: a.status,
+          'Check In': a.checkIn,
+          'Check Out': a.checkOut
+        };
+      });
+      
+      if (sheetData.length === 0) {
+        showNotification(`No employees found to export for ${exportDate}`, 'error');
         return;
       }
+    } else {
+      // General export: Export all existing records only
+      if (sortedHistory.length === 0) {
+        showNotification(`No attendance records found to export`, 'error');
+        return;
+      }
+      sheetData = sortedHistory.map(a => {
+        const emp = data.employees.find(e => e.id === a.empId);
+        return {
+          Date: a.date,
+          'EMP ID': a.empId,
+          'Employee Name': emp?.name || 'Unknown',
+          Status: a.status,
+          'Check In': a.checkIn,
+          'Check Out': a.checkOut
+        };
+      });
     }
 
-    const sheetData = dataToExport.map(a => {
-      const emp = data.employees.find(e => e.id === a.empId);
-      return {
-        Date: a.date,
-        'EMP ID': a.empId,
-        'Employee Name': emp?.name || 'Unknown',
-        Status: a.status,
-        'Check In': a.checkIn,
-        'Check Out': a.checkOut
-      };
-    });
     const ws = XLSX.utils.json_to_sheet(sheetData);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Attendance');
@@ -172,7 +205,7 @@ export default function Attendance({ session, data, onRefresh }: AttendanceProps
             </tr>
           </thead>
           <tbody>
-            {attendances.map(a => {
+            {displayedAttendance.map(a => {
               const emp = data.employees.find(e => e.id === a.empId);
               const statusCls = 
                 a.status === 'Present' ? 'badge-success' : 
@@ -180,8 +213,10 @@ export default function Attendance({ session, data, onRefresh }: AttendanceProps
                 a.status === 'Late' ? 'badge-info' : 
                 a.status === 'Leave' ? 'badge-info' : 'badge-danger';
               
+              const isRealRecord = a.id !== -1;
+              
               return (
-                <tr key={a.id}>
+                <tr key={isRealRecord ? a.id : `absent-${a.empId}`}>
                   <td className="font-mono text-sm text-text-secondary">{a.date}</td>
                   <td className="font-medium text-text-primary">{emp?.name || a.empId}</td>
                   <td><span className={`badge ${statusCls}`}>{a.status}</span></td>
@@ -189,20 +224,24 @@ export default function Attendance({ session, data, onRefresh }: AttendanceProps
                   <td className="font-mono text-sm text-text-secondary">{a.checkOut}</td>
                   {isAdmin && (
                     <td>
-                      <div className="flex gap-4">
-                        <button 
-                          onClick={() => setEditing(a)}
-                          className="text-text-secondary hover:text-brand-accent transition-colors"
-                        >
-                          <Edit3 className="w-4 h-4" />
-                        </button>
-                        <button 
-                          onClick={() => setConfirmDelete(a.id)}
-                          className="text-text-secondary hover:text-red-500 transition-colors"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
+                      {isRealRecord ? (
+                        <div className="flex gap-4">
+                          <button 
+                            onClick={() => setEditing(a)}
+                            className="text-text-secondary hover:text-brand-accent transition-colors"
+                          >
+                            <Edit3 className="w-4 h-4" />
+                          </button>
+                          <button 
+                            onClick={() => setConfirmDelete(a.id)}
+                            className="text-text-secondary hover:text-red-500 transition-colors"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="text-[10px] text-text-secondary italic">No record</div>
+                      )}
                     </td>
                   )}
                 </tr>
