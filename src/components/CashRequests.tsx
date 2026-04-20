@@ -78,7 +78,7 @@ export default function CashRequests({ session, data }: CashRequestsProps) {
     }
   };
 
-  const filteredRequests = data.cashRequests
+  const filteredRequests = (data.cashRequests || [])
     .filter(r => canManageCash || r.empId === currentEmpId)
     .sort((a, b) => b.id - a.id);
 
@@ -101,7 +101,7 @@ export default function CashRequests({ session, data }: CashRequestsProps) {
     }
 
     const sheetData = requestsToExport.map(r => {
-      const emp = data.employees.find(e => e.id === r.empId);
+      const emp = (data.employees || []).find(e => e.id === r.empId);
       return {
         Date: r.date,
         'EMP ID': r.empId,
@@ -217,7 +217,7 @@ export default function CashRequests({ session, data }: CashRequestsProps) {
               </thead>
               <tbody>
                 {filteredRequests.map(r => {
-                  const emp = data.employees.find(e => e.id === r.empId);
+                  const emp = (data.employees || []).find(e => e.id === r.empId);
                   const statusCls = r.status === 'Approved' ? 'badge-success' : r.status === 'Rejected' ? 'badge-danger' : 'badge-warning';
                   
                   return (

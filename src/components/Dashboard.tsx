@@ -35,20 +35,20 @@ export default function Dashboard({ session, data, onRefresh }: DashboardProps) 
   const canSeeLeaves = isAdmin && (session.email === "zioncommercialcreditampara@gmail.com" || session.permissions?.includes('leave'));
   const canSeeAdvances = isAdmin && (session.email === "zioncommercialcreditampara@gmail.com" || session.permissions?.includes('payroll'));
 
-  const totalStaff = data.employees.length;
+  const totalStaff = (data.employees || []).length;
   const presentToday = new Set(
-    data.attendance
+    (data.attendance || [])
       .filter(a => a.date === today && (a.status === 'Present' || a.status === 'Late' || a.status === 'Half Day'))
       .map(a => a.empId)
-      .filter(id => data.employees.some(e => e.id === id))
+      .filter(id => (data.employees || []).some(e => e.id === id))
   ).size;
-  const pendingLeavesCount = data.leaves.filter(l => l.status === 'Pending').length;
-  const approvedAdvancesCount = data.advances.filter(a => a.status === 'Approved').length;
+  const pendingLeavesCount = (data.leaves || []).filter(l => l.status === 'Pending').length;
+  const approvedAdvancesCount = (data.advances || []).filter(a => a.status === 'Approved').length;
 
   // Member Stats
-  const myAttendance = data.attendance.find(a => a.empId === currentEmpId && a.date === today);
-  const myPendingLeaves = data.leaves.filter(l => l.empId === currentEmpId && l.status === 'Pending').length;
-  const myApprovedAdvances = data.advances.filter(a => a.empId === currentEmpId && a.status === 'Approved').length;
+  const myAttendance = (data.attendance || []).find(a => a.empId === currentEmpId && a.date === today);
+  const myPendingLeaves = (data.leaves || []).filter(l => l.empId === currentEmpId && l.status === 'Pending').length;
+  const myApprovedAdvances = (data.advances || []).filter(a => a.empId === currentEmpId && a.status === 'Approved').length;
   
   const calculateDays = (from: string, to: string) => {
     if (!from || !to) return 0;
@@ -58,16 +58,16 @@ export default function Dashboard({ session, data, onRefresh }: DashboardProps) 
     return Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
   };
 
-  const myApprovedLeaves = data.leaves.filter(l => l.empId === currentEmpId && l.status === 'Approved');
+  const myApprovedLeaves = (data.leaves || []).filter(l => l.empId === currentEmpId && l.status === 'Approved');
   const myAnnualTaken = myApprovedLeaves.filter(l => l.type === 'Annual').reduce((acc, l) => acc + calculateDays(l.from, l.to), 0);
-  const myBalance = (data.settings.leavePolicy.annualTotal || 0) - myAnnualTaken;
+  const myBalance = (data.settings?.leavePolicy?.annualTotal || 0) - myAnnualTaken;
 
-  const [selectedEmpId, setSelectedEmpId] = useState(data.employees[0]?.id || '');
+  const [selectedEmpId, setSelectedEmpId] = useState((data.employees || [])[0]?.id || '');
   const [empSearch, setEmpSearch] = useState('');
 
   // Sync selection with search results
   useEffect(() => {
-    const filtered = data.employees.filter(e => 
+    const filtered = (data.employees || []).filter(e => 
       e.name.toLowerCase().includes(empSearch.toLowerCase()) || 
       e.id.toLowerCase().includes(empSearch.toLowerCase())
     );
@@ -130,7 +130,7 @@ export default function Dashboard({ session, data, onRefresh }: DashboardProps) 
   };
 
   const handleCheckOut = async () => {
-    const rec = data.attendance.find(a => a.empId === selectedEmpId && a.date === today);
+    const rec = (data.attendance || []).find(a => a.empId === selectedEmpId && a.date === today);
     if (!rec) {
       showNotification(`Employee hasn't checked in yet!`, 'warning');
       return;
@@ -139,15 +139,15 @@ export default function Dashboard({ session, data, onRefresh }: DashboardProps) 
     const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     try {
       await DataStore.checkOut(rec.id, timeStr);
-      const emp = data.employees.find(e => e.id === selectedEmpId);
+      const emp = (data.employees || []).find(e => e.id === selectedEmpId);
       showNotification(`${emp?.name} checked out!`, 'info');
     } catch (err) {
       showNotification('Failed to check out.', 'error');
     }
   };
 
-  const todayAttendance = data.attendance.filter(a => a.date === today);
-  const displayEmployees = canSeeAttendance ? data.employees : data.employees.filter(e => e.id === currentEmpId);
+  const todayAttendance = (data.attendance || []).filter(a => a.date === today);
+  const displayEmployees = canSeeAttendance ? (data.employees || []) : (data.employees || []).filter(e => e.id === currentEmpId);
 
   return (
     <div className="space-y-8">
@@ -209,7 +209,7 @@ export default function Dashboard({ session, data, onRefresh }: DashboardProps) 
                   value={selectedEmpId}
                   onChange={(e) => setSelectedEmpId(e.target.value)}
                 >
-                  {data.employees
+                  {(data.employees || [])
                     .filter(e => 
                       e.name.toLowerCase().includes(empSearch.toLowerCase()) || 
                       e.id.toLowerCase().includes(empSearch.toLowerCase())
@@ -218,7 +218,7 @@ export default function Dashboard({ session, data, onRefresh }: DashboardProps) 
                       <option key={e.id} value={e.id}>{e.id} – {e.name}</option>
                     ))
                   }
-                  {data.employees.filter(e => 
+                  {(data.employees || []).filter(e => 
                     e.name.toLowerCase().includes(empSearch.toLowerCase()) || 
                     e.id.toLowerCase().includes(empSearch.toLowerCase())
                   ).length === 0 && (

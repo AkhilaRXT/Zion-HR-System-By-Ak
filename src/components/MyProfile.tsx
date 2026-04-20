@@ -20,7 +20,7 @@ export default function MyProfile({ session, data, onRefresh }: MyProfileProps) 
     setNotification({ message, type });
   };
 
-  const emp = data.employees.find(e => e.id === session.empId);
+  const emp = (data.employees || []).find(e => e.id === session.empId);
   if (!emp) return <div className="p-8 text-brand-accent uppercase tracking-[2px]">Employee not found</div>;
 
   const handlePhotoClick = () => {
@@ -46,12 +46,12 @@ export default function MyProfile({ session, data, onRefresh }: MyProfileProps) 
     }
   };
 
-  const fuelPrice = data.settings.fuelPrice;
+  const fuelPrice = data.settings?.fuelPrice || 398;
   const petrolLKR = (emp.petrolLitres || 0) * fuelPrice;
   
   // Calculate leave balances dynamically based on current policy and approved leaves
-  const policy = data.settings.leavePolicy;
-  const approvedLeaves = data.leaves.filter(l => l.empId === emp.id && l.status === 'Approved');
+  const policy = data.settings?.leavePolicy || { monthlyLimit: 0, annualTotal: 0, casualTotal: 0, sickTotal: 0 };
+  const approvedLeaves = (data.leaves || []).filter(l => l.empId === emp.id && l.status === 'Approved');
   
   const annualTaken = approvedLeaves.filter(l => l.type === 'Annual').length;
   const casualTaken = approvedLeaves.filter(l => l.type === 'Casual').length;
@@ -67,10 +67,10 @@ export default function MyProfile({ session, data, onRefresh }: MyProfileProps) 
     sick: sickBalance
   };
 
-  const myAttendance = data.attendance.filter(a => a.empId === emp.id).sort((a, b) => b.id - a.id).slice(0, 5);
-  const myLeaves = data.leaves.filter(l => l.empId === emp.id).sort((a, b) => b.id - a.id);
-  const myAdvances = data.advances.filter(a => a.empId === emp.id).sort((a, b) => b.id - a.id);
-  const myCashRequests = data.cashRequests?.filter(r => r.empId === emp.id).sort((a, b) => b.id - a.id) || [];
+  const myAttendance = (data.attendance || []).filter(a => a.empId === emp.id).sort((a, b) => b.id - a.id).slice(0, 5);
+  const myLeaves = (data.leaves || []).filter(l => l.empId === emp.id).sort((a, b) => b.id - a.id);
+  const myAdvances = (data.advances || []).filter(a => a.empId === emp.id).sort((a, b) => b.id - a.id);
+  const myCashRequests = (data.cashRequests || []).filter(r => r.empId === emp.id).sort((a, b) => b.id - a.id);
   
   const pendingLeaves = myLeaves.filter(l => l.status === 'Pending');
   const pendingAdvances = myAdvances.filter(a => a.status === 'Pending');
@@ -83,7 +83,7 @@ export default function MyProfile({ session, data, onRefresh }: MyProfileProps) 
   ].sort((a, b) => b.id - a.id).slice(0, 5);
 
   const currentMonth = new Date().toLocaleString('default', { month: 'long', year: 'numeric' });
-  const advTotal = data.advances
+  const advTotal = (data.advances || [])
     .filter(a => {
       const advanceMonth = new Date(a.date).toLocaleString('default', { month: 'long', year: 'numeric' });
       // In the profile view, show all approved advances for the month, regardless of isPaid, so they can see their total advance deduction for the month's breakdown

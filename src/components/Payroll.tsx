@@ -87,11 +87,11 @@ export default function Payroll({ session, data, onRefresh }: PayrollProps) {
     e.preventDefault();
     
     // Calculate current net salary to validate advance request
-    const emp = data.employees.find(e => e.id === currentEmpId);
+    const emp = (data.employees || []).find(e => e.id === currentEmpId);
     if (!emp) return;
 
     const currentMonth = new Date().toLocaleString('default', { month: 'long', year: 'numeric' });
-    const advTotal = data.advances
+    const advTotal = (data.advances || [])
       .filter(a => {
         const advanceMonth = new Date(a.date).toLocaleString('default', { month: 'long', year: 'numeric' });
         return a.empId === emp.id && a.status === 'Approved' && !a.isPaid && advanceMonth === currentMonth;
@@ -149,12 +149,12 @@ export default function Payroll({ session, data, onRefresh }: PayrollProps) {
   };
 
   const handleExportAdvances = async () => {
-    const advancesToExport = data.advances
+    const advancesToExport = (data.advances || [])
       .filter(a => hasPayrollPermission || a.empId === currentEmpId)
       .sort((a, b) => b.id - a.id);
 
     const sheetData = advancesToExport.map(a => {
-      const emp = data.employees.find(e => e.id === a.empId);
+      const emp = (data.employees || []).find(e => e.id === a.empId);
       return {
         Date: a.date,
         'EMP ID': a.empId,
@@ -189,14 +189,14 @@ export default function Payroll({ session, data, onRefresh }: PayrollProps) {
     if (payComponents.deductions) selectedCompsBase.push('Deductions');
     if (payComponents.epf) selectedCompsBase.push('EPF');
 
-    const sheetData = data.employees.map(emp => {
-      const alreadyPaidCmps = data.paidComponents?.[emp.id]?.[selectedMonth] || [];
+    const sheetData = (data.employees || []).map(emp => {
+      const alreadyPaidCmps = (data.paidComponents?.[emp.id]?.[selectedMonth] || []);
       
       // Components actually being paid to THIS employee in THIS run
       const actuallyPayingCmps = selectedCompsBase.filter(c => !alreadyPaidCmps.includes(c));
       const notesStr = actuallyPayingCmps.join(', ');
 
-      const advTotal = data.advances
+      const advTotal = (data.advances || [])
         .filter(a => {
           const advanceMonth = new Date(a.date).toLocaleString('default', { month: 'long', year: 'numeric' });
           return a.empId === emp.id && a.status === 'Approved' && !a.isPaid && advanceMonth === selectedMonth;
@@ -493,18 +493,18 @@ export default function Payroll({ session, data, onRefresh }: PayrollProps) {
                 </tr>
               </thead>
               <tbody>
-                {data.advances
+                {(data.advances || [])
                   .filter(a => hasPayrollPermission || a.empId === currentEmpId)
                   .sort((a, b) => b.id - a.id)
                   .map(a => {
-                    const emp = data.employees.find(e => e.id === a.empId);
+                    const emp = (data.employees || []).find(e => e.id === a.empId);
                     const statusCls = a.status === 'Approved' ? 'badge-success' : a.status === 'Rejected' ? 'badge-danger' : 'badge-warning';
                     
                     // Calculate net salary for this employee to show context
                     let netSalary = 0;
                     if (emp) {
                       const currentMonth = new Date().toLocaleString('default', { month: 'long', year: 'numeric' });
-                      const advTotal = data.advances
+                      const advTotal = (data.advances || [])
                         .filter(adv => {
                           const advanceMonth = new Date(adv.date).toLocaleString('default', { month: 'long', year: 'numeric' });
                           return adv.empId === emp.id && adv.status === 'Approved' && !adv.isPaid && advanceMonth === currentMonth;
@@ -616,7 +616,7 @@ export default function Payroll({ session, data, onRefresh }: PayrollProps) {
                     <button 
                       onClick={async () => {
                         const nextBonuses = { ...customBonuses };
-                        const batchPromises = data.employees.map(e => {
+                        const batchPromises = (data.employees || []).map(e => {
                           nextBonuses[e.id] = globalBonusTemplate;
                           return DataStore.saveAdhocBonus({
                             id: `${selectedMonth}_${e.id}`,
@@ -664,8 +664,8 @@ export default function Payroll({ session, data, onRefresh }: PayrollProps) {
                   </tr>
                 </thead>
                 <tbody>
-                  {data.employees.map(emp => {
-                    const advTotal = data.advances
+                {(data.employees || []).map(emp => {
+                    const advTotal = (data.advances || [])
                       .filter(a => {
                         const advanceMonth = new Date(a.date).toLocaleString('default', { month: 'long', year: 'numeric' });
                         return a.empId === emp.id && a.status === 'Approved' && !a.isPaid && advanceMonth === selectedMonth;

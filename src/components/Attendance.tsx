@@ -20,11 +20,11 @@ export default function Attendance({ session, data, onRefresh }: AttendanceProps
   const [notification, setNotification] = useState<{ message: string, type: NotificationType } | null>(null);
   const [exportDate, setExportDate] = useState('');
   
-  const sortedHistory = [...data.attendance].sort((a, b) => b.id - a.id);
+  const sortedHistory = [...(data.attendance || [])].sort((a, b) => b.id - a.id);
   
   const displayedAttendance = exportDate 
-    ? data.employees.map(emp => {
-        const rec = data.attendance.find(a => a.date === exportDate && a.empId === emp.id);
+    ? (data.employees || []).map(emp => {
+        const rec = (data.attendance || []).find(a => a.date === exportDate && a.empId === emp.id);
         return rec || {
           id: -1,
           empId: emp.id,
@@ -46,7 +46,7 @@ export default function Attendance({ session, data, onRefresh }: AttendanceProps
     if (exportDate) {
       // Export for a specific date: Include all employees
       sheetData = displayedAttendance.map(a => {
-        const emp = data.employees.find(e => e.id === a.empId);
+        const emp = (data.employees || []).find(e => e.id === a.empId);
         return {
           Date: a.date,
           'EMP ID': a.empId,
@@ -68,7 +68,7 @@ export default function Attendance({ session, data, onRefresh }: AttendanceProps
         return;
       }
       sheetData = sortedHistory.map(a => {
-        const emp = data.employees.find(e => e.id === a.empId);
+        const emp = (data.employees || []).find(e => e.id === a.empId);
         return {
           Date: a.date,
           'EMP ID': a.empId,
@@ -206,7 +206,7 @@ export default function Attendance({ session, data, onRefresh }: AttendanceProps
           </thead>
           <tbody>
             {displayedAttendance.map(a => {
-              const emp = data.employees.find(e => e.id === a.empId);
+              const emp = (data.employees || []).find(e => e.id === a.empId);
               const statusCls = 
                 a.status === 'Present' ? 'badge-success' : 
                 a.status === 'Half Day' ? 'badge-warning' : 

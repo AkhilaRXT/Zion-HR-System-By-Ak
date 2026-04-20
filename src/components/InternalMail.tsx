@@ -44,7 +44,7 @@ export default function InternalMail({ session, data }: InternalMailProps) {
     if (emp) return emp.name;
     
     // Fallback to employees just in case
-    const empFallback = data.employees.find(e => e.id === identifier || e.name.toLowerCase() === identifier.toLowerCase());
+    const empFallback = (data.employees || []).find(e => e.id === identifier || e.name.toLowerCase() === identifier.toLowerCase());
     return empFallback ? empFallback.name : identifier;
   };
 
@@ -53,7 +53,7 @@ export default function InternalMail({ session, data }: InternalMailProps) {
     const emp = dirList.find(e => e.id === identifier || e.name.toLowerCase() === identifier.toLowerCase());
     if (emp) return emp.id;
 
-    const empFallback = data.employees.find(e => e.id === identifier || e.name.toLowerCase() === identifier.toLowerCase());
+    const empFallback = (data.employees || []).find(e => e.id === identifier || e.name.toLowerCase() === identifier.toLowerCase());
     return empFallback ? empFallback.id : identifier;
   };
 

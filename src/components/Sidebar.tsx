@@ -116,9 +116,9 @@ export default function Sidebar({ session, data, activeRoute, onNavigate, onLogo
       )}>
         <div className="flex justify-between items-start mb-12">
           <div>
-            <Logo src={data.settings.logo} />
-            <div className="font-serif text-2xl font-bold text-text-primary mb-1">{data.settings.companyName}</div>
-            <p className="text-xs text-text-secondary font-medium">{data.settings.companySubtitle}</p>
+            <Logo src={data.settings?.logo} />
+            <div className="font-serif text-2xl font-bold text-text-primary mb-1">{data.settings?.companyName}</div>
+            <p className="text-xs text-text-secondary font-medium">{data.settings?.companySubtitle}</p>
           </div>
           <button 
             onClick={onClose}

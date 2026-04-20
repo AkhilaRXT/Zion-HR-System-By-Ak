@@ -22,7 +22,7 @@ interface StaffManagementProps {
 
 export default function StaffManagement({ session, data, onRefresh }: StaffManagementProps) {
   const isAdmin = session.isAdmin;
-  const fuelPrice = data.settings.fuelPrice;
+  const fuelPrice = data.settings?.fuelPrice || 398;
   const [searchTerm, setSearchTerm] = useState('');
   const [originalId, setOriginalId] = useState<string | null>(null);
   const [isEditing, setIsEditing] = useState<(Employee & { username?: string, password?: string, isSystemAdmin?: boolean, permissions?: string[] }) | null>(null);
@@ -86,7 +86,7 @@ export default function StaffManagement({ session, data, onRefresh }: StaffManag
 
   const handleAddStaff = async (e: React.FormEvent) => {
     e.preventDefault();
-    const id = newEmp.empNo || `EMP${String(data.employees.length + 1).padStart(3, '0')}`;
+    const id = newEmp.empNo || `EMP${String((data.employees || []).length + 1).padStart(3, '0')}`;
     
     const employee: Employee = {
       id,
@@ -170,7 +170,7 @@ export default function StaffManagement({ session, data, onRefresh }: StaffManag
   };
 
   const startEditing = (emp: Employee) => {
-    const cred = data.credentials.find(c => c.empId === emp.id);
+    const cred = (data.credentials || []).find(c => c.empId === emp.id);
     setOriginalId(emp.id);
     setIsEditing({
       ...emp,
@@ -181,7 +181,7 @@ export default function StaffManagement({ session, data, onRefresh }: StaffManag
     });
   };
 
-  const filteredEmployees = data.employees.filter(e => 
+  const filteredEmployees = (data.employees || []).filter(e => 
     e.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
     e.id.toLowerCase().includes(searchTerm.toLowerCase())
   );

@@ -26,8 +26,8 @@ export default function LeaveManagement({ session, data, onRefresh }: LeaveManag
   };
   
   // Calculate leave balances dynamically based on current policy and approved leaves
-  const policy = data.settings.leavePolicy;
-  const approvedLeaves = data.leaves.filter(l => l.empId === currentEmpId && l.status === 'Approved');
+  const policy = data.settings?.leavePolicy || { monthlyLimit: 0, annualTotal: 0, casualTotal: 0, sickTotal: 0 };
+  const approvedLeaves = (data.leaves || []).filter(l => l.empId === currentEmpId && l.status === 'Approved');
   
   const calculateDays = (from: string, to: string) => {
     if (!from || !to) return 0;
@@ -97,7 +97,7 @@ export default function LeaveManagement({ session, data, onRefresh }: LeaveManag
     }
   };
 
-  const filteredLeaves = data.leaves.filter(l => canManageLeaves || l.empId === currentEmpId).sort((a, b) => b.id - a.id);
+  const filteredLeaves = (data.leaves || []).filter(l => canManageLeaves || l.empId === currentEmpId).sort((a, b) => b.id - a.id);
 
   return (
     <div className="space-y-12">
@@ -182,11 +182,11 @@ export default function LeaveManagement({ session, data, onRefresh }: LeaveManag
             </thead>
             <tbody>
               {filteredLeaves.map(l => {
-                const emp = data.employees.find(e => e.id === l.empId);
+                const emp = (data.employees || []).find(e => e.id === l.empId);
                 const statusCls = l.status === 'Approved' ? 'badge-success' : l.status === 'Rejected' ? 'badge-danger' : 'badge-warning';
                 
                 // Calculate balance for this specific employee
-                const empApprovedLeaves = data.leaves.filter(leave => leave.empId === l.empId && leave.status === 'Approved');
+                const empApprovedLeaves = (data.leaves || []).filter(leave => leave.empId === l.empId && leave.status === 'Approved');
                 const empAnnualTaken = empApprovedLeaves.filter(leave => leave.type === 'Annual').reduce((acc, leave) => acc + calculateDays(leave.from, leave.to), 0);
                 const empCasualTaken = empApprovedLeaves.filter(leave => leave.type === 'Casual').reduce((acc, leave) => acc + calculateDays(leave.from, leave.to), 0);
                 const empSickTaken = empApprovedLeaves.filter(leave => leave.type === 'Sick').reduce((acc, leave) => acc + calculateDays(leave.from, leave.to), 0);
