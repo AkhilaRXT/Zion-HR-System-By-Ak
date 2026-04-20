@@ -335,7 +335,7 @@ export default function Payroll({ session, data, onRefresh }: PayrollProps) {
         >
           Payment Processing
         </button>
-        {isAdmin && (
+        {hasPayrollPermission && (
           <button
             onClick={() => setActiveTab('receipts')}
             className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors ${activeTab === 'receipts' ? 'border-brand-accent text-brand-accent' : 'border-transparent text-text-secondary hover:text-text-primary'}`}
@@ -767,7 +767,7 @@ export default function Payroll({ session, data, onRefresh }: PayrollProps) {
       </div>
       )}
 
-      {activeTab === 'receipts' && isAdmin && (
+      {activeTab === 'receipts' && hasPayrollPermission && (
         <div className="space-y-6 mt-6">
           <div className="table-container">
             <div className="p-6 border-b border-border-accent flex items-center justify-between">
