@@ -121,7 +121,8 @@ const initialData: AppData = {
   auditLogs: [],
   payrollReceipts: [],
   paidDeductions: {},
-  internalMessages: []
+  internalMessages: [],
+  adhocBonuses: []
 };
 
 export const DataStore = {
@@ -324,9 +325,9 @@ export const DataStore = {
       try {
         if (!auth.currentUser) {
           const { signInAnonymously } = await import('firebase/auth');
-          // Add a 5 second timeout to signInAnonymously to prevent infinite hanging
+          // Add a 15 second timeout to signInAnonymously to prevent infinite hanging
           const authPromise = signInAnonymously(auth);
-          const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Auth request timed out. Please check your internet connection and try again.')), 5000));
+          const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Auth request timed out. Please check your internet connection and try again.')), 15000));
           await Promise.race([authPromise, timeoutPromise]);
         }
       } catch (authErr: any) {
@@ -343,7 +344,7 @@ export const DataStore = {
 
       // Add a timeout to reading credentials to prevent hanging if quota is fully blocked
       const credDocPromise = getDoc(doc(db, 'credentials', username.toLowerCase()));
-      const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Database request timed out. You may have exceeded your Firebase quota limits.')), 10000));
+      const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Database request timed out. You may have exceeded your Firebase quota limits.')), 20000));
       const credDoc = await Promise.race([credDocPromise, timeoutPromise]) as any;
 
       if (!credDoc.exists()) {
@@ -581,7 +582,7 @@ export const DataStore = {
       await this.logAction('Update Employee Failed', `ID: ${empId}, Error: ${error.message}`, 'Employee');
       console.error('Update Employee Error:', error);
       if (error.code === 'permission-denied') {
-        throw new Error('Permission Denied: You do not have authority to update members. Please log in with your Admin Google Account.');
+        throw new Error('Permission Denied: You do not have authority to update this employee record. If you are trying to update your own profile, ensure you are logged in correctly.');
       }
       handleFirestoreError(error, OperationType.UPDATE, `employees/${empId}`);
       throw error;
@@ -857,6 +858,22 @@ export const DataStore = {
       await this.logAction('Delete Target', `Deleted target record ${id}`, 'Settings');
     } catch (error) {
       handleFirestoreError(error, OperationType.DELETE, `targets/${id}`);
+    }
+  },
+
+  async saveAdhocBonus(bonus: any) {
+    try {
+      await setDoc(doc(db, 'adhocBonuses', bonus.id), bonus);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.CREATE, `adhocBonuses/${bonus.id}`);
+    }
+  },
+
+  async clearAdhocBonus(id: string) {
+    try {
+      await deleteDoc(doc(db, 'adhocBonuses', id));
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, `adhocBonuses/${id}`);
     }
   },
 

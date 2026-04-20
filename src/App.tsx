@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { DataStore } from './lib/dataStore';
-import { Session, AppData, Employee, Attendance, LeaveRequest, AdvanceRequest, Target, AuditLog, AppSettings, CashRequest, UserCredential } from './types';
+import { Session, AppData, Employee, Attendance, LeaveRequest, AdvanceRequest, Target, AuditLog, AppSettings, CashRequest, UserCredential, AdhocBonus } from './types';
 import { db, auth } from './lib/firebase';
 import { collection, onSnapshot, doc, query, limit, orderBy, QuerySnapshot, DocumentData } from 'firebase/firestore';
 import Login from './components/Login';
@@ -127,6 +127,7 @@ export default function App() {
     if (session.isAdmin) {
       // Core global collections (Always needed for names and dashboard)
       syncCollection('employees', (docs) => updatePart({ employees: docs as Employee[] }));
+      syncCollection('adhocBonuses', (docs) => updatePart({ adhocBonuses: docs as AdhocBonus[] }));
       syncCollection('credentials', (docs) => updatePart({ credentials: docs as UserCredential[] }));
       
       // Limit attendance for the dashboard to recent items
@@ -134,6 +135,22 @@ export default function App() {
       syncCollection('attendance', (docs) => updatePart({ attendance: docs as Attendance[] }), attendanceQuery);
       
       syncCollection('leaves', (docs) => updatePart({ leaves: docs as LeaveRequest[] }));
+
+      // Sync paid deductions for all employees (needed for Profile history and Payroll processing)
+      const unsubPaid = onSnapshot(collection(db, 'paidDeductions'), (snap) => {
+        const paid: { [key: string]: string[] } = {};
+        const paidAmts: { [empId: string]: { [month: string]: number } } = {};
+        const paidNts: { [empId: string]: { [month: string]: string } } = {};
+        const paidCmps: { [empId: string]: { [month: string]: string[] } } = {};
+        snap.docs.forEach(d => { 
+          paid[d.id] = d.data().months || []; 
+          paidAmts[d.id] = d.data().paidAmounts || {};
+          paidNts[d.id] = d.data().paidNotes || {};
+          paidCmps[d.id] = d.data().paidComponents || {};
+        });
+        updatePart({ paidDeductions: paid, paidSalaryAmounts: paidAmts, paidSalaryNotes: paidNts, paidComponents: paidCmps });
+      }, (err) => console.warn('Permission denied for paidDeductions (admin context)'));
+      unsubscribers.push(unsubPaid);
 
       // Lazy load modules based on current route
       if (route === 'payroll' || route === 'settings') {
@@ -144,21 +161,6 @@ export default function App() {
         });
         syncCollection('cashRequests', (docs) => updatePart({ cashRequests: docs as CashRequest[] }));
         syncCollection('targets', (docs) => updatePart({ targets: docs as Target[] }));
-        
-        const unsubPaid = onSnapshot(collection(db, 'paidDeductions'), (snap) => {
-          const paid: { [key: string]: string[] } = {};
-          const paidAmts: { [empId: string]: { [month: string]: number } } = {};
-          const paidNts: { [empId: string]: { [month: string]: string } } = {};
-          const paidCmps: { [empId: string]: { [month: string]: string[] } } = {};
-          snap.docs.forEach(d => { 
-            paid[d.id] = d.data().months || []; 
-            paidAmts[d.id] = d.data().paidAmounts || {};
-            paidNts[d.id] = d.data().paidNotes || {};
-            paidCmps[d.id] = d.data().paidComponents || {};
-          });
-          updatePart({ paidDeductions: paid, paidSalaryAmounts: paidAmts, paidSalaryNotes: paidNts, paidComponents: paidCmps });
-        }, (err) => console.warn('Permission denied for paidDeductions'));
-        unsubscribers.push(unsubPaid);
       }
       
       if (route === 'audit') {
@@ -210,6 +212,33 @@ export default function App() {
           updatePart({ attendance: docs });
         }, (err) => console.warn('Permission denied for attendance'));
         unsubscribers.push(unsubAttendance);
+
+        // Sync their own adhoc bonuses
+        const bonusQuery = query(collection(db, 'adhocBonuses'), where('empId', '==', session.empId));
+        const unsubBonuses = onSnapshot(bonusQuery, (snap) => {
+          const docs = snap.docs.map(d => d.data() as AdhocBonus);
+          updatePart({ adhocBonuses: docs });
+        }, (err) => console.warn('Permission denied for adhocBonuses'));
+        unsubscribers.push(unsubBonuses);
+
+        // Sync their own paid deductions/receipts
+        const unsubPaidOwn = onSnapshot(doc(db, 'paidDeductions', session.empId), (snap) => {
+          if (snap.exists()) {
+            const d = snap;
+            const paid: { [key: string]: string[] } = {};
+            const paidAmts: { [empId: string]: { [month: string]: number } } = {};
+            const paidNts: { [empId: string]: { [month: string]: string } } = {};
+            const paidCmps: { [empId: string]: { [month: string]: string[] } } = {};
+            
+            paid[d.id] = d.data()?.months || []; 
+            paidAmts[d.id] = d.data()?.paidAmounts || {};
+            paidNts[d.id] = d.data()?.paidNotes || {};
+            paidCmps[d.id] = d.data()?.paidComponents || {};
+            
+            updatePart({ paidDeductions: paid, paidSalaryAmounts: paidAmts, paidSalaryNotes: paidNts, paidComponents: paidCmps });
+          }
+        }, (err) => console.warn('Permission denied for own paidDeductions'));
+        unsubscribers.push(unsubPaidOwn);
       });
     }
 

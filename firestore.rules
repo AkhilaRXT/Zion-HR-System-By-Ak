@@ -62,7 +62,7 @@ service cloud.firestore {
         isMasterAdmin() ||
         (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.empId == empId) ||
-        (request.auth.token.email != null && resource != null && 'email' in resource.data && resource.data.email == request.auth.token.email)
+        (request.auth.token.email != null && resource != null && 'email' in resource.data && resource.data.email == request.auth.token.email && request.auth.token.email_verified == true)
       );
     }
 
@@ -76,7 +76,11 @@ service cloud.firestore {
 
     match /employees/{empId} {
       allow read: if isAuthenticated() && (isOwner(empId) || isAdmin());
-      allow write: if isAdmin();
+      allow update: if isAuthenticated() && (
+        isAdmin() || 
+        (isOwner(empId) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['profilePic']))
+      );
+      allow create, delete: if isAdmin();
     }
 
     match /attendance/{id} {
@@ -110,11 +114,12 @@ service cloud.firestore {
 
     match /auditLogs/{id} {
       allow read: if isAdmin();
-      allow write: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update, delete: if false;
     }
 
     match /settings/{id} {
-      allow read: if true;
+      allow read: if isAuthenticated();
       allow write: if isAdmin();
     }
 
@@ -134,10 +139,10 @@ service cloud.firestore {
     }
 
     match /credentials/{username} {
-      // Get by explicit username is allowed so login can function, but enumeration/listing is blocked
-      allow get: if true;
-      allow list: if isAdmin();
-      allow write: if isAdmin();
+      // Credentials must NEVER be publicly listable.
+      // We allow 'get' for authentication purposes so the client can verify passwords.
+      allow get: if isAuthenticated();
+      allow list, write: if isAdmin();
     }
 
     match /test/{id} {
@@ -169,6 +174,11 @@ service cloud.firestore {
       );
     }
 
+    match /adhocBonuses/{id} {
+      allow read: if isAuthenticated() && (isAdmin() || (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.empId == resource.data.empId));
+      allow write: if isAdmin();
+    }
+
     match /messages/{id} {
       allow read: if isAuthenticated() && (
         isMasterAdmin() || 
@@ -176,8 +186,12 @@ service cloud.firestore {
          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.empId in resource.data.participants) ||
         resource.data.senderId == request.auth.uid
       );
-      allow create: if isAuthenticated();
-      allow update: if isAuthenticated();
+      allow create: if isAuthenticated() && (
+        request.resource.data.senderId == (exists(/databases/$(database)/documents/users/$(request.auth.uid)) ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data.empId : request.auth.uid)
+      );
+      allow update: if isAuthenticated() && (
+        resource.data.senderId == (exists(/databases/$(database)/documents/users/$(request.auth.uid)) ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data.empId : request.auth.uid)
+      );
       allow delete: if isAdmin();
     }
   }

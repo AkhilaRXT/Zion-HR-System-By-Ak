@@ -142,7 +142,7 @@ export default function LeaveManagement({ session, data, onRefresh }: LeaveManag
               />
             </div>
             <div className="form-group">
-              <label className="text-xs font-medium text-text-secondary mb-2 block">Attachment (PDF/Image, max 700KB)</label>
+              <label className="text-xs font-medium text-text-secondary mb-2 block">Attachment (PDF/Image, max 3MB)</label>
               <input 
                 type="file" 
                 accept=".pdf,image/*"

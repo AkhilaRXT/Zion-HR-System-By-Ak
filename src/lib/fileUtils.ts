@@ -1,8 +1,10 @@
 export const fileToBase64 = (file: File): Promise<string> => {
   return new Promise((resolve, reject) => {
-    // 700KB limit to be safe for Firestore 1MB doc limit
-    if (file.size > 700 * 1024) {
-      reject(new Error('File size must be less than 700KB'));
+    // 3MB limit (Base64 adds ~33% overhead, so 3MB file becomes ~4MB string)
+    // CRITICAL: Firestore has a 1MB per document limit. 
+    // Large files should be images (which we compress) or very small PDFs.
+    if (file.size > 3000 * 1024) {
+      reject(new Error('File size must be less than 3MB'));
       return;
     }
     const reader = new FileReader();

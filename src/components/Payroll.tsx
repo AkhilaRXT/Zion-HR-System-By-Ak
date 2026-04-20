@@ -42,6 +42,16 @@ export default function Payroll({ session, data, onRefresh }: PayrollProps) {
   } | null>(null);
 
   const [customBonuses, setCustomBonuses] = useState<Record<string, number>>({});
+
+  React.useEffect(() => {
+    const bonusesForMonth = (data.adhocBonuses || []).filter(b => b.month === selectedMonth);
+    const bonusMap: Record<string, number> = {};
+    bonusesForMonth.forEach(b => {
+      bonusMap[b.empId] = b.amount;
+    });
+    setCustomBonuses(bonusMap);
+  }, [selectedMonth, data.adhocBonuses]);
+
   const [globalBonusTemplate, setGlobalBonusTemplate] = useState<number>(0);
 
   const showNotification = (message: string, type: NotificationType = 'success') => {
@@ -358,7 +368,7 @@ export default function Payroll({ session, data, onRefresh }: PayrollProps) {
                 />
               </div>
               <div className="form-group">
-                <label className="text-xs font-medium text-text-secondary mb-2 block">Attachment (PDF/Image, max 700KB)</label>
+                <label className="text-xs font-medium text-text-secondary mb-2 block">Attachment (PDF/Image, max 3MB)</label>
                 <input 
                   type="file" 
                   accept=".pdf,image/*"
@@ -604,12 +614,21 @@ export default function Payroll({ session, data, onRefresh }: PayrollProps) {
                       onChange={e => setGlobalBonusTemplate(Number(e.target.value))}
                     />
                     <button 
-                      onClick={() => {
+                      onClick={async () => {
                         const nextBonuses = { ...customBonuses };
-                        data.employees.forEach(e => {
+                        const batchPromises = data.employees.map(e => {
                           nextBonuses[e.id] = globalBonusTemplate;
+                          return DataStore.saveAdhocBonus({
+                            id: `${selectedMonth}_${e.id}`,
+                            empId: e.id,
+                            month: selectedMonth,
+                            amount: globalBonusTemplate,
+                            addedBy: session.name,
+                            timestamp: new Date().toISOString()
+                          });
                         });
                         setCustomBonuses(nextBonuses);
+                        await Promise.all(batchPromises);
                         showNotification(`Applied LKR ${globalBonusTemplate.toLocaleString()} bonus to all.`);
                       }}
                       className="text-[10px] bg-brand-primary text-white px-2 py-1 rounded hover:bg-brand-secondary transition-colors whitespace-nowrap"
@@ -617,9 +636,13 @@ export default function Payroll({ session, data, onRefresh }: PayrollProps) {
                       Apply All
                     </button>
                     <button 
-                      onClick={() => {
+                      onClick={async () => {
+                        const clearPromises = Object.keys(customBonuses).map(empId => 
+                          DataStore.clearAdhocBonus(`${selectedMonth}_${empId}`)
+                        );
                         setCustomBonuses({});
                         setGlobalBonusTemplate(0);
+                        await Promise.all(clearPromises);
                         showNotification('Cleared all ad-hoc bonuses.');
                       }}
                       className="text-[10px] bg-red-50 text-red-600 px-2 py-1 rounded hover:bg-red-100 transition-colors whitespace-nowrap"
@@ -689,6 +712,21 @@ export default function Payroll({ session, data, onRefresh }: PayrollProps) {
                                 onChange={e => {
                                   const val = Number(e.target.value);
                                   setCustomBonuses(prev => ({ ...prev, [emp.id]: val }));
+                                }}
+                                onBlur={async (e) => {
+                                  const val = Number(e.target.value);
+                                  if (val > 0) {
+                                    await DataStore.saveAdhocBonus({
+                                      id: `${selectedMonth}_${emp.id}`,
+                                      empId: emp.id,
+                                      month: selectedMonth,
+                                      amount: val,
+                                      addedBy: session.name,
+                                      timestamp: new Date().toISOString()
+                                    });
+                                  } else {
+                                    await DataStore.clearAdhocBonus(`${selectedMonth}_${emp.id}`);
+                                  }
                                 }}
                                 placeholder="0"
                               />

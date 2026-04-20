@@ -77,7 +77,7 @@ export default function StaffManagement({ session, data, onRefresh }: StaffManag
           }
         } catch (err) {
           console.error('Failed to compress image:', err);
-          showNotification('Failed to process image. Please try a smaller file.', 'error');
+          showNotification('Failed to process image. Ensure file is an image under 3MB.', 'error');
         }
       };
       reader.readAsDataURL(file);

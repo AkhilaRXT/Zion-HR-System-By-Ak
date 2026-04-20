@@ -39,7 +39,7 @@ export default function MyProfile({ session, data, onRefresh }: MyProfileProps) 
           showNotification('Profile picture updated successfully!');
         } catch (err) {
           console.error('Failed to compress image:', err);
-          showNotification('Failed to process image. Please try a smaller file.', 'error');
+          showNotification('Failed to process image. Ensure file is an image under 3MB.', 'error');
         }
       };
       reader.readAsDataURL(file);
@@ -99,8 +99,9 @@ export default function MyProfile({ session, data, onRefresh }: MyProfileProps) 
 
   const totalDeductions = advTotal + bikeInstallment + staffLoan + epf;
   
+  const pendingBonus = (data.adhocBonuses || []).find(b => b.empId === emp.id && b.month === currentMonth)?.amount || 0;
   const gross = (emp.baseSalary || 0) + (emp.travelingAllowance || 0) + (emp.vehicleAllowance || 0) +
-                (emp.performanceAllowance || 0) + petrolLKR + (emp.attendanceBonus || 0) + (emp.overtime || 0);
+                (emp.performanceAllowance || 0) + petrolLKR + (emp.attendanceBonus || 0) + (emp.overtime || 0) + pendingBonus;
 
   const alreadyPaid = data.paidSalaryAmounts?.[emp.id]?.[currentMonth] || 0;
   const rawNet = gross - totalDeductions - alreadyPaid;
@@ -154,7 +155,7 @@ export default function MyProfile({ session, data, onRefresh }: MyProfileProps) 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
         <div className="glass-panel p-8">
           <h4 className="text-sm font-semibold text-text-primary mb-6 flex items-center gap-2">
-            <Wallet className="w-4 h-4 text-brand-accent" /> Salary Breakdown
+            <Wallet className="w-4 h-4 text-brand-accent" /> Salary Breakdown ({currentMonth})
           </h4>
           <div className="space-y-5">
             <div className="space-y-3">
@@ -171,6 +172,12 @@ export default function MyProfile({ session, data, onRefresh }: MyProfileProps) 
                 <div className="flex justify-between items-center text-sm">
                   <span className="text-text-secondary font-medium">Performance Bonus</span>
                   <span className="font-mono text-text-primary font-semibold">LKR {emp.performanceAllowance.toLocaleString()}</span>
+                </div>
+              )}
+              {pendingBonus > 0 && (
+                <div className="flex justify-between items-center text-sm">
+                  <span className="text-emerald-600 font-medium">Ad-Hoc Bonus / Incentives</span>
+                  <span className="font-mono text-emerald-600 font-bold">LKR {pendingBonus.toLocaleString()}</span>
                 </div>
               )}
             </div>
@@ -225,29 +232,38 @@ export default function MyProfile({ session, data, onRefresh }: MyProfileProps) 
             </div>
           </div>
 
-          {alreadyPaid > 0 && (
+          {Object.keys(data.paidSalaryAmounts?.[emp.id] || {}).length > 0 && (
             <div className="glass-panel p-8">
               <h4 className="text-sm font-semibold text-text-primary mb-6 flex items-center gap-2">
-                <Database className="w-4 h-4 text-emerald-500" /> Payment History ({currentMonth})
+                <Database className="w-4 h-4 text-emerald-500" /> Payment History
               </h4>
-              <div className="space-y-4">
-                {data.paidSalaryNotes[emp.id]?.[currentMonth]?.split(' | ').map((note: string, idx: number) => {
-                   const parts = note.match(/(.+) \(LKR (.+)\)/);
-                   const comps = parts ? parts[1] : note;
-                   const amt = parts ? parts[2] : '-';
-                   return (
-                     <div key={idx} className="flex justify-between items-center py-2 border-b border-border-accent last:border-0">
-                        <div className="space-y-1">
-                          <p className="text-xs font-semibold text-text-primary">Batch #{idx + 1}</p>
-                          <p className="text-[10px] text-text-secondary">{comps}</p>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-xs font-mono font-bold text-emerald-600">LKR {amt}</p>
-                          <span className="text-[9px] px-1 bg-emerald-100 text-emerald-700 rounded uppercase font-bold tracking-tight">Paid</span>
-                        </div>
-                     </div>
-                   );
-                })}
+              <div className="space-y-8">
+                {Object.keys(data.paidSalaryNotes?.[emp.id] || {})
+                  .sort((a, b) => new Date(b).getTime() - new Date(a).getTime())
+                  .map(month => (
+                    <div key={month} className="space-y-3">
+                      <p className="text-[10px] font-bold text-brand-primary uppercase tracking-widest bg-brand-primary/5 px-2 py-1 rounded inline-block">{month}</p>
+                      <div className="space-y-3 pl-2 border-l-2 border-emerald-100">
+                        {data.paidSalaryNotes?.[emp.id]?.[month]?.split(' | ').map((note: string, idx: number) => {
+                          const parts = note.match(/(.+) \(LKR (.+)\)/);
+                          const comps = parts ? parts[1] : note;
+                          const amt = parts ? parts[2] : '-';
+                          return (
+                            <div key={idx} className="flex justify-between items-center py-1">
+                              <div className="space-y-1">
+                                <p className="text-xs font-semibold text-text-primary">Batch #{idx + 1}</p>
+                                <p className="text-[10px] text-text-secondary">{comps}</p>
+                              </div>
+                              <div className="text-right">
+                                <p className="text-xs font-mono font-bold text-emerald-600">LKR {amt}</p>
+                                <span className="text-[9px] px-1 bg-emerald-100 text-emerald-700 rounded uppercase font-bold tracking-tight">Paid</span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
               </div>
             </div>
           )}

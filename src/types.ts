@@ -179,6 +179,15 @@ export interface PayrollReceipt {
   actionedBy: string;
 }
 
+export interface AdhocBonus {
+  id: string; // month_empId
+  empId: string;
+  month: string;
+  amount: number;
+  addedBy: string;
+  timestamp: string;
+}
+
 export interface AppData {
   employees: Employee[];
   credentials: UserCredential[];
@@ -197,6 +206,7 @@ export interface AppData {
   paidComponents?: { [empId: string]: { [month: string]: string[] } };
   internalMessages: InternalMessage[];
   directory?: DirectoryEntry[];
+  adhocBonuses: AdhocBonus[];
 }
 
 export interface Session {
