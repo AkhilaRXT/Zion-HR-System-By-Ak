@@ -58,7 +58,6 @@ export default function Payroll({ session, data, onRefresh }: PayrollProps) {
     setNotification({ message, type });
   };
 
-  const [newAdvance, setNewAdvance] = useState({ amount: 0, reason: '', attachment: '' });
   const [payComponents, setPayComponents] = useState({
     baseSalary: true,
     performanceAllowance: true,
@@ -70,107 +69,6 @@ export default function Payroll({ session, data, onRefresh }: PayrollProps) {
     deductions: true,
     epf: true
   });
-
-  const handleAdvanceFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      try {
-        const base64 = await fileToBase64(file);
-        setNewAdvance({ ...newAdvance, attachment: base64 });
-      } catch (err: any) {
-        showNotification(err.message || 'Failed to process file', 'error');
-      }
-    }
-  };
-
-  const handleAdvanceSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    // Calculate current net salary to validate advance request
-    const emp = (data.employees || []).find(e => e.id === currentEmpId);
-    if (!emp) return;
-
-    const currentMonth = new Date().toLocaleString('default', { month: 'long', year: 'numeric' });
-    const advTotal = (data.advances || [])
-      .filter(a => {
-        const advanceMonth = new Date(a.date).toLocaleString('default', { month: 'long', year: 'numeric' });
-        return a.empId === emp.id && a.status === 'Approved' && !a.isPaid && advanceMonth === currentMonth;
-      })
-      .reduce((s, a) => s + a.amount, 0);
-    
-    const petrolLKR = (emp.petrolLitres || 0) * fuelPrice;
-    const epf = emp.hasEPF ? (emp.baseSalary || 0) * 0.08 : 0;
-    
-    const totalEarnings = (emp.baseSalary || 0) + 
-                          (emp.performanceAllowance || 0) + 
-                          (emp.travelingAllowance || 0) + 
-                          (emp.vehicleAllowance || 0) +
-                          petrolLKR + 
-                          (emp.attendanceBonus || 0) + 
-                          (emp.overtime || 0);
-
-    const totalDeductions = advTotal + 
-                            (emp.bikeInstallment || 0) + 
-                            (emp.staffLoan || 0) + 
-                            epf;
-
-    const netSalary = totalEarnings - totalDeductions;
-
-    if (newAdvance.amount > netSalary) {
-      showNotification(`Cannot request LKR ${newAdvance.amount.toLocaleString()}. Your current net salary is LKR ${netSalary.toLocaleString()}.`, 'error');
-      return;
-    }
-
-    const request: AdvanceRequest = {
-      id: Date.now(),
-      empId: currentEmpId,
-      amount: newAdvance.amount,
-      date: new Date().toISOString().split('T')[0],
-      status: 'Pending',
-      reason: newAdvance.reason,
-      attachment: newAdvance.attachment
-    };
-    try {
-      await DataStore.addAdvanceRequest(request);
-      showNotification('Salary advance requested successfully!');
-      setNewAdvance({ amount: 0, reason: '', attachment: '' });
-    } catch (err) {
-      showNotification('Failed to request advance.', 'error');
-    }
-  };
-
-  const handleAdvanceStatus = async (id: number, status: 'Approved' | 'Rejected') => {
-    try {
-      await DataStore.updateAdvanceStatus(id, status, session.name);
-      showNotification(`Advance request ${status.toLowerCase()}.`);
-    } catch (err) {
-      showNotification('Failed to update advance status.', 'error');
-    }
-  };
-
-  const handleExportAdvances = async () => {
-    const advancesToExport = (data.advances || [])
-      .filter(a => hasPayrollPermission || a.empId === currentEmpId)
-      .sort((a, b) => b.id - a.id);
-
-    const sheetData = advancesToExport.map(a => {
-      const emp = (data.employees || []).find(e => e.id === a.empId);
-      return {
-        Date: a.date,
-        'EMP ID': a.empId,
-        'Employee Name': emp?.name || 'Unknown',
-        Reason: a.reason,
-        Amount: a.amount,
-        Status: a.status
-      };
-    });
-
-    const ws = XLSX.utils.json_to_sheet(sheetData);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Salary Advances');
-    XLSX.writeFile(wb, `Salary_Advances_${new Date().toISOString().split('T')[0]}.xlsx`);
-    await DataStore.logAction('Export Data', 'Exported Salary Advances to Excel', 'Advance');
-  };
 
   const [isProcessing, setIsProcessing] = useState(false);
   const handleExport = async () => {
@@ -206,7 +104,7 @@ export default function Payroll({ session, data, onRefresh }: PayrollProps) {
       const petrolLKR = (emp.petrolLitres || 0) * fuelPrice;
       const epf = (emp.hasEPF && payComponents.epf && !alreadyPaidCmps.includes('EPF')) ? (emp.baseSalary || 0) * (epfPercentage / 100) : 0;
       
-      const isAlreadyFinalized = data.paidDeductions?.[emp.id]?.includes(selectedMonth);
+      const isAlreadyFinalized = (data.paidDeductions?.[emp.id] || []).includes(selectedMonth);
 
       const earnings = {
         'Basic Salary': (payComponents.baseSalary && !alreadyPaidCmps.includes('Basic')) ? (emp.baseSalary || 0) : 0,
@@ -348,38 +246,6 @@ export default function Payroll({ session, data, onRefresh }: PayrollProps) {
       {activeTab === 'processing' && (
         <div className="flex flex-col lg:flex-row gap-12 items-start mt-6">
           <div className="w-full lg:w-1/3 space-y-8">
-            <div className="glass-panel p-6 md:p-8">
-              <h3 className="text-sm font-semibold text-text-primary mb-6 flex items-center gap-2">
-              Request Salary Advance
-            </h3>
-            <form onSubmit={handleAdvanceSubmit} className="space-y-5">
-              <div className="form-group">
-                <label className="text-xs font-medium text-text-secondary mb-2 block">Amount (LKR)</label>
-                <input 
-                  type="number" className="form-control" required min="1"
-                  value={newAdvance.amount || ''} onChange={e => setNewAdvance({...newAdvance, amount: Number(e.target.value)})}
-                />
-              </div>
-              <div className="form-group">
-                <label className="text-xs font-medium text-text-secondary mb-2 block">Reason</label>
-                <input 
-                  type="text" className="form-control" required 
-                  value={newAdvance.reason} onChange={e => setNewAdvance({...newAdvance, reason: e.target.value})}
-                />
-              </div>
-              <div className="form-group">
-                <label className="text-xs font-medium text-text-secondary mb-2 block">Attachment (PDF/Image, max 3MB)</label>
-                <input 
-                  type="file" 
-                  accept=".pdf,image/*"
-                  className="form-control file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-xs file:font-medium file:bg-brand-accent file:text-white hover:file:bg-blue-700"
-                  onChange={handleAdvanceFileChange}
-                />
-              </div>
-              <button type="submit" className="btn btn-primary w-full justify-center py-4">Submit Request</button>
-            </form>
-          </div>
-
           {hasPayrollPermission && (
             <div className="glass-panel p-8 space-y-6">
               <div>
@@ -469,131 +335,6 @@ export default function Payroll({ session, data, onRefresh }: PayrollProps) {
         </div>
 
         <div className="w-full lg:w-2/3 space-y-12">
-          <div className="table-container">
-            <div className="p-6 border-b border-border-accent flex justify-between items-center">
-              <h3 className="text-sm font-semibold text-text-primary">
-                {hasPayrollPermission ? 'All Salary Advances' : 'My Salary Advances'}
-              </h3>
-              <button 
-                onClick={handleExportAdvances}
-                className="btn btn-outline py-2 px-4 h-auto text-xs"
-              >
-                <FileDown className="w-4 h-4" />
-                Export
-              </button>
-            </div>
-            <table>
-              <thead>
-                <tr>
-                  <th>Date</th>
-                  <th>Employee</th>
-                  <th>Amount</th>
-                  <th>Status</th>
-                  {hasPayrollPermission && <th>Actions</th>}
-                </tr>
-              </thead>
-              <tbody>
-                {(data.advances || [])
-                  .filter(a => hasPayrollPermission || a.empId === currentEmpId)
-                  .sort((a, b) => b.id - a.id)
-                  .map(a => {
-                    const emp = (data.employees || []).find(e => e.id === a.empId);
-                    const statusCls = a.status === 'Approved' ? 'badge-success' : a.status === 'Rejected' ? 'badge-danger' : 'badge-warning';
-                    
-                    // Calculate net salary for this employee to show context
-                    let netSalary = 0;
-                    if (emp) {
-                      const currentMonth = new Date().toLocaleString('default', { month: 'long', year: 'numeric' });
-                      const advTotal = (data.advances || [])
-                        .filter(adv => {
-                          const advanceMonth = new Date(adv.date).toLocaleString('default', { month: 'long', year: 'numeric' });
-                          return adv.empId === emp.id && adv.status === 'Approved' && !adv.isPaid && advanceMonth === currentMonth;
-                        })
-                        .reduce((s, adv) => s + adv.amount, 0);
-                      
-                      const petrolLKR = (emp.petrolLitres || 0) * fuelPrice;
-                      const epf = emp.hasEPF ? (emp.baseSalary || 0) * 0.08 : 0;
-                      
-                      const totalEarnings = (emp.baseSalary || 0) + 
-                                            (emp.performanceAllowance || 0) + 
-                                            (emp.travelingAllowance || 0) + 
-                                            (emp.vehicleAllowance || 0) +
-                                            petrolLKR + 
-                                            (emp.attendanceBonus || 0) + 
-                                            (emp.overtime || 0);
-
-                      const totalDeductions = advTotal + 
-                                              (emp.bikeInstallment || 0) + 
-                                              (emp.staffLoan || 0) + 
-                                              epf;
-
-                      netSalary = totalEarnings - totalDeductions;
-                    }
-
-                    return (
-                      <tr key={a.id}>
-                        <td className="font-mono text-sm text-text-secondary">{a.date}</td>
-                        <td>
-                          <div className="font-medium text-text-primary">{emp?.name || a.empId}</div>
-                          <div className="text-xs text-text-secondary font-medium mt-1 flex items-center gap-2">
-                            {a.reason}
-                            {a.attachment && (
-                              <a href={a.attachment} download={`Advance_Request_${a.empId}.pdf`} className="text-brand-accent hover:text-blue-700 flex items-center gap-1" title="View Attachment">
-                                <Paperclip className="w-3 h-3" />
-                              </a>
-                            )}
-                          </div>
-                          {hasPayrollPermission && emp && (
-                            <div className="mt-2">
-                              <span className="text-xs px-2 py-1 bg-emerald-50 text-emerald-600 rounded-md font-semibold">
-                                Est. Net: LKR {netSalary.toLocaleString()}
-                              </span>
-                            </div>
-                          )}
-                        </td>
-                        <td className="font-mono text-sm text-brand-accent font-semibold">LKR {a.amount.toLocaleString()}</td>
-                        <td>
-                          <div className="flex flex-col gap-1 items-start">
-                            <span className={`badge ${statusCls}`}>{a.status}</span>
-                            {a.isPaid && <span className="badge bg-emerald-500/10 text-emerald-500 border-emerald-500/30">Settled via Payroll</span>}
-                            
-                            {/* Render History Log if available */}
-                            {a.actionHistory && a.actionHistory.length > 0 ? (
-                              <div className="mt-1 space-y-1 w-full bg-slate-50 rounded-md p-2 border border-slate-100 flex flex-col items-start text-left">
-                                {a.actionHistory.map((h, i) => (
-                                  <div key={i} className="text-[9px] text-slate-500 w-full text-left leading-tight">
-                                    <span className="font-semibold text-slate-700">{h.action}</span> by {h.by}
-                                  </div>
-                                ))}
-                              </div>
-                            ) : (
-                               a.actionedBy && a.status !== 'Pending' && (
-                                 <div className="text-[10px] text-text-secondary mt-1 text-left w-full">by {a.actionedBy}</div>
-                               )
-                            )}
-                          </div>
-                        </td>
-                        {isAdmin && (
-                          <td>
-                            {a.status === 'Pending' ? (
-                              <div className="flex gap-4">
-                                <button onClick={() => handleAdvanceStatus(a.id, 'Approved')} className="text-emerald-500 hover:text-white transition-all">
-                                  <Check className="w-4 h-4" />
-                                </button>
-                                <button onClick={() => handleAdvanceStatus(a.id, 'Rejected')} className="text-red-500 hover:text-white transition-all">
-                                  <X className="w-4 h-4" />
-                                </button>
-                              </div>
-                            ) : '-'}
-                          </td>
-                        )}
-                      </tr>
-                    );
-                  })}
-              </tbody>
-            </table>
-          </div>
-
           {isAdmin && showPaysheet && (
             <div className="table-container animate-in fade-in slide-in-from-bottom-4 duration-500">
               <div className="p-6 border-b border-border-accent flex flex-col gap-4 md:flex-row md:items-center justify-between bg-gray-50/50">
@@ -664,7 +405,9 @@ export default function Payroll({ session, data, onRefresh }: PayrollProps) {
                   </tr>
                 </thead>
                 <tbody>
-                {(data.employees || []).map(emp => {
+                {(data.employees || [])
+                  .filter(e => e.status !== 'Dormant')
+                  .map(emp => {
                     const advTotal = (data.advances || [])
                       .filter(a => {
                         const advanceMonth = new Date(a.date).toLocaleString('default', { month: 'long', year: 'numeric' });
@@ -673,32 +416,48 @@ export default function Payroll({ session, data, onRefresh }: PayrollProps) {
                       .reduce((s, a) => s + a.amount, 0);
                     
                     const petrolLKR = (emp.petrolLitres || 0) * fuelPrice;
-                    const alreadyPaidCmps = data.paidComponents?.[emp.id]?.[selectedMonth] || [];
+                    const alreadyPaidCmps = (data.paidComponents?.[emp.id]?.[selectedMonth] || []);
                     const epf = (emp.hasEPF && payComponents.epf && !alreadyPaidCmps.includes('EPF')) ? (emp.baseSalary || 0) * (epfPercentage / 100) : 0;
-                    const isAlreadyFinalized = data.paidDeductions?.[emp.id]?.includes(selectedMonth);
+                    const isAlreadyFinalized = (data.paidDeductions?.[emp.id] || []).includes(selectedMonth);
 
-                    const manualBonus = (!alreadyPaidCmps.includes('CustomBonus')) ? (customBonuses[emp.id] || 0) : 0;
+                    const manualBonus = customBonuses[emp.id] || 0;
+                    const isHeld = emp.salaryStatus && emp.salaryStatus !== 'Active';
+                    const held = isHeld ? (emp.heldComponents || []) : [];
 
-                    const totalEarnings = ((payComponents.baseSalary && !alreadyPaidCmps.includes('Basic')) ? (emp.baseSalary || 0) : 0) + 
-                                          ((payComponents.performanceAllowance && !alreadyPaidCmps.includes('Bonus')) ? (emp.performanceAllowance || 0) : 0) + 
-                                          ((payComponents.travelingAllowance && !alreadyPaidCmps.includes('Travel')) ? (emp.travelingAllowance || 0) : 0) + 
-                                          ((payComponents.vehicleAllowance && !alreadyPaidCmps.includes('Vehicle')) ? (emp.vehicleAllowance || 0) : 0) +
-                                          ((payComponents.petrolAllowance && !alreadyPaidCmps.includes('Petrol')) ? petrolLKR : 0) + 
-                                          ((payComponents.attendanceBonus && !alreadyPaidCmps.includes('Attendance')) ? (emp.attendanceBonus || 0) : 0) + 
-                                          ((payComponents.overtime && !alreadyPaidCmps.includes('Overtime')) ? (emp.overtime || 0) : 0) +
-                                          manualBonus;
+                    const basicVal = (payComponents.baseSalary && !alreadyPaidCmps.includes('Basic') && !held.includes('Basic')) ? (emp.baseSalary || 0) : 0;
+                    const performanceVal = (payComponents.performanceAllowance && !alreadyPaidCmps.includes('Bonus') && !held.includes('Performance')) ? (emp.performanceAllowance || 0) : 0;
+                    const travelVal = (payComponents.travelingAllowance && !alreadyPaidCmps.includes('Travel') && !held.includes('Travel')) ? (emp.travelingAllowance || 0) : 0;
+                    const vehicleVal = (payComponents.vehicleAllowance && !alreadyPaidCmps.includes('Vehicle') && !held.includes('Vehicle')) ? (emp.vehicleAllowance || 0) : 0;
+                    const petrolVal = (payComponents.petrolAllowance && !alreadyPaidCmps.includes('Petrol') && !held.includes('Petrol')) ? petrolLKR : 0;
+                    const attendanceVal = (payComponents.attendanceBonus && !alreadyPaidCmps.includes('Attendance') && !held.includes('Attendance')) ? (emp.attendanceBonus || 0) : 0;
+                    const overtimeVal = (payComponents.overtime && !alreadyPaidCmps.includes('Overtime') && !held.includes('Overtime')) ? (emp.overtime || 0) : 0;
+                    const customBonusVal = (!alreadyPaidCmps.includes('CustomBonus') && !held.includes('CustomBonus')) ? manualBonus : 0;
 
-                    const totalDeductions = payComponents.deductions ? (advTotal + 
+                    const totalEarnings = basicVal + performanceVal + travelVal + vehicleVal + petrolVal + attendanceVal + overtimeVal + customBonusVal;
+
+                    // Deductions are usually not held unless the entire salary is held and net is 0.
+                    // We'll allow deductions as long as there are earnings to cover them.
+                    const totalDeductions = !payComponents.deductions ? 0 : (advTotal + 
                                             ((!isAlreadyFinalized) ? (emp.bikeInstallment || 0) : 0) + 
                                             ((!isAlreadyFinalized) ? (emp.staffLoan || 0) : 0) + 
-                                            ((!isAlreadyFinalized) ? epf : 0)) : 0;
+                                            ((!isAlreadyFinalized) ? epf : 0));
                                             
                     const net = Math.max(0, totalEarnings - totalDeductions);
 
                     return (
                       <tr key={emp.id}>
                         <td className="font-mono text-sm text-brand-accent">{emp.id}</td>
-                        <td className="font-medium text-text-primary">{emp.name}</td>
+                        <td className="font-medium text-text-primary">
+                          {emp.name}
+                          {isHeld && (
+                            <span 
+                              title={held.length > 0 ? `Holding: ${held.join(', ')}` : "All components held"}
+                              className="ml-2 text-[10px] font-bold px-2 py-0.5 bg-red-50 text-red-600 rounded border border-red-100 uppercase cursor-help"
+                            >
+                              {held.length > 0 ? 'Partial Hold' : 'Full Hold'} ({emp.salaryStatus?.replace('Held_', '').replace('Forever', '∞')}M)
+                            </span>
+                          )}
+                        </td>
                         <td className="text-xs text-text-secondary">LKR {(totalEarnings - manualBonus).toLocaleString()}</td>
                         <td>
                           {(!alreadyPaidCmps.includes('CustomBonus')) ? (

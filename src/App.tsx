@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { DataStore } from './lib/dataStore';
+import { DataStore, STORAGE_KEY } from './lib/dataStore';
 import { Session, AppData, Employee, Attendance, LeaveRequest, AdvanceRequest, Target, AuditLog, AppSettings, CashRequest, UserCredential, AdhocBonus } from './types';
 import { db, auth } from './lib/firebase';
-import { collection, onSnapshot, doc, query, limit, orderBy, QuerySnapshot, DocumentData } from 'firebase/firestore';
+import { collection, onSnapshot, doc, query, limit, orderBy, where, QuerySnapshot, DocumentData } from 'firebase/firestore';
 import Login from './components/Login';
 import Sidebar from './components/Sidebar';
 import Dashboard from './components/Dashboard';
@@ -16,6 +16,7 @@ import Settings from './components/Settings';
 import MyProfile from './components/MyProfile';
 import AuditLogs from './components/AuditLogs';
 import InternalMail from './components/InternalMail';
+import SalaryAdvances from './components/SalaryAdvances';
 import { Clock, Menu, Loader2 } from 'lucide-react';
 
 export default function App() {
@@ -27,6 +28,7 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(true);
   const [isAuthReady, setIsAuthReady] = useState(false);
   const [isSettingsReady, setIsSettingsReady] = useState(false);
+  const [dbError, setDbError] = useState<string | null>(null);
 
   // Safety fallback for all loading states
   useEffect(() => {
@@ -41,11 +43,14 @@ export default function App() {
     }
   }, [isLoading]);
 
+  // --- DATA SYNCHRONIZATION ---
+
+  const updatePart = (part: Partial<AppData>) => {
+    setAppData(prev => ({ ...prev, ...part }));
+  };
+
   useEffect(() => {
-    DataStore.init().then(() => {
-      // Run maintenance in background without blocking
-      DataStore.runMaintenance();
-    });
+    DataStore.init();
     const existing = DataStore.getSession();
     if (existing) setSession(existing);
 
@@ -61,223 +66,216 @@ export default function App() {
     };
   }, []);
 
+  // 1. Core Config Sync (Settings) - Active as long as app is mounted
   useEffect(() => {
-    // Always sync settings, even before login
     const unsubSettings = onSnapshot(doc(db, 'settings', 'global'), (snap) => {
       if (snap.exists()) {
         const newSettings = snap.data() as AppSettings;
         setAppData(prev => ({ ...prev, settings: newSettings }));
         setIsSettingsReady(true);
-        // Cache settings to localStorage to prevent theme flash on next load
         try {
-          const raw = localStorage.getItem('zion_hr_data');
+          const raw = localStorage.getItem(STORAGE_KEY);
           const localData = raw ? JSON.parse(raw) : DataStore.getData();
           localData.settings = newSettings;
-          localStorage.setItem('zion_hr_data', JSON.stringify(localData));
-        } catch (e) {
-          console.warn('Failed to cache settings locally');
-        }
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(localData));
+        } catch (e) {}
       } else {
         setIsSettingsReady(true);
       }
     }, (err) => {
       console.warn('Permission denied or error fetching settings:', err);
+      if (err.message.toLocaleLowerCase().includes('quota')) setDbError('Firebase Daily Quota Exceeded. Some data may not load until tomorrow.');
       setIsSettingsReady(true);
     });
-
     return () => unsubSettings();
   }, []);
 
+  // 2. Core Session/Profile Sync - Active when logged in (Stable data)
   useEffect(() => {
-    if (!session) {
-      if (isAuthReady && isSettingsReady) setIsLoading(false);
-      return;
-    }
+    if (!session || !isAuthReady) return;
     
-    if (!isAuthReady) {
-      setIsLoading(true);
-      return;
-    }
-
-    const unsubscribers: (() => void)[] = [];
-    
-    const updatePart = (part: Partial<AppData>) => {
-      setAppData(prev => ({ ...prev, ...part }));
-    };
-
-    // If admin, listen to everything. If employee, listen to restricted set.
-    // For now, we'll try to listen to all, but we need to handle permission errors gracefully.
-    const syncCollection = (name: string, setter: (data: any[]) => void, queryRef?: any) => {
-      try {
-        const ref = queryRef || collection(db, name);
-        const unsub = onSnapshot(ref, (snapshot: QuerySnapshot<DocumentData>) => {
-          const docs = snapshot.docs.map((doc: any) => {
-            const data = doc.data();
-            // Ensure the document ID is always present in the object, 
-            // prioritizing the actual document name for total accuracy.
-            return { ...data, id: doc.id };
-          });
-          setter(docs);
-        }, (error: any) => {
-          console.warn(`Permission denied for collection ${name}. This is expected for non-admin users.`);
-        });
-        unsubscribers.push(unsub);
-      } catch (err) {
-        console.error(`Error setting up listener for ${name}:`, err);
+    const unsubs: (() => void)[] = [];
+    const handleErr = (name: string, err: any) => {
+      console.warn(`Error in ${name}:`, err);
+      const msg = err.message || String(err);
+      if (msg.toLowerCase().includes('quota')) {
+        setDbError('Firebase Daily quota exceeded. Try again tomorrow or enable billing.');
+      } else if (msg.toLowerCase().includes('permission-denied')) {
+        setDbError(`Permission Denied for ${name}. Ensure your account has correct roles.`);
+      } else {
+        setDbError(`Sync error (${name}): ${msg}`);
       }
     };
 
-    if (session.isAdmin) {
-      // Core global collections (Always needed for names and dashboard)
-      syncCollection('employees', (docs) => updatePart({ employees: docs as Employee[] }));
-      syncCollection('adhocBonuses', (docs) => updatePart({ adhocBonuses: docs as AdhocBonus[] }));
-      syncCollection('credentials', (docs) => updatePart({ credentials: docs as UserCredential[] }));
-      
-      // Limit attendance for the dashboard to recent items
-      const attendanceQuery = query(collection(db, 'attendance'), orderBy('id', 'desc'), limit(150));
-      syncCollection('attendance', (docs) => updatePart({ attendance: docs as Attendance[] }), attendanceQuery);
-      
-      syncCollection('leaves', (docs) => updatePart({ leaves: docs as LeaveRequest[] }));
+    // All users need the public directory
+    const unsubDir = onSnapshot(collection(db, 'directory'), (snap) => {
+      updatePart({ directory: snap.docs.map(d => d.data() as any) });
+    }, (err) => handleErr('directory', err));
+    unsubs.push(unsubDir);
 
-      // Sync paid deductions for all employees (needed for Profile history and Payroll processing)
+    if (session.isAdmin) {
+      // ADMIN: Core data (Employees & Paid Deductions logic)
+      const unsubEmployees = onSnapshot(collection(db, 'employees'), (snap) => {
+        updatePart({ employees: snap.docs.map(d => ({ ...d.data(), id: d.id }) as Employee) });
+      }, (err) => handleErr('employees', err));
+      unsubs.push(unsubEmployees);
+
+      // Core Request Collections - These are relatively small, needed in multiple views
+      // Syncing them once here avoids re-syncing on every page change
+      const syncCoreCollection = (name: string, key: string) => {
+        return onSnapshot(collection(db, name), (snap) => {
+          updatePart({ [key]: snap.docs.map(d => ({ ...d.data(), id: d.id })) });
+        }, (err) => handleErr(name, err));
+      };
+
+      unsubs.push(syncCoreCollection('leaves', 'leaves'));
+      unsubs.push(syncCoreCollection('advances', 'advances'));
+      unsubs.push(syncCoreCollection('cashRequests', 'cashRequests'));
+      unsubs.push(syncCoreCollection('adhocBonuses', 'adhocBonuses'));
+      unsubs.push(syncCoreCollection('targets', 'targets'));
+
       const unsubPaid = onSnapshot(collection(db, 'paidDeductions'), (snap) => {
         const paid: { [key: string]: string[] } = {};
         const paidAmts: { [empId: string]: { [month: string]: number } } = {};
         const paidNts: { [empId: string]: { [month: string]: string } } = {};
         const paidCmps: { [empId: string]: { [month: string]: string[] } } = {};
         snap.docs.forEach(d => { 
-          paid[d.id] = d.data().months || []; 
-          paidAmts[d.id] = d.data().paidAmounts || {};
-          paidNts[d.id] = d.data().paidNotes || {};
-          paidCmps[d.id] = d.data().paidComponents || {};
+          const data = d.data();
+          paid[d.id] = data.months || []; 
+          paidAmts[d.id] = data.paidAmounts || {};
+          paidNts[d.id] = data.paidNotes || {};
+          paidCmps[d.id] = data.paidComponents || {};
         });
         updatePart({ paidDeductions: paid, paidSalaryAmounts: paidAmts, paidSalaryNotes: paidNts, paidComponents: paidCmps });
-      }, (err) => console.warn('Permission denied for paidDeductions (admin context)'));
-      unsubscribers.push(unsubPaid);
+      }, (err) => handleErr('paidDeductions', err));
+      unsubs.push(unsubPaid);
 
-      // Lazy load modules based on current route
-      if (route === 'payroll' || route === 'settings') {
-        syncCollection('advances', (docs) => updatePart({ advances: docs as AdvanceRequest[] }));
-        syncCollection('payrollReceipts', (docs) => {
-          const sorted = docs.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-          updatePart({ payrollReceipts: sorted as any[] });
-        });
-        syncCollection('cashRequests', (docs) => updatePart({ cashRequests: docs as CashRequest[] }));
-        syncCollection('targets', (docs) => updatePart({ targets: docs as Target[] }));
-      }
-      
-      if (route === 'audit') {
-        const auditQuery = query(collection(db, 'auditLogs'), orderBy('id', 'desc'), limit(70));
-        syncCollection('auditLogs', (docs) => updatePart({ auditLogs: docs as AuditLog[] }), auditQuery);
-      }
     } else {
-      // Regular employee: only sync their own data
-      const unsubEmp = onSnapshot(doc(db, 'employees', session.empId), (snap) => {
+      // EMPLOYEE: Their own record & related data
+      const unsubMe = onSnapshot(doc(db, 'employees', session.empId), (snap) => {
+        if (snap.exists()) updatePart({ employees: [snap.data() as Employee] });
+      }, (err) => handleErr('my_profile', err));
+      unsubs.push(unsubMe);
+
+      // Employee's own collections
+      const syncOwn = (coll: string, key: string) => {
+        const q = query(collection(db, coll), where('empId', '==', session.empId));
+        return onSnapshot(q, (snap) => {
+          updatePart({ [key]: snap.docs.map(d => ({ ...d.data(), id: d.id })) });
+        }, (err) => handleErr(`own_${coll}`, err));
+      };
+      
+      unsubs.push(syncOwn('leaves', 'leaves'));
+      unsubs.push(syncOwn('advances', 'advances'));
+      unsubs.push(syncOwn('cashRequests', 'cashRequests'));
+      unsubs.push(syncOwn('attendance', 'attendance'));
+      unsubs.push(syncOwn('adhocBonuses', 'adhocBonuses'));
+      
+      const unsubPaidOwn = onSnapshot(doc(db, 'paidDeductions', session.empId), (snap) => {
         if (snap.exists()) {
-          const emp = snap.data() as Employee;
-          setAppData(prev => ({
-            ...prev,
-            employees: [emp] // For employee view, we only need their own record
-          }));
+          const d = snap;
+          const data = d.data();
+          const paid: { [key: string]: string[] } = { [d.id]: data?.months || [] };
+          const paidAmts: { [key: string]: any } = { [d.id]: data?.paidAmounts || {} };
+          const paidNts: { [key: string]: any } = { [d.id]: data?.paidNotes || {} };
+          const paidCmps: { [key: string]: any } = { [d.id]: data?.paidComponents || {} };
+          updatePart({ paidDeductions: paid, paidSalaryAmounts: paidAmts, paidSalaryNotes: paidNts, paidComponents: paidCmps });
         }
-      }, (err) => console.warn('Permission denied for employee profile'));
-      unsubscribers.push(unsubEmp);
-
-      // Sync their own leaves
-      import('firebase/firestore').then(({ query, where }) => {
-        const leavesQuery = query(collection(db, 'leaves'), where('empId', '==', session.empId));
-        const unsubLeaves = onSnapshot(leavesQuery, (snap) => {
-          const docs = snap.docs.map(d => d.data() as LeaveRequest);
-          updatePart({ leaves: docs });
-        }, (err) => console.warn('Permission denied for leaves'));
-        unsubscribers.push(unsubLeaves);
-
-        // Sync their own advances
-        const advancesQuery = query(collection(db, 'advances'), where('empId', '==', session.empId));
-        const unsubAdvances = onSnapshot(advancesQuery, (snap) => {
-          const docs = snap.docs.map(d => d.data() as AdvanceRequest);
-          updatePart({ advances: docs });
-        }, (err) => console.warn('Permission denied for advances'));
-        unsubscribers.push(unsubAdvances);
-
-        // Sync their own cash requests
-        const cashQuery = query(collection(db, 'cashRequests'), where('empId', '==', session.empId));
-        const unsubCash = onSnapshot(cashQuery, (snap) => {
-          const docs = snap.docs.map(d => d.data() as CashRequest);
-          updatePart({ cashRequests: docs });
-        }, (err) => console.warn('Permission denied for cashRequests'));
-        unsubscribers.push(unsubCash);
-
-        // Sync their own attendance
-        const attendanceQuery = query(collection(db, 'attendance'), where('empId', '==', session.empId));
-        const unsubAttendance = onSnapshot(attendanceQuery, (snap) => {
-          const docs = snap.docs.map(d => d.data() as Attendance);
-          updatePart({ attendance: docs });
-        }, (err) => console.warn('Permission denied for attendance'));
-        unsubscribers.push(unsubAttendance);
-
-        // Sync their own adhoc bonuses
-        const bonusQuery = query(collection(db, 'adhocBonuses'), where('empId', '==', session.empId));
-        const unsubBonuses = onSnapshot(bonusQuery, (snap) => {
-          const docs = snap.docs.map(d => d.data() as AdhocBonus);
-          updatePart({ adhocBonuses: docs });
-        }, (err) => console.warn('Permission denied for adhocBonuses'));
-        unsubscribers.push(unsubBonuses);
-
-        // Sync their own paid deductions/receipts
-        const unsubPaidOwn = onSnapshot(doc(db, 'paidDeductions', session.empId), (snap) => {
-          if (snap.exists()) {
-            const d = snap;
-            const paid: { [key: string]: string[] } = {};
-            const paidAmts: { [empId: string]: { [month: string]: number } } = {};
-            const paidNts: { [empId: string]: { [month: string]: string } } = {};
-            const paidCmps: { [empId: string]: { [month: string]: string[] } } = {};
-            
-            paid[d.id] = d.data()?.months || []; 
-            paidAmts[d.id] = d.data()?.paidAmounts || {};
-            paidNts[d.id] = d.data()?.paidNotes || {};
-            paidCmps[d.id] = d.data()?.paidComponents || {};
-            
-            updatePart({ paidDeductions: paid, paidSalaryAmounts: paidAmts, paidSalaryNotes: paidNts, paidComponents: paidCmps });
-          }
-        }, (err) => console.warn('Permission denied for own paidDeductions'));
-        unsubscribers.push(unsubPaidOwn);
-      });
+      }, (err) => handleErr('own_paid_deductions', err));
+      unsubs.push(unsubPaidOwn);
     }
 
-    // Sync messages for the current user (sender or recipient)
-    if (route === 'mail' || route === 'dashboard') {
-      import('firebase/firestore').then(({ query, where, limit }) => {
-        const messagesQuery = query(collection(db, 'messages'), where('participants', 'array-contains', session.empId), limit(50));
-        const unsubMessages = onSnapshot(messagesQuery, (snap) => {
-          const docs = snap.docs.map(d => d.data() as any);
-          docs.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-          updatePart({ internalMessages: docs });
-        }, (err) => console.warn('Permission denied for messages'));
-        unsubscribers.push(unsubMessages);
-      });
-    }
+    return () => unsubs.forEach(u => u());
+  }, [session, isAuthReady]); 
 
-    // Always fetch directory for autocomplete
-    const dirQuery = collection(db, 'directory');
-    const unsubDirList = onSnapshot(dirQuery, (snap) => {
-       const publicDir = snap.docs.map(d => d.data() as any);
-       setAppData(prev => ({ ...prev, directory: publicDir }));
-    }, (err) => console.warn('Permission denied for general directory list'));
-    unsubscribers.push(unsubDirList);
+  // 3. Dashboards / Quick-View Stats - Fetches small window of data
+  useEffect(() => {
+     if (!session?.isAdmin || !isAuthReady) return;
+     const unsubs: (() => void)[] = [];
+     
+     // Only if on dashboard, get recent stuff for stats
+     if (route === 'dashboard') {
+        const today = new Date();
+        const weekAgo = new Date();
+        weekAgo.setDate(today.getDate() - 7);
+        const weekAgoStr = weekAgo.toISOString().split('T')[0];
+        
+        const qAttendance = query(collection(db, 'attendance'), where('date', '>=', weekAgoStr), orderBy('date', 'desc'), limit(500));
+        unsubs.push(onSnapshot(qAttendance, (snap) => updatePart({ attendance: snap.docs.map(d => ({ ...d.data(), id: d.id }) as any) }), (err) => console.log('Stat sync skipped:', err)));
+     }
+     
+     return () => unsubs.forEach(u => u());
+  }, [session, isAuthReady, route]);
 
-    // Allow 300ms for initial collections to trigger their cached snapshots.
-    // Since we now cache settings and have no dummy data, this guarantees a smooth, flash-free transition.
-    const loadTimer = setTimeout(() => setIsLoading(false), 300);
-
-    return () => {
-      unsubscribers.forEach(unsub => unsub());
-      clearTimeout(loadTimer);
+  // 4. Route-Specific Admin Sync - Fetches only what's needed for the active view
+  useEffect(() => {
+    if (!session?.isAdmin || !isAuthReady) return;
+    if (route === 'dashboard') return; // Handled by dashboard effect
+    
+    const unsubs: (() => void)[] = [];
+    const handleErr = (name: string, err: any) => {
+      console.warn(`Route sync failed for ${name}:`, err);
+      setDbError(`Route Sync Error (${name}): ${err.message || String(err)}`);
     };
-  }, [session, isAuthReady, isSettingsReady, route]);
+
+    const syncRouteCollection = (coll: string, key: string, qRef?: any) => {
+      const ref = qRef || collection(db, coll);
+      const unsub = onSnapshot(ref, (snapshot) => {
+        updatePart({ [key]: snapshot.docs.map(d => ({ ...d.data(), id: d.id })) });
+      }, (err) => handleErr(coll, err));
+      unsubs.push(unsub);
+    };
+
+    if (route === 'attendance') {
+      const today = new Date();
+      const monthAgo = new Date();
+      monthAgo.setDate(today.getDate() - 60); // Show 60 days of history
+      const monthAgoStr = monthAgo.toISOString().split('T')[0];
+
+      const fullAttQuery = query(collection(db, 'attendance'), where('date', '>=', monthAgoStr), orderBy('date', 'desc'), limit(2000));
+      syncRouteCollection('attendance', 'attendance', fullAttQuery);
+    }
+
+    // Note: leaves, advances, cashRequests, adhocBonuses are now in core sync (Effect 2)
+    // for admins to prevent flashing when navigating.
+
+    if (route === 'payroll') {
+      const receiptQuery = query(collection(db, 'payrollReceipts'), orderBy('timestamp', 'desc'), limit(100));
+      syncRouteCollection('payrollReceipts', 'payrollReceipts', receiptQuery);
+    }
+
+    if (route === 'staff') {
+      syncRouteCollection('credentials', 'credentials');
+    }
+
+    if (route === 'audit') {
+      const q = query(collection(db, 'auditLogs'), orderBy('timestamp', 'desc'), limit(150));
+      syncRouteCollection('auditLogs', 'auditLogs', q);
+    }
+
+    if (route === 'mail') {
+      const q = query(collection(db, 'messages'), where('participants', 'array-contains', session.empId), limit(50));
+      const unsub = onSnapshot(q, (snap) => {
+        const docs = snap.docs.map(d => ({ ...d.data(), id: d.id }) as any);
+        docs.sort((a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+        updatePart({ internalMessages: docs });
+      }, (err) => handleErr('messages', err));
+      unsubs.push(unsub);
+    }
+
+    return () => unsubs.forEach(u => u());
+  }, [session, route, isAuthReady]);
+
+  // Loader lifecycle
+  useEffect(() => {
+    if (session && isAuthReady && isSettingsReady) {
+      const timer = setTimeout(() => setIsLoading(false), 1200);
+      return () => clearTimeout(timer);
+    }
+  }, [session, isAuthReady, isSettingsReady]);
 
   const refreshData = () => {
-    // No longer needed with real-time sync, but keeping for compatibility
+    window.location.reload();
   };
 
   const handleLogin = (newSession: Session) => {
@@ -313,7 +311,7 @@ export default function App() {
           <div className="absolute inset-0 border-4 border-brand-accent/30 rounded-full animate-ping" style={{ animationDuration: '2s' }} />
         </div>
         <div className="flex flex-col items-center gap-3">
-          <h2 className="text-text-primary font-serif text-3xl font-bold">{appData.settings.companyName || 'Zion HR'}</h2>
+          <h2 className="text-text-primary font-serif text-3xl font-bold">{appData.settings?.companyName || 'Zion HR'}</h2>
           <div className="flex items-center gap-2">
             <div className="w-2 h-2 bg-brand-accent rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
             <div className="w-2 h-2 bg-brand-accent rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
@@ -340,7 +338,7 @@ export default function App() {
       }
 
       // Always accessible for everyone
-      if (id === 'dashboard' || id === 'myprofile' || id === 'leave' || id === 'payroll' || id === 'cash_requests' || id === 'mail') return true;
+      if (id === 'dashboard' || id === 'myprofile' || id === 'leave' || id === 'payroll' || id === 'advances' || id === 'cash_requests' || id === 'mail') return true;
       
       if (isMasterAdmin) return true;
 
@@ -364,6 +362,7 @@ export default function App() {
       case 'attendance': return <AttendanceView session={session} data={appData} onRefresh={refreshData} />;
       case 'leave': return <LeaveManagement session={session} data={appData} onRefresh={refreshData} />;
       case 'payroll': return <Payroll session={session} data={appData} onRefresh={refreshData} />;
+      case 'advances': return <SalaryAdvances session={session} data={appData} onRefresh={refreshData} />;
       case 'cash_requests': return <CashRequests session={session} data={appData} />;
       case 'mail': return <InternalMail session={session} data={appData} />;
       case 'myprofile': return <MyProfile session={session} data={appData} onRefresh={refreshData} />;
@@ -379,7 +378,8 @@ export default function App() {
       case 'staff': return 'Staff Management';
       case 'attendance': return 'Attendance Tracking';
       case 'leave': return 'Leave Management';
-      case 'payroll': return 'Payroll & Advances';
+      case 'payroll': return 'Payroll Management';
+      case 'advances': return session.isAdmin ? 'Advance Management' : 'Salary Advances';
       case 'cash_requests': return 'Cash Requests';
       case 'mail': return 'Internal Mail';
       case 'myprofile': return 'My Profile';
@@ -389,14 +389,14 @@ export default function App() {
     }
   };
 
-  const theme = appData.settings.theme;
+  const theme = appData.settings?.theme;
   const primaryColor = theme?.primary || '#2563eb';
   const accentColor = theme?.accent || '#e5e7eb';
   const bgColor = theme?.background || '#f3f4f6';
   const secondaryColor = theme?.secondary || '#10b981';
   const textPrimary = theme?.textPrimary || '#111827';
   const textSecondary = theme?.textSecondary || '#6b7280';
-  const blobs = appData.settings.backgroundBlobs || { enabled: true, blur: 150, opacity: 5 };
+  const blobs = appData.settings?.backgroundBlobs || { enabled: true, blur: 150, opacity: 5 };
 
   return (
     <div className="app-container bg-bg-primary relative overflow-hidden">
@@ -445,6 +445,11 @@ export default function App() {
       />
       
       <main className="main-content">
+        {dbError && (
+          <div className="bg-red-500 text-white px-6 py-2 text-center text-xs font-bold animate-pulse sticky top-0 z-[100]">
+            ⚠️ {dbError}
+          </div>
+        )}
         <header className="px-6 md:px-12 py-6 md:py-8 flex justify-between items-center border-b border-border-accent bg-white/50 backdrop-blur-md sticky top-0 z-30">
           <div className="flex items-center gap-4">
             <button 

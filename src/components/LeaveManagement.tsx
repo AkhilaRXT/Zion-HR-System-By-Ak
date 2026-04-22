@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { AppData, Session, LeaveRequest } from '../types';
 import { DataStore } from '../lib/dataStore';
-import { Check, X, PlaneTakeoff, Paperclip } from 'lucide-react';
+import { Check, X, PlaneTakeoff, Paperclip, FileDown, Calendar } from 'lucide-react';
 import { AnimatePresence } from 'motion/react';
 import Notification, { NotificationType } from './Notification';
+import * as XLSX from 'xlsx';
 import { fileToBase64 } from '../lib/fileUtils';
 
 interface LeaveManagementProps {
@@ -20,6 +21,19 @@ export default function LeaveManagement({ session, data, onRefresh }: LeaveManag
   const currentEmpId = session.empId;
   
   const [notification, setNotification] = useState<{ message: string, type: NotificationType } | null>(null);
+  const [activeTab, setActiveTab] = useState<'Pending' | 'Approved' | 'Rejected' | 'All'>(canManageLeaves ? 'Pending' : 'All');
+  
+  const formatDateForInput = (date: Date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  const [dateRange, setDateRange] = useState({
+    from: formatDateForInput(new Date(new Date().getFullYear(), new Date().getMonth() - 2, 1)),
+    to: formatDateForInput(new Date(new Date().getFullYear(), new Date().getMonth() + 4, 0))
+  });
 
   const showNotification = (message: string, type: NotificationType = 'success') => {
     setNotification({ message, type });
@@ -97,7 +111,48 @@ export default function LeaveManagement({ session, data, onRefresh }: LeaveManag
     }
   };
 
-  const filteredLeaves = (data.leaves || []).filter(l => canManageLeaves || l.empId === currentEmpId).sort((a, b) => b.id - a.id);
+  const handleExportLeaves = async () => {
+    const leavesToExport = (data.leaves || [])
+      .filter(l => {
+        const matchesPermission = canManageLeaves || l.empId === currentEmpId;
+        const matchesDate = l.from >= dateRange.from && l.from <= dateRange.to;
+        const matchesStatus = activeTab === 'All' || l.status === activeTab;
+        return matchesPermission && matchesDate && matchesStatus;
+      })
+      .sort((a, b) => b.id - a.id);
+
+    const sheetData = leavesToExport.map(l => {
+      const emp = (data.employees || []).find(e => e.id === l.empId);
+      return {
+        'Apply Date': new Date(l.id).toISOString().split('T')[0],
+        'Employee ID': l.empId,
+        'Employee Name': emp?.name || 'Unknown',
+        Type: l.type,
+        From: l.from,
+        To: l.to,
+        Reason: l.reason,
+        Status: l.status,
+        'Actioned By': l.actionedBy || '-'
+      };
+    });
+
+    const ws = XLSX.utils.json_to_sheet(sheetData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Leave Reports');
+    XLSX.writeFile(wb, `Leave_Report_${dateRange.from}_to_${dateRange.to}.xlsx`);
+    showNotification('Leave report exported successfully.');
+  };
+
+  const filteredByDate = (data.leaves || [])
+    .filter(l => l.from >= dateRange.from && l.from <= dateRange.to);
+
+  const filteredLeaves = filteredByDate
+    .filter(l => {
+      const matchesPermission = canManageLeaves || l.empId === currentEmpId;
+      const matchesStatus = activeTab === 'All' || l.status === activeTab;
+      return matchesPermission && matchesStatus;
+    })
+    .sort((a, b) => Number(b.id) - Number(a.id));
 
   return (
     <div className="space-y-12">
@@ -164,91 +219,165 @@ export default function LeaveManagement({ session, data, onRefresh }: LeaveManag
           </form>
         </div>
 
-        <div className="w-full lg:w-2/3 table-container">
-          <div className="p-6 border-b border-border-accent">
-            <h3 className="text-sm font-semibold text-text-primary">
-              {canManageLeaves ? 'All Leave Requests' : 'My Leave Requests'}
-            </h3>
+        <div className="w-full lg:w-2/3 space-y-6">
+          <div className="glass-panel p-6 flex flex-col md:flex-row gap-6 items-end">
+            <div className="flex-1 grid grid-cols-2 gap-4 w-full">
+              <div className="form-group">
+                <label className="text-[10px] font-bold text-text-secondary uppercase tracking-widest mb-1 block">From Date</label>
+                <input 
+                  type="date" className="form-control text-xs" 
+                  value={dateRange.from} onChange={e => setDateRange({...dateRange, from: e.target.value})}
+                />
+              </div>
+              <div className="form-group">
+                <label className="text-[10px] font-bold text-text-secondary uppercase tracking-widest mb-1 block">To Date</label>
+                <input 
+                  type="date" className="form-control text-xs" 
+                  value={dateRange.to} onChange={e => setDateRange({...dateRange, to: e.target.value})}
+                />
+              </div>
+            </div>
+            <button 
+              onClick={handleExportLeaves}
+              className="btn btn-outline py-2.5 px-6 h-auto text-xs w-full md:w-auto"
+            >
+              <FileDown className="w-4 h-4" />
+              Export to Excel
+            </button>
           </div>
-          <table>
-            <thead>
-              <tr>
-                <th>Employee</th>
-                <th>Type</th>
-                <th>Duration</th>
-                <th>Status</th>
-                {canManageLeaves && <th>Actions</th>}
-              </tr>
-            </thead>
-            <tbody>
-              {filteredLeaves.map(l => {
-                const emp = (data.employees || []).find(e => e.id === l.empId);
-                const statusCls = l.status === 'Approved' ? 'badge-success' : l.status === 'Rejected' ? 'badge-danger' : 'badge-warning';
-                
-                // Calculate balance for this specific employee
-                const empApprovedLeaves = (data.leaves || []).filter(leave => leave.empId === l.empId && leave.status === 'Approved');
-                const empAnnualTaken = empApprovedLeaves.filter(leave => leave.type === 'Annual').reduce((acc, leave) => acc + calculateDays(leave.from, leave.to), 0);
-                const empCasualTaken = empApprovedLeaves.filter(leave => leave.type === 'Casual').reduce((acc, leave) => acc + calculateDays(leave.from, leave.to), 0);
-                const empSickTaken = empApprovedLeaves.filter(leave => leave.type === 'Sick').reduce((acc, leave) => acc + calculateDays(leave.from, leave.to), 0);
 
-                const empCasualBalance = (policy.casualTotal || 0) - empCasualTaken;
-                const empSickBalance = (policy.sickTotal || 0) - empSickTaken;
-                const empAnnualBalance = (policy.annualTotal || 0) - empAnnualTaken;
+          <div className="table-container">
+            <div className="p-6 border-b border-border-accent bg-gray-50/50 flex flex-col gap-6">
+              <div className="flex justify-between items-center">
+                <div>
+                  <h3 className="text-sm font-semibold text-text-primary">
+                    {canManageLeaves ? 'All Leave Requests' : 'My Leave Requests'}
+                  </h3>
+                  <p className="text-[10px] text-text-secondary font-medium mt-1 uppercase tracking-widest">
+                    Showing results from {dateRange.from} to {dateRange.to}
+                  </p>
+                </div>
+              </div>
 
-                return (
-                  <tr key={l.id}>
-                    <td>
-                      <div className="font-medium text-text-primary">{emp?.name || l.empId}</div>
-                      {canManageLeaves && (
-                        <div className="mt-2 flex flex-wrap gap-2">
-                          <span className="text-xs px-2 py-1 bg-gray-100 text-text-secondary rounded-md">Annual: {empAnnualBalance}</span>
-                          <span className="text-xs px-2 py-1 bg-gray-100 text-text-secondary rounded-md">Casual: {empCasualBalance}</span>
-                          <span className="text-xs px-2 py-1 bg-gray-100 text-text-secondary rounded-md">Sick: {empSickBalance}</span>
-                        </div>
-                      )}
-                    </td>
-                    <td className="text-sm text-text-secondary">{l.type}</td>
-                    <td className="font-mono text-sm text-text-secondary">
-                      {l.from} → {l.to}
-                      {l.attachment && (
-                        <div className="mt-2">
-                          <a href={l.attachment} download={`Leave_Request_${l.empId}.pdf`} className="text-xs font-medium text-brand-accent hover:text-blue-700 flex items-center gap-1">
-                            <Paperclip className="w-3 h-3" /> View Attachment
-                          </a>
-                        </div>
-                      )}
-                    </td>
-                    <td>
-                      <span className={`badge ${statusCls}`}>{l.status}</span>
-                      {l.actionedBy && l.status !== 'Pending' && (
-                        <div className="text-[10px] text-text-secondary mt-1">by {l.actionedBy}</div>
-                      )}
-                    </td>
-                    {canManageLeaves && (
-                      <td>
-                        {l.status === 'Pending' ? (
-                          <div className="flex gap-4">
-                            <button 
-                              onClick={() => handleStatus(l.id, 'Approved')}
-                              className="text-emerald-500 hover:text-white transition-all"
-                            >
-                              <Check className="w-4 h-4" />
-                            </button>
-                            <button 
-                              onClick={() => handleStatus(l.id, 'Rejected')}
-                              className="text-red-500 hover:text-white transition-all"
-                            >
-                              <X className="w-4 h-4" />
-                            </button>
-                          </div>
-                        ) : '-'}
-                      </td>
+              <div className="flex border-b border-border-accent">
+                {(['Pending', 'Approved', 'Rejected', 'All'] as const).map((tab) => (
+                  <button
+                    key={tab}
+                    onClick={() => setActiveTab(tab)}
+                    className={`px-6 py-2 text-xs font-bold uppercase tracking-widest transition-all relative ${
+                      activeTab === tab 
+                      ? 'text-brand-accent' 
+                      : 'text-text-secondary hover:text-text-primary'
+                    }`}
+                  >
+                    {tab}
+                    {activeTab === tab && (
+                      <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-brand-accent" />
                     )}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <table>
+              <thead>
+                <tr>
+                  <th>Employee</th>
+                  <th>Type / Status</th>
+                  <th>Duration</th>
+                  {canManageLeaves && <th className="text-right">Actions</th>}
+                </tr>
+              </thead>
+              <tbody>
+                {filteredLeaves.length > 0 ? filteredLeaves.map(l => {
+                  const emp = (data.employees || []).find(e => e.id === l.empId);
+                  const statusCls = l.status === 'Approved' ? 'badge-success' : l.status === 'Rejected' ? 'badge-danger' : 'badge-warning';
+                  
+                  // Calculate balance for this specific employee
+                  const empApprovedLeaves = (data.leaves || []).filter(leave => leave.empId === l.empId && leave.status === 'Approved');
+                  const empAnnualTaken = empApprovedLeaves.filter(leave => leave.type === 'Annual').reduce((acc, leave) => acc + calculateDays(leave.from, leave.to), 0);
+                  const empCasualTaken = empApprovedLeaves.filter(leave => leave.type === 'Casual').reduce((acc, leave) => acc + calculateDays(leave.from, leave.to), 0);
+                  const empSickTaken = empApprovedLeaves.filter(leave => leave.type === 'Sick').reduce((acc, leave) => acc + calculateDays(leave.from, leave.to), 0);
+
+                  const empCasualBalance = (policy.casualTotal || 0) - empCasualTaken;
+                  const empSickBalance = (policy.sickTotal || 0) - empSickTaken;
+                  const empAnnualBalance = (policy.annualTotal || 0) - empAnnualTaken;
+
+                  return (
+                    <tr key={l.id}>
+                      <td>
+                        <div className="font-semibold text-text-primary">{emp?.name || l.empId}</div>
+                        <div className="text-[10px] text-brand-accent font-medium mt-0.5 tracking-tight">{l.empId}</div>
+                        {canManageLeaves && (
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            <span className="text-[10px] font-bold px-2 py-0.5 bg-gray-50 text-text-secondary rounded border border-gray-100 italic">BAL: A:{empAnnualBalance} | C:{empCasualBalance} | S:{empSickBalance}</span>
+                          </div>
+                        )}
+                        <div className="mt-3 text-xs text-text-secondary italic bg-gray-50/50 p-2 rounded border border-dashed border-border-accent">
+                          "{l.reason}"
+                        </div>
+                      </td>
+                      <td>
+                        <div className="flex flex-col gap-2 items-start">
+                          <span className="text-[10px] font-bold uppercase tracking-widest text-text-secondary">{l.type}</span>
+                          <div className="flex flex-col gap-1 items-start">
+                             <span className={`badge ${statusCls}`}>{l.status}</span>
+                             {l.actionedBy && l.status !== 'Pending' && (
+                               <span className="text-[9px] text-text-secondary font-medium italic pl-1 leading-none">by {l.actionedBy}</span>
+                             )}
+                          </div>
+                        </div>
+                      </td>
+                      <td className="font-mono text-xs text-text-secondary leading-relaxed">
+                        <div className="flex items-center gap-2 mb-1">
+                          <Calendar className="w-3 h-3 text-brand-accent" />
+                          <span className="font-bold text-text-primary">{l.from}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <div className="w-3" />
+                          <span>to {l.to}</span>
+                        </div>
+                        {l.attachment && (
+                          <div className="mt-3">
+                            <a href={l.attachment} download={`Leave_Request_${l.empId}.pdf`} className="text-xs font-bold text-brand-accent hover:underline flex items-center gap-1.5 bg-brand-accent/5 py-1 px-2 rounded-md w-fit">
+                              <Paperclip className="w-3 h-3" /> View Document
+                            </a>
+                          </div>
+                        )}
+                      </td>
+                      {canManageLeaves && (
+                        <td className="text-right">
+                          {l.status === 'Pending' ? (
+                            <div className="flex gap-2 justify-end">
+                              <button 
+                                onClick={() => handleStatus(l.id, 'Approved')}
+                                className="p-2 bg-emerald-50 text-emerald-600 rounded-lg hover:bg-emerald-600 hover:text-white transition-all shadow-sm"
+                                title="Approve"
+                              >
+                                <Check className="w-4 h-4" />
+                              </button>
+                              <button 
+                                onClick={() => handleStatus(l.id, 'Rejected')}
+                                className="p-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-600 hover:text-white transition-all shadow-sm"
+                                title="Reject"
+                              >
+                                <X className="w-4 h-4" />
+                              </button>
+                            </div>
+                          ) : '-'}
+                        </td>
+                      )}
+                    </tr>
+                  );
+                }) : (
+                  <tr>
+                    <td colSpan={canManageLeaves ? 4 : 3} className="text-center py-12 text-text-secondary font-medium italic">
+                      No leave requests found for the selected date range.
+                    </td>
                   </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
 

@@ -8,6 +8,7 @@ import {
   PlaneTakeoff, 
   Target, 
   FileText, 
+  HandCoins,
   Settings, 
   UserCircle, 
   LogOut,
@@ -69,7 +70,8 @@ export default function Sidebar({ session, data, activeRoute, onNavigate, onLogo
     { id: 'staff', label: 'Staff Mgmt', icon: Users },
     { id: 'attendance', label: 'Attendance', icon: CalendarCheck },
     { id: 'leave', label: hasLeavePerm ? 'Leave Mgmt' : 'My Leaves', icon: PlaneTakeoff },
-    { id: 'payroll', label: hasPayrollPerm ? 'Payroll' : 'Salary Advance', icon: FileText },
+    { id: 'payroll', label: 'Payroll', icon: FileText },
+    { id: 'advances', label: hasPayrollPerm ? 'Advance Mgmt' : 'My Advances', icon: HandCoins },
     { id: 'cash_requests', label: hasCashPerm ? 'Cash Requests' : 'My Cash Requests', icon: FileText },
     { id: 'audit', label: 'Audit Logs', icon: History },
     ...(isMasterAdmin ? [{ id: 'settings', label: 'Control Panel', icon: Settings }] : []),
@@ -83,7 +85,10 @@ export default function Sidebar({ session, data, activeRoute, onNavigate, onLogo
     }
 
     // Always accessible for everyone
-    if (id === 'dashboard' || id === 'mail' || id === 'myprofile' || id === 'leave' || id === 'payroll' || id === 'cash_requests') return true;
+    if (id === 'dashboard' || id === 'mail' || id === 'myprofile' || id === 'leave' || id === 'advances' || id === 'cash_requests') return true;
+    
+    // Payroll requires specific permission or Master
+    if (id === 'payroll') return hasPayrollPerm;
     
     // Master Admin (Google Login) gets everything
     if (isMasterAdmin) return true;

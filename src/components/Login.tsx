@@ -49,7 +49,7 @@ export default function Login({ onLogin, data }: LoginProps) {
     }
   };
 
-  const hero = data.settings.loginHero || {
+  const hero = data.settings?.loginHero || {
     titleLine1: 'Empowering Your',
     titleLine2: 'Financial Future',
     stat1Value: '100%',
@@ -81,7 +81,7 @@ export default function Login({ onLogin, data }: LoginProps) {
               <span className="text-blue-300">{hero.titleLine2}</span>
             </h1>
             <p className="text-xl text-blue-100/80 font-medium leading-relaxed">
-              {data.settings.companySubtitle || 'Professional Human Resource & Payroll Management System'}
+              {data.settings?.companySubtitle || 'Professional Human Resource & Payroll Management System'}
             </p>
             <div className="mt-12 flex gap-8">
               <div className="flex flex-col">
@@ -106,7 +106,7 @@ export default function Login({ onLogin, data }: LoginProps) {
         >
           <div className="mb-12 text-center lg:text-left">
             <div className="flex justify-center lg:justify-start">
-              <Logo src={data.settings.logo} />
+              <Logo src={data.settings?.logo} />
             </div>
             <h2 className="text-3xl font-bold text-text-primary mb-3">Welcome Back</h2>
             <p className="text-sm font-medium text-text-secondary">Please enter your credentials to access your account.</p>

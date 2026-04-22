@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { AppData, Session, AppSettings } from '../types';
 import { DataStore } from '../lib/dataStore';
 import { Save, RefreshCw, Palette, ShieldAlert, Clock, Database, Trash2, FileDown, Camera, AlertTriangle } from 'lucide-react';
@@ -17,6 +17,13 @@ interface SettingsProps {
 }
 
 export default function Settings({ session, data, onRefresh }: SettingsProps) {
+  useEffect(() => {
+    // Run background maintenance only when admin enters settings
+    if (session.isAdmin) {
+      DataStore.runMaintenance();
+    }
+  }, []);
+
   if (!session.isAdmin) return <div className="p-8 text-brand-accent uppercase tracking-[2px]">Access Denied</div>;
 
   const [settings, setSettings] = useState<AppSettings>(data.settings);
@@ -87,9 +94,9 @@ export default function Settings({ session, data, onRefresh }: SettingsProps) {
   };
 
   const exportExcel = (filename: string, filterFn: (a: any) => boolean) => {
-    const rows = data.attendance.filter(filterFn);
+    const rows = (data.attendance || []).filter(filterFn);
     const sheetData = rows.map(a => {
-      const emp = data.employees.find(e => e.id === a.empId);
+      const emp = (data.employees || []).find(e => e.id === a.empId);
       return {
         Date: a.date,
         'EMP ID': a.empId,
@@ -108,7 +115,7 @@ export default function Settings({ session, data, onRefresh }: SettingsProps) {
   };
 
   const exportBankDetails = () => {
-    const sheetData = data.employees.map(emp => ({
+    const sheetData = (data.employees || []).map(emp => ({
       'EMP ID': emp.id,
       'Employee Name': emp.name,
       'Designation': emp.role,

@@ -22,6 +22,7 @@ interface StaffManagementProps {
 
 export default function StaffManagement({ session, data, onRefresh }: StaffManagementProps) {
   const isAdmin = session.isAdmin;
+  const isMasterAdmin = session.email === "zioncommercialcreditampara@gmail.com";
   const fuelPrice = data.settings?.fuelPrice || 398;
   const [searchTerm, setSearchTerm] = useState('');
   const [originalId, setOriginalId] = useState<string | null>(null);
@@ -29,6 +30,7 @@ export default function StaffManagement({ session, data, onRefresh }: StaffManag
   
   // Modal & Notification State
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const [confirmIdChange, setConfirmIdChange] = useState<{ oldId: string, newId: string } | null>(null);
   const [notification, setNotification] = useState<{ message: string, type: NotificationType } | null>(null);
 
   const [newEmp, setNewEmp] = useState({
@@ -52,6 +54,9 @@ export default function StaffManagement({ session, data, onRefresh }: StaffManag
     accountNo: '',
     profilePic: '',
     hasEPF: true,
+    status: 'Active' as const,
+    salaryStatus: 'Active' as const,
+    heldComponents: [] as string[],
     username: '',
     password: '',
     isSystemAdmin: false,
@@ -109,6 +114,9 @@ export default function StaffManagement({ session, data, onRefresh }: StaffManag
       accountNo: newEmp.accountNo,
       profilePic: newEmp.profilePic,
       hasEPF: newEmp.hasEPF,
+      status: newEmp.status,
+      salaryStatus: newEmp.salaryStatus,
+      heldComponents: newEmp.heldComponents
     };
 
     const cred = {
@@ -127,6 +135,8 @@ export default function StaffManagement({ session, data, onRefresh }: StaffManag
         baseSalary: 0, travelingAllowance: 0, vehicleAllowance: 0, performanceAllowance: 0,
         petrolLitres: 0, attendanceBonus: 0, overtime: 0, bikeInstallment: 0, staffLoan: 0,
         bankName: '', bankBranch: '', accountNo: '', profilePic: '', hasEPF: true,
+        status: 'Active', salaryStatus: 'Active',
+        heldComponents: [],
         username: '', password: '', isSystemAdmin: false, permissions: []
       });
     } catch (err: any) {
@@ -147,9 +157,14 @@ export default function StaffManagement({ session, data, onRefresh }: StaffManag
     }
   };
 
-  const handleUpdate = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleUpdate = async (e?: React.FormEvent, forceIdChange = false) => {
+    if (e) e.preventDefault();
     if (isEditing && originalId) {
+      if (isEditing.id !== originalId && !forceIdChange) {
+        setConfirmIdChange({ oldId: originalId, newId: isEditing.id });
+        return;
+      }
+
       const { username, password, isSystemAdmin, permissions, ...empUpdates } = isEditing;
       const credUpdates: any = {};
       if (username) credUpdates.username = username;
@@ -158,10 +173,14 @@ export default function StaffManagement({ session, data, onRefresh }: StaffManag
       credUpdates.permissions = isSystemAdmin ? permissions : [];
       
       try {
+        if (forceIdChange) {
+          showNotification('Migrating records... Please wait.', 'info');
+        }
         await DataStore.updateEmployee(originalId, empUpdates, credUpdates);
-        showNotification('Employee details updated.');
+        showNotification(isEditing.id !== originalId ? 'Employee ID and records migrated successfully.' : 'Employee details updated.');
         setIsEditing(null);
         setOriginalId(null);
+        setConfirmIdChange(null);
       } catch (err: any) {
         console.error('Update Staff Error:', err);
         showNotification(err.message || 'Failed to update employee.', 'error');
@@ -177,7 +196,8 @@ export default function StaffManagement({ session, data, onRefresh }: StaffManag
       username: cred?.username || '',
       password: cred?.password || '',
       isSystemAdmin: cred?.isAdmin || false,
-      permissions: cred?.permissions || []
+      permissions: cred?.permissions || [],
+      heldComponents: emp.heldComponents || []
     });
   };
 
@@ -399,6 +419,74 @@ export default function StaffManagement({ session, data, onRefresh }: StaffManag
                 </div>
               </div>
 
+              {isMasterAdmin && (
+                <div className="border border-red-200 bg-red-50/10 p-8 space-y-8">
+                  <p className="text-[10px] font-bold text-red-600 uppercase tracking-[2px] flex items-center gap-2">
+                    <span className="w-2 h-2 bg-red-600 rounded-full animate-pulse" />
+                    Master Admin Controls
+                  </p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="form-group">
+                      <label className="text-[10px] uppercase tracking-[2px] text-text-secondary mb-2 block font-bold">Account Status</label>
+                      <select 
+                        className="form-control border-red-200 focus:border-red-500"
+                        value={newEmp.status} onChange={e => setNewEmp({...newEmp, status: e.target.value as any})}
+                      >
+                        <option value="Active">Active (Working)</option>
+                        <option value="Dormant">Dormant (Resigned/Terminated)</option>
+                      </select>
+                    </div>
+                    <div className="form-group">
+                      <label className="text-[10px] uppercase tracking-[2px] text-text-secondary mb-2 block font-bold">Salary Hold Status</label>
+                      <select 
+                        className="form-control border-red-200 focus:border-red-500"
+                        value={newEmp.salaryStatus} onChange={e => setNewEmp({...newEmp, salaryStatus: e.target.value as any})}
+                      >
+                        <option value="Active">No Hold</option>
+                        <option value="Held_1">Hold for 1 Month</option>
+                        <option value="Held_2">Hold for 2 Months</option>
+                        <option value="Held_Forever">Hold Forever</option>
+                      </select>
+                    </div>
+
+                    {newEmp.salaryStatus !== 'Active' && (
+                      <div className="form-group col-span-1 md:col-span-2">
+                        <label className="text-[10px] uppercase tracking-[2px] text-red-600 mb-4 block font-bold">Select Components to Hold</label>
+                        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                          {[
+                            { id: 'Basic', label: 'Basic Salary' },
+                            { id: 'Travel', label: 'Travel Allowance' },
+                            { id: 'Vehicle', label: 'Vehicle Allowance' },
+                            { id: 'Performance', label: 'Performance Allowance' },
+                            { id: 'Petrol', label: 'Petrol' },
+                            { id: 'Attendance', label: 'Attendance Bonus' },
+                            { id: 'Overtime', label: 'Overtime' },
+                            { id: 'CustomBonus', label: 'Custom Bonus' }
+                          ].map(cmp => (
+                            <label key={cmp.id} className="flex items-center gap-2 cursor-pointer group">
+                              <input 
+                                type="checkbox" 
+                                className="w-3 h-3 accent-red-600"
+                                checked={newEmp.heldComponents.includes(cmp.id)}
+                                onChange={e => {
+                                  const next = e.target.checked 
+                                    ? [...newEmp.heldComponents, cmp.id]
+                                    : newEmp.heldComponents.filter(id => id !== cmp.id);
+                                  setNewEmp({...newEmp, heldComponents: next});
+                                }}
+                              />
+                              <span className="text-[9px] uppercase tracking-[1px] text-text-secondary group-hover:text-red-600 transition-colors">
+                                {cmp.label}
+                              </span>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
               <div className="border border-border-accent p-8 space-y-8">
                 <div className="flex justify-between items-center">
                   <p className="text-[10px] font-bold text-brand-accent uppercase tracking-[2px]">
@@ -504,7 +592,20 @@ export default function StaffManagement({ session, data, onRefresh }: StaffManag
                           <span className="font-mono text-sm text-brand-accent">{emp.id}</span>
                         </div>
                       </td>
-                      <td className="font-medium text-text-primary">{emp.name}</td>
+                      <td className="font-medium text-text-primary">
+                        {emp.name}
+                        {emp.status === 'Dormant' && (
+                          <span className="ml-2 text-[8px] px-1.5 py-0.5 bg-gray-100 text-gray-500 rounded border border-gray-200 uppercase font-bold tracking-tighter">Dormant</span>
+                        )}
+                        {emp.salaryStatus && emp.salaryStatus !== 'Active' && (
+                          <span 
+                            title={(emp.heldComponents || []).length > 0 ? `Holding: ${emp.heldComponents?.join(', ')}` : "All components held"}
+                            className="ml-2 text-[8px] px-1.5 py-0.5 bg-red-50 text-red-600 rounded border border-red-100 uppercase font-bold tracking-tighter cursor-help"
+                          >
+                            {(emp.heldComponents || []).length > 0 ? 'Partial Hold' : 'Full Hold'} ({emp.salaryStatus.replace('Held_', '').replace('Forever', '∞')})
+                          </span>
+                        )}
+                      </td>
                       <td className="text-sm text-text-secondary">{emp.role}</td>
                       <td><span className="badge badge-info">{emp.department}</span></td>
                       {isAdmin && (
@@ -738,6 +839,75 @@ export default function StaffManagement({ session, data, onRefresh }: StaffManag
                   </div>
                 </div>
 
+                {isMasterAdmin && (
+                  <div className="border border-red-200 bg-red-50/10 p-8 space-y-8">
+                    <p className="text-[10px] font-bold text-red-600 uppercase tracking-[2px] flex items-center gap-2">
+                      <span className="w-2 h-2 bg-red-600 rounded-full animate-pulse" />
+                      Master Admin Controls
+                    </p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div className="form-group">
+                        <label className="text-[10px] uppercase tracking-[2px] text-text-secondary mb-2 block font-bold">Account Status</label>
+                        <select 
+                          className="form-control border-red-200 focus:border-red-500"
+                          value={isEditing.status || 'Active'} onChange={e => setIsEditing({...isEditing, status: e.target.value as any})}
+                        >
+                          <option value="Active">Active (Working)</option>
+                          <option value="Dormant">Dormant (Resigned/Terminated)</option>
+                        </select>
+                      </div>
+                      <div className="form-group">
+                        <label className="text-[10px] uppercase tracking-[2px] text-text-secondary mb-2 block font-bold">Salary Hold Status</label>
+                        <select 
+                          className="form-control border-red-200 focus:border-red-500"
+                          value={isEditing.salaryStatus || 'Active'} onChange={e => setIsEditing({...isEditing, salaryStatus: e.target.value as any})}
+                        >
+                          <option value="Active">No Hold</option>
+                          <option value="Held_1">Hold for 1 Month</option>
+                          <option value="Held_2">Hold for 2 Months</option>
+                          <option value="Held_Forever">Hold Forever</option>
+                        </select>
+                      </div>
+
+                      {isEditing.salaryStatus && isEditing.salaryStatus !== 'Active' && (
+                        <div className="form-group col-span-1 md:col-span-2">
+                          <label className="text-[10px] uppercase tracking-[2px] text-red-600 mb-4 block font-bold">Select Components to Hold</label>
+                          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                            {[
+                              { id: 'Basic', label: 'Basic Salary' },
+                              { id: 'Travel', label: 'Travel Allowance' },
+                              { id: 'Vehicle', label: 'Vehicle Allowance' },
+                              { id: 'Performance', label: 'Performance Allowance' },
+                              { id: 'Petrol', label: 'Petrol' },
+                              { id: 'Attendance', label: 'Attendance Bonus' },
+                              { id: 'Overtime', label: 'Overtime' },
+                              { id: 'CustomBonus', label: 'Custom Bonus' }
+                            ].map(cmp => (
+                              <label key={cmp.id} className="flex items-center gap-2 cursor-pointer group">
+                                <input 
+                                  type="checkbox" 
+                                  className="w-3 h-3 accent-red-600"
+                                  checked={(isEditing.heldComponents || []).includes(cmp.id)}
+                                  onChange={e => {
+                                    const current = isEditing.heldComponents || [];
+                                    const next = e.target.checked 
+                                      ? [...current, cmp.id]
+                                      : current.filter(id => id !== cmp.id);
+                                    setIsEditing({...isEditing, heldComponents: next});
+                                  }}
+                                />
+                                <span className="text-[9px] uppercase tracking-[1px] text-text-secondary group-hover:text-red-600 transition-colors">
+                                  {cmp.label}
+                                </span>
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
                 <div className="border border-border-accent p-8 space-y-8">
                   <div className="flex justify-between items-center">
                     <p className="text-[10px] font-bold text-brand-accent uppercase tracking-[2px]">
@@ -805,6 +975,17 @@ export default function StaffManagement({ session, data, onRefresh }: StaffManag
         message={`Are you sure you want to delete employee ${confirmDelete}? This action cannot be undone and will remove all associated records.`}
         onConfirm={confirmDeleteAction}
         onCancel={() => setConfirmDelete(null)}
+      />
+
+      <ConfirmModal 
+        isOpen={!!confirmIdChange}
+        title="Critical ID Change Migration"
+        message={`You are changing the biological identifier of this employee from ${confirmIdChange?.oldId} to ${confirmIdChange?.newId}. This will automatically trigger a cascading update across ALL historical data (Attendance, Leaves, Payments, etc). This process is intensive. Do you wish to proceed?`}
+        confirmText="Migrate Everything"
+        cancelText="Cancel"
+        type="warning"
+        onConfirm={() => handleUpdate(undefined, true)}
+        onCancel={() => setConfirmIdChange(null)}
       />
 
       <AnimatePresence>

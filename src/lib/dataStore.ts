@@ -17,8 +17,8 @@ import {
   writeBatch
 } from 'firebase/firestore';
 
-export const STORAGE_KEY = 'zion_hr_data';
-const AUTH_KEY = 'zion_hr_session';
+export const STORAGE_KEY = 'zion_hr_v2_data';
+const AUTH_KEY = 'zion_hr_v2_session';
 
 enum OperationType {
   CREATE = 'create',
@@ -156,9 +156,19 @@ export const DataStore = {
   async runMaintenance() {
     // Hidden maintenance function to repair database inconsistencies
     try {
-      const currentSessionStr = localStorage.getItem(AUTH_KEY);
+      // Throttle maintenance to run at most once every 24 hours per user
+      const lastRun = localStorage.getItem('zion_last_maint_v2');
+      const now = Date.now();
+      if (lastRun && (now - Number(lastRun)) < 86400000) {
+        return; 
+      }
+      localStorage.setItem('zion_last_maint_v2', now.toString());
+
+      const currentSessionStr = sessionStorage.getItem(AUTH_KEY);
       if (currentSessionStr) {
         const currentSession = JSON.parse(currentSessionStr) as Session;
+        
+        // Ensure Master Admin account doc exists
         if (currentSession.isAdmin && currentSession.empId) {
           const myDoc = await getDoc(doc(db, 'employees', currentSession.empId));
           if (!myDoc.exists()) {
@@ -179,20 +189,9 @@ export const DataStore = {
           }
         }
       }
-
-      const adminDoc = await getDoc(doc(db, 'employees', 'EMP003'));
-      if (adminDoc.exists()) {
-        const data = adminDoc.data() as Employee;
-        if (data.email !== "zioncommercialcreditampara@gmail.com") {
-          await updateDoc(doc(db, 'employees', 'EMP003'), { email: "zioncommercialcreditampara@gmail.com" });
-        }
-      }
-
-      const employeesSnap = await getDocs(query(collection(db, 'employees')));
-      for (const docSnap of employeesSnap.docs) {
-         const emp = docSnap.data() as Employee;
-         await setDoc(doc(db, 'directory', emp.id), { id: emp.id, name: emp.name }, { merge: true });
-      }
+      
+      // Removed the full collection loop that was consuming massive daily read units.
+      // Directory syncing is now handled individually during employee creation/updates.
     } catch (e) {
       console.warn('Maintenance failed:', e);
     }
@@ -275,9 +274,19 @@ export const DataStore = {
   },
 
   getData(): AppData {
-    // This will be replaced by real-time sync in App.tsx
-    const data = localStorage.getItem(STORAGE_KEY);
-    return data ? JSON.parse(data) : initialData;
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return initialData;
+      
+      const parsed = JSON.parse(raw);
+      // Safety: Only trust cached settings to prevent stale transactional data (like old mock employees)
+      return {
+        ...initialData,
+        settings: parsed.settings || initialData.settings
+      };
+    } catch (e) {
+      return initialData;
+    }
   },
 
   saveData(data: AppData) {
@@ -353,6 +362,10 @@ export const DataStore = {
       const empDoc = await getDoc(doc(db, 'employees', cred.empId));
       const emp = empDoc.exists() ? empDoc.data() as Employee : null;
 
+      if (emp && emp.status === 'Dormant') {
+        return { success: false, error: 'Unauthorized: This account has been deactivated (Dormant).' };
+      }
+
       const session: Session = { 
         empId: cred.empId, 
         name: emp ? emp.name : 'Unknown', 
@@ -388,6 +401,9 @@ export const DataStore = {
 
       if (!empSnap.empty) {
         const empData = empSnap.docs[0].data() as Employee;
+        if (empData.status === 'Dormant' && !isAdmin) {
+          return { success: false, error: 'Unauthorized: This account has been deactivated (Dormant).' };
+        }
         empId = empData.id;
         name = empData.name;
       } else if (isAdmin) {
@@ -501,27 +517,123 @@ export const DataStore = {
       await this.ensureAuth();
       const empRef = doc(db, 'employees', empId);
       
-      // If the admin changes the EMP no, we should create a new doc and delete the old
-      // Wait, updates.id might be a new EMP ID
-      if (updates.id && updates.id !== empId) {
-        const newEmpRef = doc(db, 'employees', updates.id);
+      const isIdChanging = updates.id && updates.id !== empId;
+      const oldId = empId;
+      const newId = updates.id || empId;
+
+      if (isIdChanging) {
+        // 1. Check if new ID already exists
+        const checkDoc = await getDoc(doc(db, 'employees', newId));
+        if (checkDoc.exists()) {
+          throw new Error(`The ID ${newId} is already in use by another employee.`);
+        }
+
+        // 2. Begin Migration (Option 2: Cascading Update)
         const oldDoc = await getDoc(empRef);
         const mergedData = { ...(oldDoc.exists() ? oldDoc.data() : {}), ...updates };
-        await setDoc(newEmpRef, mergedData);
-        if (oldDoc.exists()) {
-          await deleteDoc(empRef);
-        }
-        await setDoc(doc(db, 'directory', updates.id), { id: updates.id, name: updates.name || mergedData.name }, { merge: true });
-        if (oldDoc.exists()) {
-          await deleteDoc(doc(db, 'directory', empId));
-          await deleteDoc(doc(db, 'leaveBalances', empId)); // Also would need to recreate, but let's just create base
-          await setDoc(doc(db, 'leaveBalances', updates.id), { annual: 24, casual: 10, sick: 14 }, { merge: true });
-        }
-        empId = updates.id; // Update empId to the new one for the cred updates
+        
+        // Create new employee doc
+        await setDoc(doc(db, 'employees', newId), mergedData);
+        
+        // Sync directory early
+        await setDoc(doc(db, 'directory', newId), { id: newId, name: updates.name || mergedData.name }, { merge: true });
+
+        // MIGRATION LOGIC
+        const updateCollection = async (collectionName: string, idField: string) => {
+          const q = query(collection(db, collectionName), where(idField, '==', oldId));
+          const snap = await getDocs(q);
+          const prs = snap.docs.map(d => updateDoc(d.ref, { [idField]: newId }));
+          await Promise.all(prs);
+        };
+
+        // Standard transactional collections
+        await Promise.all([
+          updateCollection('attendance', 'empId').catch(console.warn),
+          updateCollection('leaves', 'empId').catch(console.warn),
+          updateCollection('targets', 'empId').catch(console.warn),
+          updateCollection('advances', 'empId').catch(console.warn),
+          updateCollection('cashRequests', 'empId').catch(console.warn),
+          updateCollection('adhocBonuses', 'empId').catch(console.warn), // field update
+          updateCollection('credentials', 'empId').catch(console.warn)
+        ]);
+
+        // Move documents keyed by ID
+        const moveDoc = async (collName: string) => {
+          const oldDRef = doc(db, collName, oldId);
+          const snap = await getDoc(oldDRef);
+          if (snap.exists()) {
+            await setDoc(doc(db, collName, newId), snap.data());
+            await deleteDoc(oldDRef);
+          }
+        };
+        await Promise.all([
+          moveDoc('leaveBalances').catch(console.warn),
+          moveDoc('paidDeductions').catch(console.warn)
+        ]);
+
+        // Fix adhocBonuses special document IDs (month_empId)
+        const bonusSnap = await getDocs(query(collection(db, 'adhocBonuses'), where('empId', '==', newId)));
+        const bonusPrs = bonusSnap.docs.map(async d => {
+          const data = d.data();
+          const expectedId = `${data.month}_${newId}`;
+          if (d.id !== expectedId) {
+            await setDoc(doc(db, 'adhocBonuses', expectedId), { ...data, id: expectedId });
+            await deleteDoc(d.ref);
+          }
+        });
+        await Promise.all(bonusPrs);
+
+        // Internal Messages (participants, senderId, etc)
+        const msgQ = query(collection(db, 'messages'), where('participants', 'array-contains', oldId));
+        const msgSnap = await getDocs(msgQ);
+        const msgPrs = msgSnap.docs.map(async d => {
+          const data = d.data() as any;
+          const u: any = {};
+          const replace = (arr: string[] = []) => arr.map(x => x === oldId ? newId : x);
+          
+          if (data.senderId === oldId) u.senderId = newId;
+          if (data.to?.includes(oldId)) u.to = replace(data.to);
+          if (data.cc?.includes(oldId)) u.cc = replace(data.cc);
+          if (data.bcc?.includes(oldId)) u.bcc = replace(data.bcc);
+          if (data.participants?.includes(oldId)) u.participants = replace(data.participants);
+          if (data.readBy?.includes(oldId)) u.readBy = replace(data.readBy);
+          
+          if (Object.keys(u).length > 0) await updateDoc(d.ref, u);
+        });
+        await Promise.all(msgPrs);
+
+        // Payroll Receipts (nested transactions)
+        const receiptSnap = await getDocs(collection(db, 'payrollReceipts'));
+        const rPrs = receiptSnap.docs.map(async d => {
+          const data = d.data();
+          let hit = false;
+          const nextTx = (data.transactions || []).map((t: any) => {
+            if (t.empId === oldId) { hit = true; return { ...t, empId: newId }; }
+            return t;
+          });
+          if (hit) await updateDoc(d.ref, { transactions: nextTx });
+        });
+        await Promise.all(rPrs);
+
+        // Final Cleanup
+        if (oldDoc.exists()) await deleteDoc(empRef);
+        await deleteDoc(doc(db, 'directory', oldId));
+        
+        empId = newId; // Target ID for credential logic below
       } else {
+        // Standard merge update (No ID change)
         await setDoc(empRef, updates, { merge: true });
-        if (updates.name) {
-          await setDoc(doc(db, 'directory', empId), { id: empId, name: updates.name }, { merge: true });
+        
+        // Directory Sync
+        if (updates.status === 'Dormant') {
+          await deleteDoc(doc(db, 'directory', empId)).catch(() => {});
+        } else if (updates.name || updates.status === 'Active') {
+          // If name changed or reactivated, ensure correct name in directory
+          const empDoc = await getDoc(empRef);
+          const currentData = empDoc.data() as Employee;
+          if (currentData.status !== 'Dormant') {
+            await setDoc(doc(db, 'directory', empId), { id: empId, name: currentData.name }, { merge: true });
+          }
         }
       }
 
@@ -687,7 +799,8 @@ export const DataStore = {
           date: dateStr,
           status,
           checkIn: displayTime,
-          checkOut: '--'
+          checkOut: '--',
+          timestamp: new Date().toISOString()
         });
       }
       await this.logAction('Attendance In', `Employee ${empId} marked as ${status} at ${displayTime}`, 'Attendance');

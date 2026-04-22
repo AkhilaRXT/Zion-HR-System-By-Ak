@@ -19,6 +19,9 @@ export interface Employee {
   accountNo?: string;
   profilePic?: string;
   hasEPF?: boolean;
+  status?: 'Active' | 'Dormant';
+  salaryStatus?: 'Active' | 'Held_1' | 'Held_2' | 'Held_Forever';
+  heldComponents?: string[];
 }
 
 export interface UserCredential {
@@ -36,6 +39,7 @@ export interface Attendance {
   status: 'Present' | 'Absent' | 'Half Day' | 'Late' | 'Leave';
   checkIn: string;
   checkOut: string;
+  timestamp: string;
 }
 
 export interface LeaveRequest {
@@ -120,6 +124,7 @@ export interface AppSettings {
     textPrimary: string;
     textSecondary: string;
   };
+  epfPercentage?: number;
   backgroundBlobs?: {
     enabled: boolean;
     blur: number;

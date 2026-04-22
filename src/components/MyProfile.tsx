@@ -94,17 +94,26 @@ export default function MyProfile({ session, data, onRefresh }: MyProfileProps) 
   const isAlreadyFinalized = data.paidDeductions?.[emp.id]?.includes(currentMonth);
 
   const epf = emp.hasEPF ? (emp.baseSalary || 0) * 0.08 : 0;
-  const bikeInstallment = emp.bikeInstallment || 0;
-  const staffLoan = emp.staffLoan || 0;
+  const bikeInstallment = (!isAlreadyFinalized ? emp.bikeInstallment : 0) || 0;
+  const staffLoan = (!isAlreadyFinalized ? emp.staffLoan : 0) || 0;
 
-  const totalDeductions = advTotal + bikeInstallment + staffLoan + epf;
+  const totalDeductions = advTotal + bikeInstallment + staffLoan + (!isAlreadyFinalized ? epf : 0);
   
   const pendingBonus = (data.adhocBonuses || []).find(b => b.empId === emp.id && b.month === currentMonth)?.amount || 0;
-  const gross = (emp.baseSalary || 0) + (emp.travelingAllowance || 0) + (emp.vehicleAllowance || 0) +
-                (emp.performanceAllowance || 0) + petrolLKR + (emp.attendanceBonus || 0) + (emp.overtime || 0) + pendingBonus;
+  
+  const alreadyPaidCmps = (data.paidComponents?.[emp.id]?.[currentMonth] || []);
 
-  const alreadyPaid = data.paidSalaryAmounts?.[emp.id]?.[currentMonth] || 0;
-  const rawNet = gross - totalDeductions - alreadyPaid;
+  const totalEarnings = 
+    (!alreadyPaidCmps.includes('Basic') ? (emp.baseSalary || 0) : 0) + 
+    (!alreadyPaidCmps.includes('Bonus') ? (emp.performanceAllowance || 0) : 0) + 
+    (!alreadyPaidCmps.includes('Travel') ? (emp.travelingAllowance || 0) : 0) + 
+    (!alreadyPaidCmps.includes('Vehicle') ? (emp.vehicleAllowance || 0) : 0) +
+    (!alreadyPaidCmps.includes('Petrol') ? petrolLKR : 0) + 
+    (!alreadyPaidCmps.includes('Attendance') ? (emp.attendanceBonus || 0) : 0) + 
+    (!alreadyPaidCmps.includes('Overtime') ? (emp.overtime || 0) : 0) + 
+    (!alreadyPaidCmps.includes('CustomBonus') ? pendingBonus : 0);
+
+  const rawNet = totalEarnings - totalDeductions;
   const netSalary = Math.max(0, rawNet);
 
   return (
@@ -160,21 +169,29 @@ export default function MyProfile({ session, data, onRefresh }: MyProfileProps) 
           <div className="space-y-5">
             <div className="space-y-3">
               <p className="text-xs font-bold text-text-secondary uppercase tracking-wider mb-2">Earnings</p>
-              <div className="flex justify-between items-center text-sm">
-                <span className="text-text-secondary font-medium">Basic Salary</span>
-                <span className="font-mono text-text-primary font-semibold">LKR {emp.baseSalary.toLocaleString()}</span>
-              </div>
-              <div className="flex justify-between items-center text-sm">
-                <span className="text-text-secondary font-medium">Allowances</span>
-                <span className="font-mono text-text-primary font-semibold">LKR {(petrolLKR + (emp.travelingAllowance || 0) + (emp.vehicleAllowance || 0)).toLocaleString()}</span>
-              </div>
-              {(emp.performanceAllowance || 0) > 0 && (
+              {!alreadyPaidCmps.includes('Basic') && (
+                <div className="flex justify-between items-center text-sm">
+                  <span className="text-text-secondary font-medium">Basic Salary</span>
+                  <span className="font-mono text-text-primary font-semibold">LKR {(emp.baseSalary || 0).toLocaleString()}</span>
+                </div>
+              )}
+              {((!alreadyPaidCmps.includes('Petrol') ? petrolLKR : 0) + 
+                (!alreadyPaidCmps.includes('Travel') ? (emp.travelingAllowance || 0) : 0) + 
+                (!alreadyPaidCmps.includes('Vehicle') ? (emp.vehicleAllowance || 0) : 0)) > 0 && (
+                <div className="flex justify-between items-center text-sm">
+                  <span className="text-text-secondary font-medium">Allowances</span>
+                  <span className="font-mono text-text-primary font-semibold">LKR {((!alreadyPaidCmps.includes('Petrol') ? petrolLKR : 0) + 
+                  (!alreadyPaidCmps.includes('Travel') ? (emp.travelingAllowance || 0) : 0) + 
+                  (!alreadyPaidCmps.includes('Vehicle') ? (emp.vehicleAllowance || 0) : 0)).toLocaleString()}</span>
+                </div>
+              )}
+              {!alreadyPaidCmps.includes('Bonus') && (emp.performanceAllowance || 0) > 0 && (
                 <div className="flex justify-between items-center text-sm">
                   <span className="text-text-secondary font-medium">Performance Bonus</span>
                   <span className="font-mono text-text-primary font-semibold">LKR {emp.performanceAllowance.toLocaleString()}</span>
                 </div>
               )}
-              {pendingBonus > 0 && (
+              {!alreadyPaidCmps.includes('CustomBonus') && pendingBonus > 0 && (
                 <div className="flex justify-between items-center text-sm">
                   <span className="text-emerald-600 font-medium">Ad-Hoc Bonus / Incentives</span>
                   <span className="font-mono text-emerald-600 font-bold">LKR {pendingBonus.toLocaleString()}</span>
@@ -188,35 +205,30 @@ export default function MyProfile({ session, data, onRefresh }: MyProfileProps) 
                 <span className="text-text-secondary font-medium">Salary Advances</span>
                 <span className="font-mono text-red-500 font-semibold">- LKR {advTotal.toLocaleString()}</span>
               </div>
-              {emp.hasEPF && (
+              {!isAlreadyFinalized && emp.hasEPF && (
                 <div className="flex justify-between items-center text-sm">
                   <span className="text-text-secondary font-medium">EPF (8%)</span>
                   <span className="font-mono text-red-500 font-semibold">- LKR {epf.toLocaleString()}</span>
                 </div>
               )}
-              {bikeInstallment > 0 && (
+              {!isAlreadyFinalized && bikeInstallment > 0 && (
                 <div className="flex justify-between items-center text-sm">
                   <span className="text-text-secondary font-medium">Bike Installment</span>
                   <span className="font-mono text-red-500 font-semibold">- LKR {bikeInstallment.toLocaleString()}</span>
                 </div>
               )}
-              {staffLoan > 0 && (
+              {!isAlreadyFinalized && staffLoan > 0 && (
                 <div className="flex justify-between items-center text-sm">
                   <span className="text-text-secondary font-medium">Staff Loan</span>
                   <span className="font-mono text-red-500 font-semibold">- LKR {staffLoan.toLocaleString()}</span>
                 </div>
               )}
-              {alreadyPaid > 0 && (
+              {alreadyPaidCmps.length > 0 && (
                 <div className="pt-2 border-t border-border-accent/50 space-y-1">
                   <div className="flex justify-between items-center text-sm">
-                    <span className="text-brand-primary font-medium">Banked / Transferred Amount</span>
-                    <span className="font-mono text-brand-primary font-bold">- LKR {alreadyPaid.toLocaleString()}</span>
+                    <span className="text-brand-primary font-medium">Already Paid Components</span>
+                    <span className="font-mono text-brand-primary font-bold">{alreadyPaidCmps.join(', ')}</span>
                   </div>
-                  {data.paidSalaryNotes?.[emp.id]?.[currentMonth] && (
-                    <div className="text-[10px] text-text-secondary italic pl-2">
-                       (Transferred Components: {data.paidSalaryNotes[emp.id][currentMonth]})
-                    </div>
-                  )}
                 </div>
               )}
               {isAlreadyFinalized && (
