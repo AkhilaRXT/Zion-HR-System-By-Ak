@@ -15,7 +15,10 @@ import {
   ChevronDown,
   X,
   CreditCard,
-  Wallet
+  Wallet,
+  ShieldCheck,
+  CheckCircle,
+  RotateCcw
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { motion, AnimatePresence } from 'motion/react';
@@ -32,6 +35,8 @@ export default function DCCollection({ session, data }: DCCollectionProps) {
   const [activeTab, setActiveTab] = useState(isAdmin ? 'report' : 'receipt');
   const [notification, setNotification] = useState<{ message: string, type: NotificationType } | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const [confirmUndo, setConfirmUndo] = useState<string | null>(null);
+  const [verifySearch, setVerifySearch] = useState('');
 
   // Form State
   const [formData, setFormData] = useState({
@@ -186,6 +191,67 @@ export default function DCCollection({ session, data }: DCCollectionProps) {
     showNotification('Report exported to Excel');
   };
 
+  const handleVerify = async (id: string) => {
+    try {
+      await DataStore.verifyDCCollection(id, session.name);
+      showNotification('Collection verified successfully!');
+    } catch (error) {
+      showNotification('Failed to verify collection', 'error');
+    }
+  };
+
+  const handleUndoVerify = async () => {
+    if (!confirmUndo) return;
+    try {
+      await DataStore.undoVerifyDCCollection(confirmUndo);
+      showNotification('Verification reverted successfully!', 'warning');
+    } catch (error: any) {
+      console.error(error);
+      showNotification(`Failed to revert verification: ${error.message || error}`, 'error');
+    } finally {
+      setConfirmUndo(null);
+    }
+  };
+
+  const handleExportVerification = (verified: boolean) => {
+    const list = (data.dcCollections || []).filter(c => !!c.isVerified === verified);
+    if (list.length === 0) {
+      showNotification(`No ${verified ? 'verified' : 'unverified'} records to export`, 'error');
+      return;
+    }
+
+    const detailData = list.map(c => [
+      c.date,
+      c.receiptNo,
+      c.collectionType,
+      c.nic,
+      c.customerName,
+      c.loanAmount,
+      c.documentCharge,
+      c.paymentMethod,
+      c.collectedBy,
+      c.isVerified ? 'Yes' : 'No',
+      c.verifiedBy || '-',
+    ]);
+
+    const totalAmount = list.reduce((s, c) => s + c.documentCharge, 0);
+
+    const sheetData = [
+      [`${verified ? 'Verified' : 'Unverified'} DC Collection Report`],
+      [`Generated on: ${new Date().toLocaleString()}`],
+      [],
+      ['Date', 'Receipt #', 'Type', 'NIC', 'Customer Name', 'Loan Amount', 'DC Amount', 'Method', 'Collected By', 'Verified', 'Verified By'],
+      ...detailData,
+      ['', '', '', '', 'TOTAL', '', totalAmount, '', '', '', '']
+    ];
+
+    const ws = XLSX.utils.aoa_to_sheet(sheetData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'DC Collections');
+    XLSX.writeFile(wb, `DC_Collections_${verified ? 'Verified' : 'Unverified'}_${todayStr}.xlsx`);
+    showNotification('Report exported to Excel');
+  };
+
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
       {/* Tabs */}
@@ -202,17 +268,30 @@ export default function DCCollection({ session, data }: DCCollectionProps) {
           Receipt Entry
         </button>
         {isAdmin && (
-          <button 
-            onClick={() => setActiveTab('report')}
-            className={`flex items-center gap-2 px-6 py-2.5 rounded-lg text-xs font-bold tracking-widest uppercase transition-all ${
-              activeTab === 'report' 
-                ? 'bg-brand-accent text-white shadow-lg shadow-brand-accent/20' 
-                : 'text-text-secondary hover:text-text-primary hover:bg-white/50'
-            }`}
-          >
-            <PieChart className="w-4 h-4" />
-            Collection Report
-          </button>
+          <>
+            <button 
+              onClick={() => setActiveTab('report')}
+              className={`flex items-center gap-2 px-6 py-2.5 rounded-lg text-xs font-bold tracking-widest uppercase transition-all ${
+                activeTab === 'report' 
+                  ? 'bg-brand-accent text-white shadow-lg shadow-brand-accent/20' 
+                  : 'text-text-secondary hover:text-text-primary hover:bg-white/50'
+              }`}
+            >
+              <PieChart className="w-4 h-4" />
+              Collection Report
+            </button>
+            <button 
+              onClick={() => setActiveTab('verification')}
+              className={`flex items-center gap-2 px-6 py-2.5 rounded-lg text-xs font-bold tracking-widest uppercase transition-all ${
+                activeTab === 'verification' 
+                  ? 'bg-brand-accent text-white shadow-lg shadow-brand-accent/20' 
+                  : 'text-text-secondary hover:text-text-primary hover:bg-white/50'
+              }`}
+            >
+              <ShieldCheck className="w-4 h-4" />
+              Customer Verification
+            </button>
+          </>
         )}
       </div>
 
@@ -346,7 +425,7 @@ export default function DCCollection({ session, data }: DCCollectionProps) {
               </div>
             </div>
           </motion.div>
-        ) : (
+        ) : activeTab === 'report' ? (
           <motion.div 
             key="report-view"
             initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }}
@@ -573,7 +652,146 @@ export default function DCCollection({ session, data }: DCCollectionProps) {
               </div>
             </div>
           </motion.div>
-        )}
+        ) : activeTab === 'verification' && isAdmin ? (
+          <motion.div 
+            key="verification-view"
+            initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }}
+            className="space-y-8"
+          >
+            <div className="bg-white/80 rounded-2xl border border-border-accent p-8">
+              <div className="flex flex-col md:flex-row gap-6 justify-between items-start md:items-center mb-8">
+                <div className="flex items-center gap-2 text-text-primary">
+                  <ShieldCheck className="w-6 h-6 text-brand-accent" />
+                  <h4 className="text-sm font-bold uppercase tracking-[2px]">Verification Dashboard</h4>
+                </div>
+                <div className="flex items-center gap-4 w-full md:w-auto">
+                  <div className="relative flex-1 md:w-64">
+                    <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary" />
+                    <input 
+                      type="text"
+                      className="form-control pl-10"
+                      placeholder="Search Name or NIC..."
+                      value={verifySearch}
+                      onChange={e => setVerifySearch(e.target.value)}
+                    />
+                  </div>
+                  <button 
+                    onClick={() => handleExportVerification(true)}
+                    className="bg-emerald-50 text-emerald-600 px-4 py-3 rounded-lg text-xs font-bold uppercase hover:bg-emerald-100 transition-colors flex items-center gap-2 whitespace-nowrap"
+                  >
+                    <FileDown className="w-4 h-4" />
+                    Verified
+                  </button>
+                  <button 
+                    onClick={() => handleExportVerification(false)}
+                    className="bg-amber-50 text-amber-600 px-4 py-3 rounded-lg text-xs font-bold uppercase hover:bg-amber-100 transition-colors flex items-center gap-2 whitespace-nowrap"
+                  >
+                    <FileDown className="w-4 h-4" />
+                    Unverified
+                  </button>
+                </div>
+              </div>
+
+              <div className="table-container">
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[1000px]">
+                    <thead>
+                      <tr>
+                        <th>Date</th>
+                        <th>Receipt #</th>
+                        <th>Customer / NIC</th>
+                        <th className="text-right">DC Amount</th>
+                        <th className="text-right">Loan Amount</th>
+                        <th>Collected By</th>
+                        <th>Status</th>
+                        <th className="text-center">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(data.dcCollections || [])
+                        .filter(c => 
+                           !verifySearch || 
+                           c.customerName.toLowerCase().includes(verifySearch.toLowerCase()) || 
+                           c.nic.toLowerCase().includes(verifySearch.toLowerCase())
+                        )
+                        .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+                        .map(c => (
+                        <tr key={c.id}>
+                          <td className="text-[11px] font-bold text-text-secondary tracking-widest uppercase">{c.date}</td>
+                          <td className="font-mono text-[10px] text-text-secondary">{c.receiptNo}</td>
+                          <td>
+                            <div className="flex flex-col">
+                              <span className="font-bold text-text-primary text-xs">{c.customerName}</span>
+                              <span className="text-[10px] text-text-secondary">{c.nic}</span>
+                            </div>
+                          </td>
+                          <td className="text-right font-mono font-bold text-emerald-600">Rs. {c.documentCharge.toLocaleString()}</td>
+                          <td className="text-right font-mono font-bold text-text-primary">Rs. {c.loanAmount.toLocaleString()}</td>
+                          <td className="text-[10px] font-bold text-text-secondary uppercase">{c.collectedBy}</td>
+                          <td>
+                            {c.isVerified ? (
+                              <div className="flex flex-col gap-1">
+                                <span className="flex items-center gap-1 text-[10px] font-bold text-emerald-600 uppercase tracking-wider bg-emerald-50 px-2 py-1 rounded w-fit">
+                                  <CheckCircle className="w-3 h-3" />
+                                  Verified
+                                </span>
+                                <span className="text-[9px] text-text-secondary italic">
+                                  by {c.verifiedBy}
+                                </span>
+                              </div>
+                            ) : (
+                              <span className="flex items-center gap-1 text-[10px] font-bold text-amber-500 uppercase tracking-wider bg-amber-50 px-2 py-1 rounded w-fit">
+                                Pending
+                              </span>
+                            )}
+                          </td>
+                          <td className="text-right">
+                             {!c.isVerified ? (
+                               <button 
+                                 onClick={() => handleVerify(c.id)}
+                                 className="bg-brand-accent hover:bg-brand-accent/90 text-white px-3 py-1.5 rounded-lg text-xs font-bold uppercase transition-all shadow-sm flex items-center justify-center gap-2 ml-auto"
+                               >
+                                 <ShieldCheck className="w-3 h-3" />
+                                 Verify Loan
+                               </button>
+                             ) : (
+                               <div className="flex flex-col items-end gap-2">
+                                 <span className="text-[10px] font-bold text-text-secondary uppercase">
+                                   {new Date(c.verifiedAt || '').toLocaleDateString()}
+                                 </span>
+                                 {session.email === "zioncommercialcreditampara@gmail.com" && (
+                                   <button 
+                                     onClick={() => setConfirmUndo(c.id)}
+                                     className="flex items-center gap-1 text-[9px] font-bold text-amber-600 hover:text-amber-700 bg-amber-50 hover:bg-amber-100 px-2 py-1 rounded transition-colors uppercase tracking-wider"
+                                     title="Undo Verification"
+                                   >
+                                     <RotateCcw className="w-3 h-3" />
+                                     Undo
+                                   </button>
+                                 )}
+                               </div>
+                             )}
+                          </td>
+                        </tr>
+                      ))}
+                      {(data.dcCollections || []).filter(c => 
+                        !verifySearch || 
+                        c.customerName.toLowerCase().includes(verifySearch.toLowerCase()) || 
+                        c.nic.toLowerCase().includes(verifySearch.toLowerCase())
+                      ).length === 0 && (
+                        <tr>
+                          <td colSpan={8} className="p-12 text-center text-text-secondary text-sm">
+                             No matching collections found.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        ) : null}
       </AnimatePresence>
 
       <ConfirmModal 
@@ -583,6 +801,15 @@ export default function DCCollection({ session, data }: DCCollectionProps) {
         onConfirm={handleDelete}
         onCancel={() => setConfirmDelete(null)}
         type="danger"
+      />
+
+      <ConfirmModal 
+        isOpen={!!confirmUndo}
+        title="Undo Verification"
+        message="Are you sure you want to revert this loan verification? It will be moved back to the unverified list."
+        onConfirm={handleUndoVerify}
+        onCancel={() => setConfirmUndo(null)}
+        type="warning"
       />
 
       {notification && (

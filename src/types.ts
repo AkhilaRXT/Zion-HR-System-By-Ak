@@ -209,6 +209,9 @@ export interface DCCollection {
   empId: string;
   branch: string;
   timestamp: string;
+  isVerified?: boolean;
+  verifiedBy?: string;
+  verifiedAt?: string;
 }
 
 export interface AppData {

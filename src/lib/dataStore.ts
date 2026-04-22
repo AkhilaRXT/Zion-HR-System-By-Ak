@@ -14,7 +14,8 @@ import {
   getDocFromServer,
   arrayUnion,
   runTransaction,
-  writeBatch
+  writeBatch,
+  deleteField
 } from 'firebase/firestore';
 
 export const STORAGE_KEY = 'zion_hr_v2_data';
@@ -791,6 +792,38 @@ export const DataStore = {
       return { success: true };
     } catch (error) {
       handleFirestoreError(error, OperationType.CREATE, `dcCollections/${collection.id}`);
+      throw error;
+    }
+  },
+
+  async verifyDCCollection(id: string, verifierName: string) {
+    try {
+      await this.ensureAuth();
+      await updateDoc(doc(db, 'dcCollections', id), {
+        isVerified: true,
+        verifiedBy: verifierName,
+        verifiedAt: new Date().toISOString()
+      });
+      await this.logAction('Verify DC Collection', `Verified DC Collection ${id}`, 'Cash');
+      return { success: true };
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `dcCollections/${id}`);
+      throw error;
+    }
+  },
+
+  async undoVerifyDCCollection(id: string) {
+    try {
+      await this.ensureAuth();
+      await updateDoc(doc(db, 'dcCollections', id), {
+        isVerified: deleteField(),
+        verifiedBy: deleteField(),
+        verifiedAt: deleteField()
+      });
+      await this.logAction('Undo Verify DC Collection', `Reverted verification for DC Collection ${id}`, 'Cash');
+      return { success: true };
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `dcCollections/${id}`);
       throw error;
     }
   },
