@@ -122,7 +122,8 @@ const initialData: AppData = {
   payrollReceipts: [],
   paidDeductions: {},
   internalMessages: [],
-  adhocBonuses: []
+  adhocBonuses: [],
+  dcCollections: []
 };
 
 export const DataStore = {
@@ -213,7 +214,8 @@ export const DataStore = {
         'cashRequests',
         'targets',
         'auditLogs',
-        'paidDeductions'
+        'paidDeductions',
+        'dcCollections'
       ];
 
       const wipeCollection = async (name: string) => {
@@ -768,6 +770,28 @@ export const DataStore = {
       await this.logAction('Delete Attendance', `Deleted attendance record ${id}`, 'Attendance');
     } catch (error) {
       handleFirestoreError(error, OperationType.DELETE, `attendance/${id}`);
+    }
+  },
+
+  async deleteDCCollection(id: string) {
+    try {
+      await this.ensureAuth();
+      await deleteDoc(doc(db, 'dcCollections', id));
+      await this.logAction('Delete DC Collection', `Deleted record ${id}`, 'Cash');
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, `dcCollections/${id}`);
+    }
+  },
+
+  async addDCCollection(collection: any) {
+    try {
+      await this.ensureAuth();
+      await setDoc(doc(db, 'dcCollections', collection.id), collection);
+      await this.logAction('DC Collection', `Receipted ${collection.receiptNo} for ${collection.customerName} - LKR ${collection.documentCharge}`, 'Cash');
+      return { success: true };
+    } catch (error) {
+      handleFirestoreError(error, OperationType.CREATE, `dcCollections/${collection.id}`);
+      throw error;
     }
   },
 

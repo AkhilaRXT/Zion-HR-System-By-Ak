@@ -125,7 +125,8 @@ service cloud.firestore {
 
     match /payrollReceipts/{id} {
       allow read: if isAdmin();
-      allow write: if isAdmin();
+      allow create, update: if isAdmin();
+      allow delete: if isMasterAdmin();
     }
 
     match /paidDeductions/{empId} {
@@ -193,6 +194,13 @@ service cloud.firestore {
         resource.data.senderId == (exists(/databases/$(database)/documents/users/$(request.auth.uid)) ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data.empId : request.auth.uid)
       );
       allow delete: if isAdmin();
+    }
+
+    match /dcCollections/{id} {
+      allow read: if isAuthenticated() && (isOwner(resource.data.empId) || isAdmin());
+      allow create: if isAuthenticated() && isOwner(request.resource.data.empId);
+      allow update: if isAdmin();
+      allow delete: if isMasterAdmin();
     }
   }
 }

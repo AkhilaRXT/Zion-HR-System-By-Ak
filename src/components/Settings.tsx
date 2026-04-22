@@ -87,9 +87,6 @@ export default function Settings({ session, data, onRefresh }: SettingsProps) {
 
   const handleLeaveChange = (field: string, val: number) => {
     const newPolicy = { ...settings.leavePolicy, [field]: val };
-    if (field === 'casualTotal' || field === 'sickTotal') {
-      newPolicy.annualTotal = newPolicy.casualTotal + newPolicy.sickTotal;
-    }
     setSettings({ ...settings, leavePolicy: newPolicy });
   };
 
@@ -498,10 +495,14 @@ export default function Settings({ session, data, onRefresh }: SettingsProps) {
 
           <div className="border-t border-border-accent pt-8">
             <h4 className="text-xs font-bold text-brand-accent uppercase tracking-wider mb-6">Leave Policy (Days per Year)</h4>
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
               <div className="form-group">
                 <label className="text-xs font-medium text-text-secondary mb-2 block">Monthly Limit</label>
                 <input type="number" className="form-control" value={settings.leavePolicy.monthlyLimit} onChange={e => handleLeaveChange('monthlyLimit', Number(e.target.value))} />
+              </div>
+              <div className="form-group">
+                <label className="text-xs font-medium text-text-secondary mb-2 block">Annual Leave</label>
+                <input type="number" className="form-control" value={settings.leavePolicy.annualTotal} onChange={e => handleLeaveChange('annualTotal', Number(e.target.value))} />
               </div>
               <div className="form-group">
                 <label className="text-xs font-medium text-text-secondary mb-2 block">Casual</label>
@@ -513,8 +514,8 @@ export default function Settings({ session, data, onRefresh }: SettingsProps) {
               </div>
             </div>
             <div className="mt-6 p-4 bg-gray-50 border border-border-accent rounded-xl">
-              <p className="text-xs font-bold text-text-secondary uppercase tracking-wider">
-                Calculated Annual Total: <span className="text-brand-accent ml-1">{settings.leavePolicy.annualTotal} Days</span>
+              <p className="text-xs font-medium text-text-secondary italic">
+                Set the total allowed days for each leave category per calendar year.
               </p>
             </div>
           </div>

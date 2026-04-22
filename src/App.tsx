@@ -17,6 +17,7 @@ import MyProfile from './components/MyProfile';
 import AuditLogs from './components/AuditLogs';
 import InternalMail from './components/InternalMail';
 import SalaryAdvances from './components/SalaryAdvances';
+import DCCollection from './components/DCCollection';
 import { Clock, Menu, Loader2 } from 'lucide-react';
 
 export default function App() {
@@ -133,6 +134,7 @@ export default function App() {
       unsubs.push(syncCoreCollection('cashRequests', 'cashRequests'));
       unsubs.push(syncCoreCollection('adhocBonuses', 'adhocBonuses'));
       unsubs.push(syncCoreCollection('targets', 'targets'));
+      unsubs.push(syncCoreCollection('dcCollections', 'dcCollections'));
 
       const unsubPaid = onSnapshot(collection(db, 'paidDeductions'), (snap) => {
         const paid: { [key: string]: string[] } = {};
@@ -170,6 +172,7 @@ export default function App() {
       unsubs.push(syncOwn('cashRequests', 'cashRequests'));
       unsubs.push(syncOwn('attendance', 'attendance'));
       unsubs.push(syncOwn('adhocBonuses', 'adhocBonuses'));
+      unsubs.push(syncOwn('dcCollections', 'dcCollections'));
       
       const unsubPaidOwn = onSnapshot(doc(db, 'paidDeductions', session.empId), (snap) => {
         if (snap.exists()) {
@@ -338,7 +341,7 @@ export default function App() {
       }
 
       // Always accessible for everyone
-      if (id === 'dashboard' || id === 'myprofile' || id === 'leave' || id === 'payroll' || id === 'advances' || id === 'cash_requests' || id === 'mail') return true;
+      if (id === 'dashboard' || id === 'myprofile' || id === 'leave' || id === 'payroll' || id === 'advances' || id === 'cash_requests' || id === 'mail' || id === 'dc_collection') return true;
       
       if (isMasterAdmin) return true;
 
@@ -365,6 +368,7 @@ export default function App() {
       case 'advances': return <SalaryAdvances session={session} data={appData} onRefresh={refreshData} />;
       case 'cash_requests': return <CashRequests session={session} data={appData} />;
       case 'mail': return <InternalMail session={session} data={appData} />;
+      case 'dc_collection': return <DCCollection session={session} data={appData} />;
       case 'myprofile': return <MyProfile session={session} data={appData} onRefresh={refreshData} />;
       case 'settings': return <Settings session={session} data={appData} onRefresh={refreshData} />;
       case 'audit': return <AuditLogs session={session} data={appData} />;
@@ -382,6 +386,7 @@ export default function App() {
       case 'advances': return session.isAdmin ? 'Advance Management' : 'Salary Advances';
       case 'cash_requests': return 'Cash Requests';
       case 'mail': return 'Internal Mail';
+      case 'dc_collection': return 'DC Collection';
       case 'myprofile': return 'My Profile';
       case 'settings': return 'Control Panel';
       case 'audit': return 'Audit Logs';

@@ -48,7 +48,7 @@ export default function LeaveManagement({ session, data, onRefresh }: LeaveManag
     const start = new Date(from);
     const end = new Date(to);
     const diffTime = Math.abs(end.getTime() - start.getTime());
-    return Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+    return Math.round(diffTime / (1000 * 60 * 60 * 24)) + 1;
   };
 
   const annualTaken = approvedLeaves.filter(l => l.type === 'Annual').reduce((acc, l) => acc + calculateDays(l.from, l.to), 0);

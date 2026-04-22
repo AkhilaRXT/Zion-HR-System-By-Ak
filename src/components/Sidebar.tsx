@@ -72,6 +72,7 @@ export default function Sidebar({ session, data, activeRoute, onNavigate, onLogo
     { id: 'leave', label: hasLeavePerm ? 'Leave Mgmt' : 'My Leaves', icon: PlaneTakeoff },
     { id: 'payroll', label: 'Payroll', icon: FileText },
     { id: 'advances', label: hasPayrollPerm ? 'Advance Mgmt' : 'My Advances', icon: HandCoins },
+    { id: 'dc_collection', label: 'DC Collection', icon: HandCoins },
     { id: 'cash_requests', label: hasCashPerm ? 'Cash Requests' : 'My Cash Requests', icon: FileText },
     { id: 'audit', label: 'Audit Logs', icon: History },
     ...(isMasterAdmin ? [{ id: 'settings', label: 'Control Panel', icon: Settings }] : []),
@@ -85,7 +86,7 @@ export default function Sidebar({ session, data, activeRoute, onNavigate, onLogo
     }
 
     // Always accessible for everyone
-    if (id === 'dashboard' || id === 'mail' || id === 'myprofile' || id === 'leave' || id === 'advances' || id === 'cash_requests') return true;
+    if (id === 'dashboard' || id === 'mail' || id === 'myprofile' || id === 'leave' || id === 'advances' || id === 'cash_requests' || id === 'dc_collection') return true;
     
     // Payroll requires specific permission or Master
     if (id === 'payroll') return hasPayrollPerm;
@@ -133,7 +134,7 @@ export default function Sidebar({ session, data, activeRoute, onNavigate, onLogo
           </button>
         </div>
 
-      <nav className="flex-1">
+      <nav className="flex-1 overflow-y-auto pr-2 custom-scrollbar my-4">
         <ul className="space-y-4">
           {menuItems.filter(item => hasPermission(item.id)).map((item) => (
             <li 

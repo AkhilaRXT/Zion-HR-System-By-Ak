@@ -56,6 +56,8 @@ export default function StaffManagement({ session, data, onRefresh }: StaffManag
     hasEPF: true,
     status: 'Active' as const,
     salaryStatus: 'Active' as const,
+    heldFrom: '',
+    heldTo: '',
     heldComponents: [] as string[],
     username: '',
     password: '',
@@ -116,6 +118,8 @@ export default function StaffManagement({ session, data, onRefresh }: StaffManag
       hasEPF: newEmp.hasEPF,
       status: newEmp.status,
       salaryStatus: newEmp.salaryStatus,
+      heldFrom: newEmp.heldFrom,
+      heldTo: newEmp.heldTo,
       heldComponents: newEmp.heldComponents
     };
 
@@ -136,6 +140,7 @@ export default function StaffManagement({ session, data, onRefresh }: StaffManag
         petrolLitres: 0, attendanceBonus: 0, overtime: 0, bikeInstallment: 0, staffLoan: 0,
         bankName: '', bankBranch: '', accountNo: '', profilePic: '', hasEPF: true,
         status: 'Active', salaryStatus: 'Active',
+        heldFrom: '', heldTo: '',
         heldComponents: [],
         username: '', password: '', isSystemAdmin: false, permissions: []
       });
@@ -197,7 +202,9 @@ export default function StaffManagement({ session, data, onRefresh }: StaffManag
       password: cred?.password || '',
       isSystemAdmin: cred?.isAdmin || false,
       permissions: cred?.permissions || [],
-      heldComponents: emp.heldComponents || []
+      heldComponents: emp.heldComponents || [],
+      heldFrom: emp.heldFrom || '',
+      heldTo: emp.heldTo || ''
     });
   };
 
@@ -446,8 +453,28 @@ export default function StaffManagement({ session, data, onRefresh }: StaffManag
                         <option value="Held_1">Hold for 1 Month</option>
                         <option value="Held_2">Hold for 2 Months</option>
                         <option value="Held_Forever">Hold Forever</option>
+                        <option value="Custom">Hold Specific Dates</option>
                       </select>
                     </div>
+
+                    {newEmp.salaryStatus === 'Custom' && (
+                      <div className="form-group col-span-1 md:col-span-2 grid grid-cols-2 gap-4 animate-in fade-in slide-in-from-top-2">
+                        <div>
+                          <label className="text-[10px] uppercase tracking-[2px] text-red-600 mb-2 block font-bold">From Date</label>
+                          <input 
+                            type="date" className="form-control border-red-200" 
+                            value={newEmp.heldFrom} onChange={e => setNewEmp({...newEmp, heldFrom: e.target.value})}
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[10px] uppercase tracking-[2px] text-red-600 mb-2 block font-bold">To Date</label>
+                          <input 
+                            type="date" className="form-control border-red-200" 
+                            value={newEmp.heldTo} onChange={e => setNewEmp({...newEmp, heldTo: e.target.value})}
+                          />
+                        </div>
+                      </div>
+                    )}
 
                     {newEmp.salaryStatus !== 'Active' && (
                       <div className="form-group col-span-1 md:col-span-2">
@@ -602,7 +629,11 @@ export default function StaffManagement({ session, data, onRefresh }: StaffManag
                             title={(emp.heldComponents || []).length > 0 ? `Holding: ${emp.heldComponents?.join(', ')}` : "All components held"}
                             className="ml-2 text-[8px] px-1.5 py-0.5 bg-red-50 text-red-600 rounded border border-red-100 uppercase font-bold tracking-tighter cursor-help"
                           >
-                            {(emp.heldComponents || []).length > 0 ? 'Partial Hold' : 'Full Hold'} ({emp.salaryStatus.replace('Held_', '').replace('Forever', '∞')})
+                            {(emp.heldComponents || []).length > 0 ? 'Partial Hold' : 'Full Hold'} ({
+                              emp.salaryStatus === 'Custom' 
+                                ? `${new Date(emp.heldFrom!).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })} - ${new Date(emp.heldTo!).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}`
+                                : emp.salaryStatus?.replace('Held_', '').replace('Forever', '∞')
+                            })
                           </span>
                         )}
                       </td>
@@ -866,8 +897,28 @@ export default function StaffManagement({ session, data, onRefresh }: StaffManag
                           <option value="Held_1">Hold for 1 Month</option>
                           <option value="Held_2">Hold for 2 Months</option>
                           <option value="Held_Forever">Hold Forever</option>
+                          <option value="Custom">Hold Specific Dates</option>
                         </select>
                       </div>
+
+                      {isEditing.salaryStatus === 'Custom' && (
+                        <div className="form-group col-span-1 md:col-span-2 grid grid-cols-2 gap-4 animate-in fade-in slide-in-from-top-2">
+                          <div>
+                            <label className="text-[10px] uppercase tracking-[2px] text-red-600 mb-2 block font-bold">From Date</label>
+                            <input 
+                              type="date" className="form-control border-red-200" 
+                              value={isEditing.heldFrom} onChange={e => setIsEditing({...isEditing, heldFrom: e.target.value})}
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[10px] uppercase tracking-[2px] text-red-600 mb-2 block font-bold">To Date</label>
+                            <input 
+                              type="date" className="form-control border-red-200" 
+                              value={isEditing.heldTo} onChange={e => setIsEditing({...isEditing, heldTo: e.target.value})}
+                            />
+                          </div>
+                        </div>
+                      )}
 
                       {isEditing.salaryStatus && isEditing.salaryStatus !== 'Active' && (
                         <div className="form-group col-span-1 md:col-span-2">

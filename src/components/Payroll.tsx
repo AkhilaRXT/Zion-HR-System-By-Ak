@@ -421,7 +421,47 @@ export default function Payroll({ session, data, onRefresh }: PayrollProps) {
                     const isAlreadyFinalized = (data.paidDeductions?.[emp.id] || []).includes(selectedMonth);
 
                     const manualBonus = customBonuses[emp.id] || 0;
-                    const isHeld = emp.salaryStatus && emp.salaryStatus !== 'Active';
+                    
+                    const isHeld = (() => {
+                      if (!emp.salaryStatus || emp.salaryStatus === 'Active') return false;
+                      if (emp.salaryStatus === 'Held_Forever') return true;
+                      
+                      const [monthName, year] = selectedMonth.split(' ');
+                      const monthIndex = new Date(`${monthName} 1, ${year}`).getMonth();
+                      const payrollYear = parseInt(year);
+                      
+                      // For Held_1, Held_2 - check against current server time
+                      // but better to use the logic where if we are in that month, it's held.
+                      // Actually, the user asked for "smart" based on refresh on 1st.
+                      const today = new Date();
+                      const currentMonthName = today.toLocaleString('default', { month: 'long' });
+                      const currentYear = today.getFullYear();
+                      const currentMonthStr = `${currentMonthName} ${currentYear}`;
+
+                      if (emp.salaryStatus === 'Held_1') {
+                        // Hold only if the selected month is the same as the month when it was set?
+                        // Or if it's the CURRENT month. 
+                        return selectedMonth === currentMonthStr;
+                      }
+                      
+                      if (emp.salaryStatus === 'Held_2') {
+                        // This would need a "start date" to be truly accurate for 2 months.
+                        // For now, let's treat Custom dates as the primary "smart" way.
+                        return selectedMonth === currentMonthStr;
+                      }
+
+                      if (emp.salaryStatus === 'Custom' && emp.heldFrom && emp.heldTo) {
+                        const payrollStart = new Date(payrollYear, monthIndex, 1);
+                        const payrollEnd = new Date(payrollYear, monthIndex + 1, 0);
+                        const hFrom = new Date(emp.heldFrom);
+                        const hTo = new Date(emp.heldTo);
+                        // If any part of the hold range overlaps with this month
+                        return (hFrom <= payrollEnd && hTo >= payrollStart);
+                      }
+
+                      return false;
+                    })();
+
                     const held = isHeld ? (emp.heldComponents || []) : [];
 
                     const basicVal = (payComponents.baseSalary && !alreadyPaidCmps.includes('Basic') && !held.includes('Basic')) ? (emp.baseSalary || 0) : 0;
@@ -454,7 +494,11 @@ export default function Payroll({ session, data, onRefresh }: PayrollProps) {
                               title={held.length > 0 ? `Holding: ${held.join(', ')}` : "All components held"}
                               className="ml-2 text-[10px] font-bold px-2 py-0.5 bg-red-50 text-red-600 rounded border border-red-100 uppercase cursor-help"
                             >
-                              {held.length > 0 ? 'Partial Hold' : 'Full Hold'} ({emp.salaryStatus?.replace('Held_', '').replace('Forever', '∞')}M)
+                              {held.length > 0 ? 'Partial Hold' : 'Full Hold'} ({
+                                emp.salaryStatus === 'Custom' 
+                                  ? `${new Date(emp.heldFrom!).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })} - ${new Date(emp.heldTo!).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}`
+                                  : emp.salaryStatus?.replace('Held_', '').replace('Forever', '∞') + 'M'
+                              })
                             </span>
                           )}
                         </td>

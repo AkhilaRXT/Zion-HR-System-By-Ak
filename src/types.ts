@@ -20,7 +20,9 @@ export interface Employee {
   profilePic?: string;
   hasEPF?: boolean;
   status?: 'Active' | 'Dormant';
-  salaryStatus?: 'Active' | 'Held_1' | 'Held_2' | 'Held_Forever';
+  salaryStatus?: 'Active' | 'Held_1' | 'Held_2' | 'Held_Forever' | 'Custom';
+  heldFrom?: string;
+  heldTo?: string;
   heldComponents?: string[];
 }
 
@@ -193,6 +195,22 @@ export interface AdhocBonus {
   timestamp: string;
 }
 
+export interface DCCollection {
+  id: string;
+  date: string;
+  receiptNo: string;
+  customerName: string;
+  nic: string;
+  documentCharge: number;
+  loanAmount: number;
+  paymentMethod: string;
+  collectionType: string;
+  collectedBy: string; 
+  empId: string;
+  branch: string;
+  timestamp: string;
+}
+
 export interface AppData {
   employees: Employee[];
   credentials: UserCredential[];
@@ -212,6 +230,7 @@ export interface AppData {
   internalMessages: InternalMessage[];
   directory?: DirectoryEntry[];
   adhocBonuses: AdhocBonus[];
+  dcCollections: DCCollection[];
 }
 
 export interface Session {
