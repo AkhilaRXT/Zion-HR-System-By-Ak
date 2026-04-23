@@ -22,15 +22,45 @@ import ReportCenter from './components/ReportCenter';
 import { Clock, Menu, Loader2 } from 'lucide-react';
 
 export default function App() {
+  const urlToRoute = () => {
+    const p = window.location.pathname.replace(/^\//, '').replace(/-/g, '_').toLowerCase();
+    return p === 'login' || !p ? 'dashboard' : p;
+  };
+
+  const routeToUrl = (r: string) => {
+    return `/${r.replace(/_/g, '-')}`;
+  };
+
   const [session, setSession] = useState<Session | null>(null);
-  const [route, setRoute] = useState('dashboard');
+  const [route, setRoute] = useState(urlToRoute());
   const [currentTime, setCurrentTime] = useState(new Date());
+
   const [appData, setAppData] = useState<AppData>(DataStore.getData());
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isAuthReady, setIsAuthReady] = useState(false);
   const [isSettingsReady, setIsSettingsReady] = useState(false);
   const [dbError, setDbError] = useState<string | null>(null);
+
+  // URL Sync Effects
+  useEffect(() => {
+    const handlePopState = () => setRoute(urlToRoute());
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  useEffect(() => {
+    if (!session && !isLoading) {
+      if (window.location.pathname.toLowerCase() !== '/login') {
+        window.history.replaceState(null, '', '/login');
+      }
+    } else if (session) {
+      const targetUrl = routeToUrl(route);
+      if (window.location.pathname !== targetUrl) {
+        window.history.pushState(null, '', targetUrl);
+      }
+    }
+  }, [route, session, isLoading]);
 
   // Safety fallback for all loading states
   useEffect(() => {
