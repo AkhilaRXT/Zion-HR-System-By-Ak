@@ -1,4 +1,4 @@
-import { AppData, Employee, Session, AppSettings, Attendance, LeaveRequest, AdvanceRequest, AuditLog, UserCredential, CashRequest } from '../types';
+import { AppData, Employee, Session, AppSettings, Attendance, LeaveRequest, AdvanceRequest, AuditLog, UserCredential, CashRequest, SystemReport } from '../types';
 import { db, auth } from './firebase';
 import { 
   doc, 
@@ -124,7 +124,8 @@ const initialData: AppData = {
   paidDeductions: {},
   internalMessages: [],
   adhocBonuses: [],
-  dcCollections: []
+  dcCollections: [],
+  systemReports: []
 };
 
 export const DataStore = {
@@ -825,6 +826,32 @@ export const DataStore = {
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, `dcCollections/${id}`);
       throw error;
+    }
+  },
+
+  async submitSystemReport(report: Omit<SystemReport, 'id' | 'status'>) {
+    try {
+      const id = Date.now().toString();
+      const fullReport: SystemReport = {
+        ...report,
+        id,
+        status: 'New'
+      };
+      await setDoc(doc(db, 'systemReports', id), fullReport);
+      return { success: true, id };
+    } catch (error) {
+      handleFirestoreError(error, OperationType.CREATE, 'systemReports');
+      return { success: false, error: String(error) };
+    }
+  },
+
+  async updateSystemReportStatus(id: string, status: SystemReport['status']) {
+    try {
+      await updateDoc(doc(db, 'systemReports', id), { status });
+      return { success: true };
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, 'systemReports/' + id);
+      return { success: false, error: String(error) };
     }
   },
 

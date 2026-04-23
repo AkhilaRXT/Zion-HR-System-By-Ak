@@ -214,6 +214,16 @@ export interface DCCollection {
   verifiedAt?: string;
 }
 
+export interface SystemReport {
+  id: string;
+  empId: string;
+  empName: string;
+  subject: string;
+  message: string;
+  timestamp: string;
+  status: 'New' | 'Read' | 'Resolved';
+}
+
 export interface AppData {
   employees: Employee[];
   credentials: UserCredential[];
@@ -234,6 +244,7 @@ export interface AppData {
   directory?: DirectoryEntry[];
   adhocBonuses: AdhocBonus[];
   dcCollections: DCCollection[];
+  systemReports: SystemReport[];
 }
 
 export interface Session {

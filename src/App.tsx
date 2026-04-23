@@ -18,6 +18,7 @@ import AuditLogs from './components/AuditLogs';
 import InternalMail from './components/InternalMail';
 import SalaryAdvances from './components/SalaryAdvances';
 import DCCollection from './components/DCCollection';
+import ReportCenter from './components/ReportCenter';
 import { Clock, Menu, Loader2 } from 'lucide-react';
 
 export default function App() {
@@ -135,6 +136,10 @@ export default function App() {
       unsubs.push(syncCoreCollection('adhocBonuses', 'adhocBonuses'));
       unsubs.push(syncCoreCollection('targets', 'targets'));
       unsubs.push(syncCoreCollection('dcCollections', 'dcCollections'));
+
+      if (session.email === "zioncommercialcreditampara@gmail.com") {
+        unsubs.push(syncCoreCollection('systemReports', 'systemReports'));
+      }
 
       const unsubPaid = onSnapshot(collection(db, 'paidDeductions'), (snap) => {
         const paid: { [key: string]: string[] } = {};
@@ -341,7 +346,7 @@ export default function App() {
       }
 
       // Always accessible for everyone
-      if (id === 'dashboard' || id === 'myprofile' || id === 'leave' || id === 'payroll' || id === 'advances' || id === 'cash_requests' || id === 'mail' || id === 'dc_collection') return true;
+      if (id === 'dashboard' || id === 'myprofile' || id === 'leave' || id === 'payroll' || id === 'advances' || id === 'cash_requests' || id === 'mail' || id === 'dc_collection' || id === 'reports') return true;
       
       if (isMasterAdmin) return true;
 
@@ -369,6 +374,7 @@ export default function App() {
       case 'cash_requests': return <CashRequests session={session} data={appData} />;
       case 'mail': return <InternalMail session={session} data={appData} />;
       case 'dc_collection': return <DCCollection session={session} data={appData} />;
+      case 'reports': return <ReportCenter session={session} data={appData} />;
       case 'myprofile': return <MyProfile session={session} data={appData} onRefresh={refreshData} />;
       case 'settings': return <Settings session={session} data={appData} onRefresh={refreshData} />;
       case 'audit': return <AuditLogs session={session} data={appData} />;
@@ -387,6 +393,7 @@ export default function App() {
       case 'cash_requests': return 'Cash Requests';
       case 'mail': return 'Internal Mail';
       case 'dc_collection': return 'DC Collection';
+      case 'reports': return 'Report Center';
       case 'myprofile': return 'My Profile';
       case 'settings': return 'Control Panel';
       case 'audit': return 'Audit Logs';

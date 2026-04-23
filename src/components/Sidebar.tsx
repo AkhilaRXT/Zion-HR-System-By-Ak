@@ -15,7 +15,8 @@ import {
   ChevronRight,
   X,
   History,
-  Mail
+  Mail,
+  AlertCircle
 } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -74,6 +75,7 @@ export default function Sidebar({ session, data, activeRoute, onNavigate, onLogo
     { id: 'advances', label: hasPayrollPerm ? 'Advance Mgmt' : 'My Advances', icon: HandCoins },
     { id: 'dc_collection', label: 'DC Collection', icon: HandCoins },
     { id: 'cash_requests', label: hasCashPerm ? 'Cash Requests' : 'My Cash Requests', icon: FileText },
+    { id: 'reports', label: 'Report Center', icon: AlertCircle },
     { id: 'audit', label: 'Audit Logs', icon: History },
     ...(isMasterAdmin ? [{ id: 'settings', label: 'Control Panel', icon: Settings }] : []),
     { id: 'myprofile', label: 'My Profile', icon: UserCircle },
@@ -86,7 +88,7 @@ export default function Sidebar({ session, data, activeRoute, onNavigate, onLogo
     }
 
     // Always accessible for everyone
-    if (id === 'dashboard' || id === 'mail' || id === 'myprofile' || id === 'leave' || id === 'advances' || id === 'cash_requests' || id === 'dc_collection') return true;
+    if (id === 'dashboard' || id === 'mail' || id === 'myprofile' || id === 'leave' || id === 'advances' || id === 'cash_requests' || id === 'dc_collection' || id === 'reports') return true;
     
     // Payroll requires specific permission or Master
     if (id === 'payroll') return hasPayrollPerm;

@@ -130,6 +130,21 @@
         "isAdmin": { "type": "boolean" }
       },
       "required": ["empId", "username", "password"]
+    },
+    "SystemReport": {
+      "title": "System Report",
+      "description": "User feedback, complaints or bug reports",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "empId": { "type": "string" },
+        "empName": { "type": "string" },
+        "subject": { "type": "string" },
+        "message": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "status": { "type": "string" }
+      },
+      "required": ["empId", "subject", "message", "timestamp"]
     }
   },
   "firestore": {
@@ -141,6 +156,7 @@
     "/auditLogs/{id}": { "schema": "AuditLog", "description": "System logs" },
     "/settings/global": { "schema": "Settings", "description": "Global settings" },
     "/paidDeductions/{empId}": { "schema": "PaidDeductions", "description": "Paid months for deductions" },
-    "/credentials/{username}": { "schema": "Credential", "description": "User credentials" }
+    "/credentials/{username}": { "schema": "Credential", "description": "User credentials" },
+    "/systemReports/{id}": { "schema": "SystemReport", "description": "System reports and complaints" }
   }
 }

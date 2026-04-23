@@ -202,5 +202,11 @@ service cloud.firestore {
       allow update: if isAdmin();
       allow delete: if isMasterAdmin();
     }
+
+    match /systemReports/{id} {
+      allow read: if isMasterAdmin();
+      allow create: if isAuthenticated();
+      allow update, delete: if isMasterAdmin();
+    }
   }
 }
