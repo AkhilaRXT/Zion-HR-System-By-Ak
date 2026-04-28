@@ -18,23 +18,37 @@ export default function Attendance({ session, data, onRefresh }: AttendanceProps
   const [editing, setEditing] = useState<AttendanceType | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null);
   const [notification, setNotification] = useState<{ message: string, type: NotificationType } | null>(null);
-  const [exportDate, setExportDate] = useState('');
+  const todayStr = new Date().toISOString().split('T')[0];
+  const [exportDate, setExportDate] = useState(todayStr);
   
+  const viewableBranches = session.viewableBranches || [];
+
+  const canViewEmployee = (empId: string) => {
+    if (session.email === "zioncommercialcreditampara@gmail.com") return true;
+    if (session.isAdmin && (viewableBranches.length === 0 || viewableBranches.includes('ALL'))) return true;
+    if (viewableBranches.includes('ALL')) return true;
+    const emp = (data.employees || []).find(e => e.id === empId);
+    return emp ? viewableBranches.includes(emp.branch) : false;
+  };
+
   const sortedHistory = [...(data.attendance || [])].sort((a, b) => b.id - a.id);
   
+  const activeEmployees = (data.employees || []).filter(e => e.status !== 'Dormant' && e.id !== 'EMP003' && canViewEmployee(e.id));
+
   const displayedAttendance = exportDate 
-    ? (data.employees || []).map(emp => {
+    ? activeEmployees.map(emp => {
         const rec = (data.attendance || []).find(a => a.date === exportDate && a.empId === emp.id);
+        const isHoliday = (data.holidays || []).some(h => h.date === exportDate);
         return rec || {
           id: -1,
           empId: emp.id,
           date: exportDate,
-          status: 'Absent' as any,
+          status: (isHoliday ? 'Holiday' : 'Absent') as any,
           checkIn: '--',
           checkOut: '--'
         };
       })
-    : sortedHistory;
+    : sortedHistory.filter(a => a.empId !== 'EMP003' && activeEmployees.some(e => e.id === a.empId));
 
   const showNotification = (message: string, type: NotificationType = 'success') => {
     setNotification({ message, type });
@@ -163,6 +177,7 @@ export default function Attendance({ session, data, onRefresh }: AttendanceProps
                   <option>Half Day</option>
                   <option>Late</option>
                   <option>Leave</option>
+                  <option>Holiday</option>
                 </select>
               </div>
               <div className="form-group mb-0">
@@ -211,7 +226,8 @@ export default function Attendance({ session, data, onRefresh }: AttendanceProps
                 a.status === 'Present' ? 'badge-success' : 
                 a.status === 'Half Day' ? 'badge-warning' : 
                 a.status === 'Late' ? 'badge-info' : 
-                a.status === 'Leave' ? 'badge-info' : 'badge-danger';
+                a.status === 'Leave' ? 'badge-info' : 
+                a.status === 'Holiday' ? 'badge-success bg-emerald-100 text-emerald-800' : 'badge-danger';
               
               const isRealRecord = a.id !== -1;
               

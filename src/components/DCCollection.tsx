@@ -32,11 +32,14 @@ interface DCCollectionProps {
 
 export default function DCCollection({ session, data }: DCCollectionProps) {
   const isAdmin = session.isAdmin;
-  const [activeTab, setActiveTab] = useState(isAdmin ? 'report' : 'receipt');
+  const isBranchManager = session.viewableBranches && session.viewableBranches.length > 0 && !session.email?.includes('zioncommercialcreditampara@gmail.com');
+  const hasFullAccess = isAdmin || isBranchManager;
+  const [activeTab, setActiveTab] = useState(hasFullAccess ? 'report' : 'receipt');
   const [notification, setNotification] = useState<{ message: string, type: NotificationType } | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [confirmUndo, setConfirmUndo] = useState<string | null>(null);
   const [verifySearch, setVerifySearch] = useState('');
+  const [verifyTab, setVerifyTab] = useState<'all' | 'pending' | 'verified'>('pending');
 
   // Form State
   const [formData, setFormData] = useState({
@@ -101,7 +104,7 @@ export default function DCCollection({ session, data }: DCCollectionProps) {
         paymentMethod: 'Cash',
         collectionType: 'Loan'
       });
-      if (isAdmin) setActiveTab('report');
+      if (hasFullAccess) setActiveTab('report');
     } catch (err) {
       showNotification('Failed to create receipt', 'error');
     }
@@ -252,10 +255,13 @@ export default function DCCollection({ session, data }: DCCollectionProps) {
     showNotification('Report exported to Excel');
   };
 
+  const myTodayCollections = (data.dcCollections || []).filter(c => c.empId === session.empId && c.date === todayStr);
+  const myTodayTotal = myTodayCollections.reduce((sum, c) => sum + c.documentCharge, 0);
+
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
       {/* Tabs */}
-      <div className="flex gap-4 p-1 bg-gray-100/50 backdrop-blur-sm rounded-xl w-fit">
+      <div className="flex gap-2 md:gap-4 p-1 bg-gray-100/50 backdrop-blur-sm rounded-xl w-full overflow-x-auto custom-scrollbar md:w-fit">
         <button 
           onClick={() => setActiveTab('receipt')}
           className={`flex items-center gap-2 px-6 py-2.5 rounded-lg text-xs font-bold tracking-widest uppercase transition-all ${
@@ -267,7 +273,7 @@ export default function DCCollection({ session, data }: DCCollectionProps) {
           <CreditCard className="w-4 h-4" />
           Receipt Entry
         </button>
-        {isAdmin && (
+        {hasFullAccess && (
           <>
             <button 
               onClick={() => setActiveTab('report')}
@@ -395,13 +401,19 @@ export default function DCCollection({ session, data }: DCCollectionProps) {
             {/* Recent History Sidebar */}
             <div className="space-y-6">
               <div className="bg-white/80 backdrop-blur-md rounded-2xl border border-border-accent p-6 shadow-lg shadow-gray-100/10">
-                <h4 className="text-sm font-bold text-text-primary mb-6 flex items-center justify-between">
-                  My Recent Receipts
-                  <span className="text-[10px] font-medium text-brand-accent px-2 py-0.5 bg-brand-accent/10 rounded-full">Today</span>
-                </h4>
+                <div className="flex flex-col gap-2 mb-6">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-sm font-bold text-text-primary">My Recent Receipts</h4>
+                    <span className="text-[10px] font-medium text-brand-accent px-2 py-0.5 bg-brand-accent/10 rounded-full">Today</span>
+                  </div>
+                  {myTodayTotal > 0 && (
+                    <div className="text-2xl font-black text-brand-secondary tracking-tight">
+                      Rs. {myTodayTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </div>
+                  )}
+                </div>
                 <div className="space-y-4 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
-                  {(data.dcCollections || [])
-                    .filter(c => c.empId === session.empId && c.date === todayStr)
+                  {myTodayCollections
                     .sort((a,b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
                     .map(c => (
                       <div key={c.id} className="p-4 bg-gray-50/50 rounded-xl border border-border-accent hover:border-brand-accent/30 transition-colors group">
@@ -416,7 +428,7 @@ export default function DCCollection({ session, data }: DCCollectionProps) {
                         </div>
                       </div>
                     ))}
-                  {!(data.dcCollections || []).some(c => c.empId === session.empId && c.date === todayStr) && (
+                  {myTodayCollections.length === 0 && (
                     <div className="py-12 text-center">
                       <p className="text-[10px] text-text-secondary uppercase tracking-widest">No entries today</p>
                     </div>
@@ -601,7 +613,7 @@ export default function DCCollection({ session, data }: DCCollectionProps) {
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredHistory.map(c => (
+                    {filteredHistory.slice(0, 15).map(c => (
                       <tr key={c.id}>
                         <td className="text-[11px] font-bold text-text-secondary tracking-widest uppercase">{c.date}</td>
                         <td className="font-mono text-[10px] text-brand-accent font-bold">{c.receiptNo}</td>
@@ -652,7 +664,7 @@ export default function DCCollection({ session, data }: DCCollectionProps) {
               </div>
             </div>
           </motion.div>
-        ) : activeTab === 'verification' && isAdmin ? (
+        ) : activeTab === 'verification' && hasFullAccess ? (
           <motion.div 
             key="verification-view"
             initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }}
@@ -692,6 +704,27 @@ export default function DCCollection({ session, data }: DCCollectionProps) {
                 </div>
               </div>
 
+              <div className="flex gap-2 border-b border-border-accent mb-6 overflow-x-auto custom-scrollbar">
+                <button
+                  onClick={() => setVerifyTab('all')}
+                  className={`px-6 py-3 text-xs font-bold uppercase tracking-widest transition-colors flex-shrink-0 border-b-2 ${verifyTab === 'all' ? 'text-brand-accent border-brand-accent' : 'text-text-secondary hover:text-text-primary border-transparent'}`}
+                >
+                  All
+                </button>
+                <button
+                  onClick={() => setVerifyTab('pending')}
+                  className={`px-6 py-3 text-xs font-bold uppercase tracking-widest transition-colors flex-shrink-0 border-b-2 ${verifyTab === 'pending' ? 'text-brand-accent border-brand-accent' : 'text-text-secondary hover:text-text-primary border-transparent'}`}
+                >
+                  Unverified
+                </button>
+                <button
+                  onClick={() => setVerifyTab('verified')}
+                  className={`px-6 py-3 text-xs font-bold uppercase tracking-widest transition-colors flex-shrink-0 border-b-2 ${verifyTab === 'verified' ? 'text-emerald-600 border-emerald-500' : 'text-text-secondary hover:text-text-primary border-transparent'}`}
+                >
+                  Verified
+                </button>
+              </div>
+
               <div className="table-container">
                 <div className="overflow-x-auto">
                   <table className="w-full min-w-[1000px]">
@@ -709,12 +742,14 @@ export default function DCCollection({ session, data }: DCCollectionProps) {
                     </thead>
                     <tbody>
                       {(data.dcCollections || [])
+                        .filter(c => verifyTab === 'all' ? true : (verifyTab === 'verified' ? !!c.isVerified : !c.isVerified))
                         .filter(c => 
                            !verifySearch || 
                            c.customerName.toLowerCase().includes(verifySearch.toLowerCase()) || 
                            c.nic.toLowerCase().includes(verifySearch.toLowerCase())
                         )
                         .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+                        .slice(0, 15)
                         .map(c => (
                         <tr key={c.id}>
                           <td className="text-[11px] font-bold text-text-secondary tracking-widest uppercase">{c.date}</td>
@@ -774,11 +809,13 @@ export default function DCCollection({ session, data }: DCCollectionProps) {
                           </td>
                         </tr>
                       ))}
-                      {(data.dcCollections || []).filter(c => 
-                        !verifySearch || 
-                        c.customerName.toLowerCase().includes(verifySearch.toLowerCase()) || 
-                        c.nic.toLowerCase().includes(verifySearch.toLowerCase())
-                      ).length === 0 && (
+                      {(data.dcCollections || [])
+                        .filter(c => verifyTab === 'all' ? true : (verifyTab === 'verified' ? !!c.isVerified : !c.isVerified))
+                        .filter(c => 
+                          !verifySearch || 
+                          c.customerName.toLowerCase().includes(verifySearch.toLowerCase()) || 
+                          c.nic.toLowerCase().includes(verifySearch.toLowerCase())
+                        ).length === 0 && (
                         <tr>
                           <td colSpan={8} className="p-12 text-center text-text-secondary text-sm">
                              No matching collections found.

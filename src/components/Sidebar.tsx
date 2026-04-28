@@ -16,7 +16,9 @@ import {
   X,
   History,
   Mail,
-  AlertCircle
+  AlertCircle,
+  MapPin,
+  Calendar
 } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -71,11 +73,13 @@ export default function Sidebar({ session, data, activeRoute, onNavigate, onLogo
     { id: 'staff', label: 'Staff Mgmt', icon: Users },
     { id: 'attendance', label: 'Attendance', icon: CalendarCheck },
     { id: 'leave', label: hasLeavePerm ? 'Leave Mgmt' : 'My Leaves', icon: PlaneTakeoff },
+    { id: 'holidays', label: 'Holidays', icon: Calendar },
     { id: 'payroll', label: 'Payroll', icon: FileText },
     { id: 'advances', label: hasPayrollPerm ? 'Advance Mgmt' : 'My Advances', icon: HandCoins },
     { id: 'dc_collection', label: 'DC Collection', icon: HandCoins },
     { id: 'cash_requests', label: hasCashPerm ? 'Cash Requests' : 'My Cash Requests', icon: FileText },
     { id: 'reports', label: 'Report Center', icon: AlertCircle },
+    ...(isMasterAdmin ? [{ id: 'branches', label: 'Branches', icon: MapPin }] : []),
     { id: 'audit', label: 'Audit Logs', icon: History },
     ...(isMasterAdmin ? [{ id: 'settings', label: 'Control Panel', icon: Settings }] : []),
     { id: 'myprofile', label: 'My Profile', icon: UserCircle },
@@ -83,18 +87,24 @@ export default function Sidebar({ session, data, activeRoute, onNavigate, onLogo
 
   const hasPermission = (id: string) => {
     // Specifically protect settings
-    if (id === 'settings') {
+    if (id === 'settings' || id === 'branches') {
       return isMasterAdmin;
     }
 
     // Always accessible for everyone
-    if (id === 'dashboard' || id === 'mail' || id === 'myprofile' || id === 'leave' || id === 'advances' || id === 'cash_requests' || id === 'dc_collection' || id === 'reports') return true;
+    if (id === 'dashboard' || id === 'mail' || id === 'myprofile' || id === 'leave' || id === 'advances' || id === 'cash_requests' || id === 'dc_collection' || id === 'reports' || id === 'holidays') return true;
     
     // Payroll requires specific permission or Master
     if (id === 'payroll') return hasPayrollPerm;
     
     // Master Admin (Google Login) gets everything
     if (isMasterAdmin) return true;
+
+    // Branch Managers can access Attendance
+    if (id === 'attendance') {
+      const managedBranches = (data.branches || []).filter(b => b.managerId === session.empId);
+      if (managedBranches.length > 0) return true;
+    }
 
     // Regular members cannot see anything else
     if (!isAdmin) return false;

@@ -31,22 +31,34 @@ export default function Dashboard({ session, data, onRefresh }: DashboardProps) 
   
   // Admin Stats
   const canSeeStaff = isAdmin && (session.email === "zioncommercialcreditampara@gmail.com" || session.permissions?.includes('staff'));
-  const canSeeAttendance = isAdmin && (session.email === "zioncommercialcreditampara@gmail.com" || session.permissions?.includes('attendance'));
+  const isBranchManager = session.viewableBranches && session.viewableBranches.length > 0 && !session.email?.includes('zioncommercialcreditampara@gmail.com');
+  const canSeeAttendance = (isAdmin && (session.email === "zioncommercialcreditampara@gmail.com" || session.permissions?.includes('attendance'))) || isBranchManager;
   const canSeeLeaves = isAdmin && (session.email === "zioncommercialcreditampara@gmail.com" || session.permissions?.includes('leave'));
   const canSeeAdvances = isAdmin && (session.email === "zioncommercialcreditampara@gmail.com" || session.permissions?.includes('payroll'));
 
-  const totalStaff = (data.employees || []).length;
+  const viewableBranches = session.viewableBranches || [];
+  const canViewEmployee = (empId: string) => {
+    if (session.email === "zioncommercialcreditampara@gmail.com") return true;
+    if (isAdmin && (viewableBranches.length === 0 || viewableBranches.includes('ALL'))) return true;
+    if (viewableBranches.includes('ALL')) return true;
+    const emp = (data.employees || []).find(e => e.id === empId);
+    return emp ? viewableBranches.includes(emp.branch) : false;
+  };
+
+  const activeStaff = (data.employees || []).filter(e => e.status !== 'Dormant' && e.id !== 'EMP003' && canViewEmployee(e.id));
+  const totalStaff = activeStaff.length;
   const presentToday = new Set(
     (data.attendance || [])
-      .filter(a => a.date === today && (a.status === 'Present' || a.status === 'Late' || a.status === 'Half Day'))
+      .filter(a => a.date === today && (a.status === 'Present' || a.status === 'Late' || a.status === 'Half Day') && canViewEmployee(a.empId))
       .map(a => a.empId)
       .filter(id => (data.employees || []).some(e => e.id === id))
   ).size;
-  const pendingLeavesCount = (data.leaves || []).filter(l => l.status === 'Pending').length;
-  const approvedAdvancesCount = (data.advances || []).filter(a => a.status === 'Approved').length;
+  const pendingLeavesCount = (data.leaves || []).filter(l => l.status === 'Pending' && canViewEmployee(l.empId)).length;
+  const approvedAdvancesCount = (data.advances || []).filter(a => a.status === 'Approved' && canViewEmployee(a.empId)).length;
 
   // Member Stats
   const myAttendance = (data.attendance || []).find(a => a.empId === currentEmpId && a.date === today);
+  const isTodayHoliday = (data.holidays || []).some(h => h.date === today);
   const myPendingLeaves = (data.leaves || []).filter(l => l.empId === currentEmpId && l.status === 'Pending').length;
   const myApprovedAdvances = (data.advances || []).filter(a => a.empId === currentEmpId && a.status === 'Approved').length;
   
@@ -67,7 +79,8 @@ export default function Dashboard({ session, data, onRefresh }: DashboardProps) 
 
   // Sync selection with search results
   useEffect(() => {
-    const filtered = (data.employees || []).filter(e => 
+    const validStaff = (data.employees || []).filter(e => e.status !== 'Dormant' && e.id !== 'EMP003');
+    const filtered = validStaff.filter(e => 
       e.name.toLowerCase().includes(empSearch.toLowerCase()) || 
       e.id.toLowerCase().includes(empSearch.toLowerCase())
     );
@@ -147,18 +160,20 @@ export default function Dashboard({ session, data, onRefresh }: DashboardProps) 
   };
 
   const todayAttendance = (data.attendance || []).filter(a => a.date === today);
-  const displayEmployees = canSeeAttendance ? (data.employees || []) : (data.employees || []).filter(e => e.id === currentEmpId);
+  const displayEmployees = canSeeAttendance 
+    ? activeStaff
+    : (data.employees || []).filter(e => e.id === currentEmpId);
 
   return (
     <div className="space-y-8">
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-        {isAdmin ? (
+        {(isAdmin || isBranchManager) ? (
           <>
-            {canSeeStaff && <StatCard icon={Users} title="Total Active Staff" value={totalStaff} />}
+            {(canSeeStaff || isBranchManager) && <StatCard icon={Users} title={isBranchManager && !isAdmin ? "Branch Staff" : "Total Active Staff"} value={totalStaff} />}
             {canSeeAttendance && <StatCard icon={CalendarDays} title="Present Today" value={`${presentToday} / ${totalStaff}`} />}
-            {canSeeLeaves && <StatCard icon={MailWarning} title="Pending Leaves" value={pendingLeavesCount} color="text-brand-accent" />}
-            {canSeeAdvances && <StatCard icon={HandCoins} title="Approved Advances" value={approvedAdvancesCount} />}
-            {!canSeeStaff && !canSeeAttendance && !canSeeLeaves && !canSeeAdvances && (
+            {(canSeeLeaves || isBranchManager) && <StatCard icon={MailWarning} title="Pending Leaves" value={pendingLeavesCount} color="text-brand-accent" />}
+            {(canSeeAdvances || isBranchManager) && <StatCard icon={HandCoins} title="Approved Advances" value={approvedAdvancesCount} />}
+            {!canSeeStaff && !canSeeAttendance && !canSeeLeaves && !canSeeAdvances && !isBranchManager && (
               <div className="col-span-full p-12 bg-white border border-border-accent rounded-2xl text-center shadow-sm">
                 <p className="text-text-secondary font-medium text-sm">Welcome to the Admin Dashboard</p>
               </div>
@@ -169,8 +184,8 @@ export default function Dashboard({ session, data, onRefresh }: DashboardProps) 
             <StatCard 
               icon={CalendarDays} 
               title="Today's Status" 
-              value={myAttendance ? myAttendance.status : 'Absent'} 
-              color={myAttendance ? 'text-emerald-500' : 'text-red-500'}
+              value={myAttendance ? myAttendance.status : (isTodayHoliday ? 'Holiday' : 'Absent')} 
+              color={myAttendance || isTodayHoliday ? 'text-emerald-500' : 'text-red-500'}
             />
             <StatCard 
               icon={LogIn} 
@@ -209,7 +224,7 @@ export default function Dashboard({ session, data, onRefresh }: DashboardProps) 
                   value={selectedEmpId}
                   onChange={(e) => setSelectedEmpId(e.target.value)}
                 >
-                  {(data.employees || [])
+                  {displayEmployees
                     .filter(e => 
                       e.name.toLowerCase().includes(empSearch.toLowerCase()) || 
                       e.id.toLowerCase().includes(empSearch.toLowerCase())
@@ -218,7 +233,7 @@ export default function Dashboard({ session, data, onRefresh }: DashboardProps) 
                       <option key={e.id} value={e.id}>{e.id} – {e.name}</option>
                     ))
                   }
-                  {(data.employees || []).filter(e => 
+                  {displayEmployees.filter(e => 
                     e.name.toLowerCase().includes(empSearch.toLowerCase()) || 
                     e.id.toLowerCase().includes(empSearch.toLowerCase())
                   ).length === 0 && (
@@ -259,19 +274,21 @@ export default function Dashboard({ session, data, onRefresh }: DashboardProps) 
           <tbody>
             {displayEmployees.map(emp => {
               const rec = todayAttendance.find(a => a.empId === emp.id);
+              const statusText = rec ? rec.status : (isTodayHoliday ? 'Holiday' : 'Absent');
               return (
                 <tr key={emp.id}>
                   <td className="font-mono text-sm text-brand-accent">{emp.id}</td>
                   <td className="font-medium text-text-primary">{emp.name}</td>
                   <td>
                     <span className={`badge ${
-                      !rec ? 'badge-danger' : 
-                      rec.status === 'Present' ? 'badge-success' : 
-                      rec.status === 'Half Day' ? 'badge-warning' : 
-                      rec.status === 'Late' ? 'badge-info' : 
-                      rec.status === 'Leave' ? 'badge-info' : 'badge-danger'
+                      statusText === 'Holiday' ? 'badge-success bg-emerald-100 text-emerald-800' :
+                      statusText === 'Absent' ? 'badge-danger' : 
+                      statusText === 'Present' ? 'badge-success' : 
+                      statusText === 'Half Day' ? 'badge-warning' : 
+                      statusText === 'Late' ? 'badge-info' : 
+                      statusText === 'Leave' ? 'badge-info' : 'badge-danger'
                     }`}>
-                      {rec ? rec.status : 'Absent'}
+                      {statusText}
                     </span>
                   </td>
                   <td className="font-mono text-sm text-text-secondary">{rec ? rec.checkIn : '--'}</td>
@@ -348,6 +365,7 @@ export default function Dashboard({ session, data, onRefresh }: DashboardProps) 
                   <option value="Half Day">Half Day</option>
                   <option value="Late">Late</option>
                   <option value="Leave">Leave</option>
+                  <option value="Holiday">Holiday</option>
                 </select>
               </div>
               <button type="submit" className="btn btn-primary w-full justify-center py-4">

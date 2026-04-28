@@ -26,8 +26,8 @@ export default function StaffManagement({ session, data, onRefresh }: StaffManag
   const fuelPrice = data.settings?.fuelPrice || 398;
   const [searchTerm, setSearchTerm] = useState('');
   const [originalId, setOriginalId] = useState<string | null>(null);
-  const [isEditing, setIsEditing] = useState<(Employee & { username?: string, password?: string, isSystemAdmin?: boolean, permissions?: string[] }) | null>(null);
-  
+  const [isEditing, setIsEditing] = useState<(Employee & { username?: string, password?: string, isSystemAdmin?: boolean, permissions?: string[], viewableBranches?: string[] }) | null>(null);
+
   // Modal & Notification State
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [confirmIdChange, setConfirmIdChange] = useState<{ oldId: string, newId: string } | null>(null);
@@ -40,6 +40,7 @@ export default function StaffManagement({ session, data, onRefresh }: StaffManag
     role: '',
     department: 'Lending',
     branch: '',
+    branchCode: '',
     baseSalary: 0,
     travelingAllowance: 0,
     vehicleAllowance: 0,
@@ -62,7 +63,8 @@ export default function StaffManagement({ session, data, onRefresh }: StaffManag
     username: '',
     password: '',
     isSystemAdmin: false,
-    permissions: [] as string[]
+    permissions: [] as string[],
+    viewableBranches: [] as string[]
   });
 
   const showNotification = (message: string, type: NotificationType = 'success') => {
@@ -102,6 +104,7 @@ export default function StaffManagement({ session, data, onRefresh }: StaffManag
       role: newEmp.role,
       department: newEmp.department,
       branch: newEmp.branch,
+      branchCode: newEmp.branchCode,
       baseSalary: newEmp.baseSalary,
       travelingAllowance: newEmp.travelingAllowance,
       vehicleAllowance: newEmp.vehicleAllowance,
@@ -128,21 +131,22 @@ export default function StaffManagement({ session, data, onRefresh }: StaffManag
       username: newEmp.username || id.toLowerCase(),
       password: newEmp.password || 'pass123',
       isAdmin: newEmp.isSystemAdmin,
-      permissions: newEmp.isSystemAdmin ? newEmp.permissions : []
+      permissions: newEmp.isSystemAdmin ? newEmp.permissions : [],
+      viewableBranches: newEmp.isSystemAdmin ? newEmp.viewableBranches : []
     };
 
     try {
       await DataStore.addEmployee(employee, cred);
       showNotification(`Employee ${employee.name} added successfully!`);
       setNewEmp({
-        empNo: '', name: '', email: '', role: '', department: 'Lending', branch: '',
+        empNo: '', name: '', email: '', role: '', department: 'Lending', branch: '', branchCode: '',
         baseSalary: 0, travelingAllowance: 0, vehicleAllowance: 0, performanceAllowance: 0,
         petrolLitres: 0, attendanceBonus: 0, overtime: 0, bikeInstallment: 0, staffLoan: 0,
         bankName: '', bankBranch: '', accountNo: '', profilePic: '', hasEPF: true,
         status: 'Active', salaryStatus: 'Active',
         heldFrom: '', heldTo: '',
         heldComponents: [],
-        username: '', password: '', isSystemAdmin: false, permissions: []
+        username: '', password: '', isSystemAdmin: false, permissions: [], viewableBranches: []
       });
     } catch (err: any) {
       console.error('Add Staff Error:', err);
@@ -170,12 +174,16 @@ export default function StaffManagement({ session, data, onRefresh }: StaffManag
         return;
       }
 
-      const { username, password, isSystemAdmin, permissions, ...empUpdates } = isEditing;
-      const credUpdates: any = {};
-      if (username) credUpdates.username = username;
-      if (password) credUpdates.password = password;
-      credUpdates.isAdmin = isSystemAdmin;
-      credUpdates.permissions = isSystemAdmin ? permissions : [];
+      const { username, password, isSystemAdmin, permissions, viewableBranches, ...empUpdates } = isEditing;
+      let credUpdates: any = undefined;
+      if (isMasterAdmin) {
+        credUpdates = {};
+        if (username) credUpdates.username = username;
+        if (password) credUpdates.password = password;
+        credUpdates.isAdmin = isSystemAdmin;
+        credUpdates.permissions = isSystemAdmin ? permissions : [];
+        credUpdates.viewableBranches = isSystemAdmin ? viewableBranches : [];
+      }
       
       try {
         if (forceIdChange) {
@@ -202,16 +210,29 @@ export default function StaffManagement({ session, data, onRefresh }: StaffManag
       password: cred?.password || '',
       isSystemAdmin: cred?.isAdmin || false,
       permissions: cred?.permissions || [],
+      viewableBranches: cred?.viewableBranches || [],
       heldComponents: emp.heldComponents || [],
       heldFrom: emp.heldFrom || '',
       heldTo: emp.heldTo || ''
     });
   };
 
-  const filteredEmployees = (data.employees || []).filter(e => 
-    e.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    e.id.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const viewableBranches = session.viewableBranches || [];
+
+  const canViewEmployee = (empId: string) => {
+    if (session.email === "zioncommercialcreditampara@gmail.com") return true;
+    if (session.isAdmin && (viewableBranches.length === 0 || viewableBranches.includes('ALL'))) return true;
+    if (viewableBranches.includes('ALL')) return true;
+    const emp = (data.employees || []).find(e => e.id === empId);
+    return emp ? viewableBranches.includes(emp.branch) : false;
+  };
+
+  const filteredEmployees = (data.employees || [])
+    .filter(e => e.id !== 'EMP003' && canViewEmployee(e.id))
+    .filter(e => 
+      e.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+      e.id.toLowerCase().includes(searchTerm.toLowerCase())
+    );
 
   const handlePermissionToggle = (perm: string) => {
     setNewEmp(prev => ({
@@ -220,6 +241,23 @@ export default function StaffManagement({ session, data, onRefresh }: StaffManag
         ? prev.permissions.filter(p => p !== perm)
         : [...prev.permissions, perm]
     }));
+  };
+
+  const handleBranchToggle = (branchId: string, isEditingForm: boolean = false) => {
+    const updateBranches = (current: string[]) => {
+      if (branchId === 'ALL') {
+        return current.includes('ALL') ? [] : ['ALL'];
+      }
+      return current.includes(branchId) 
+        ? current.filter(b => b !== branchId) 
+        : [...current.filter(b => b !== 'ALL'), branchId];
+    };
+
+    if (isEditingForm && isEditing) {
+      setIsEditing(prev => prev ? { ...prev, viewableBranches: updateBranches(prev.viewableBranches || []) } : prev);
+    } else {
+      setNewEmp(prev => ({ ...prev, viewableBranches: updateBranches(prev.viewableBranches || []) }));
+    }
   };
 
   return (
@@ -272,12 +310,37 @@ export default function StaffManagement({ session, data, onRefresh }: StaffManag
                     value={newEmp.role} onChange={e => setNewEmp({...newEmp, role: e.target.value})}
                   />
                 </div>
-                <div className="form-group">
-                  <label className="text-[10px] uppercase tracking-[2px] text-text-secondary mb-2 block">Branch *</label>
-                  <input 
-                    type="text" className="form-control" required 
-                    value={newEmp.branch} onChange={e => setNewEmp({...newEmp, branch: e.target.value})}
-                  />
+                <div className="form-group grid grid-cols-2 gap-4 col-span-1 md:col-span-2 lg:col-span-1">
+                  <div>
+                    <label className="text-[10px] uppercase tracking-[2px] text-text-secondary mb-2 block">Branch Name *</label>
+                    {(data.branches || []).length > 0 ? (
+                      <select 
+                        className="form-control" required
+                        value={newEmp.branch} 
+                        onChange={e => {
+                          const branch = (data.branches || []).find(b => b.name === e.target.value);
+                          setNewEmp({...newEmp, branch: e.target.value, branchCode: branch?.code || ''});
+                        }}
+                      >
+                        <option value="">Select Branch...</option>
+                        {(data.branches || []).map(b => (
+                          <option key={b.id} value={b.name}>{b.name} ({b.code})</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <input 
+                        type="text" className="form-control" required placeholder="e.g. Main Branch"
+                        value={newEmp.branch} onChange={e => setNewEmp({...newEmp, branch: e.target.value})}
+                      />
+                    )}
+                  </div>
+                  <div>
+                    <label className="text-[10px] uppercase tracking-[2px] text-text-secondary mb-2 block">Branch Code</label>
+                    <input 
+                      type="text" className="form-control" placeholder="e.g. BR001"
+                      value={newEmp.branchCode} onChange={e => setNewEmp({...newEmp, branchCode: e.target.value})}
+                    />
+                  </div>
                 </div>
                 <div className="form-group col-span-2">
                   <label className="text-[10px] uppercase tracking-[2px] text-text-secondary mb-2 block">Profile Picture</label>
@@ -556,6 +619,40 @@ export default function StaffManagement({ session, data, onRefresh }: StaffManag
                         ))}
                       </div>
                     </div>
+                    
+                    <div className="space-y-4 pt-4 border-t border-border-accent/30 mt-4">
+                      <label className="text-[10px] uppercase tracking-[2px] text-text-secondary block">Viewable Branches</label>
+                      <p className="text-[10px] text-text-secondary mb-2 leading-relaxed">
+                        Select which branches this user is allowed to view and manage.
+                      </p>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <label className="flex items-center gap-2 cursor-pointer group">
+                          <input 
+                            type="checkbox" 
+                            className="w-3 h-3 accent-brand-accent"
+                            checked={newEmp.viewableBranches.includes('ALL')}
+                            onChange={() => handleBranchToggle('ALL', false)}
+                          />
+                          <span className="text-[9px] uppercase tracking-[1px] text-brand-primary font-bold group-hover:opacity-80 transition-opacity">
+                            ALL BRANCHES
+                          </span>
+                        </label>
+                        {(data.branches || []).map(b => (
+                          <label key={b.name} className="flex items-center gap-2 cursor-pointer group">
+                            <input 
+                              type="checkbox" 
+                              className="w-3 h-3 accent-brand-accent disabled:opacity-50"
+                              checked={newEmp.viewableBranches.includes(b.name) || newEmp.viewableBranches.includes('ALL')}
+                              disabled={newEmp.viewableBranches.includes('ALL')}
+                              onChange={() => handleBranchToggle(b.name, false)}
+                            />
+                            <span className={`text-[9px] uppercase tracking-[1px] ${newEmp.viewableBranches.includes('ALL') ? 'text-text-secondary opacity-50' : 'text-text-secondary group-hover:text-text-primary'} transition-colors`}>
+                              {b.name}
+                            </span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>
@@ -592,6 +689,7 @@ export default function StaffManagement({ session, data, onRefresh }: StaffManag
                   <th>EMP No</th>
                   <th>Name</th>
                   <th>Role</th>
+                  <th>Branch</th>
                   <th>Dept</th>
                   {isAdmin && (
                     <>
@@ -638,6 +736,10 @@ export default function StaffManagement({ session, data, onRefresh }: StaffManag
                         )}
                       </td>
                       <td className="text-sm text-text-secondary">{emp.role}</td>
+                      <td>
+                        <span className="text-xs text-text-primary block">{emp.branch}</span>
+                        {emp.branchCode && <span className="font-mono text-[9px] text-text-secondary leading-none">{emp.branchCode}</span>}
+                      </td>
                       <td><span className="badge badge-info">{emp.department}</span></td>
                       {isAdmin && (
                         <>
@@ -727,15 +829,19 @@ export default function StaffManagement({ session, data, onRefresh }: StaffManag
                   <div className="form-group">
                     <label className="text-[10px] uppercase tracking-[2px] text-text-secondary mb-2 block">Username</label>
                     <input 
-                      type="text" className="form-control" required 
-                      value={isEditing.username} onChange={e => setIsEditing({...isEditing, username: e.target.value})}
+                      type="text" className="form-control" 
+                      value={isEditing.username || ''} onChange={e => setIsEditing({...isEditing, username: e.target.value})}
+                      placeholder={isMasterAdmin ? "" : "Hidden"}
+                      disabled={!isMasterAdmin}
                     />
                   </div>
                   <div className="form-group">
                     <label className="text-[10px] uppercase tracking-[2px] text-text-secondary mb-2 block">Password</label>
                     <input 
-                      type="text" className="form-control" required 
-                      value={isEditing.password} onChange={e => setIsEditing({...isEditing, password: e.target.value})}
+                      type="text" className="form-control" 
+                      value={isEditing.password || ''} onChange={e => setIsEditing({...isEditing, password: e.target.value})}
+                      placeholder={isMasterAdmin ? "••••••••" : "Hidden"}
+                      disabled={!isMasterAdmin}
                     />
                   </div>
                   <div className="form-group">
@@ -751,12 +857,37 @@ export default function StaffManagement({ session, data, onRefresh }: StaffManag
                       <option>Operations</option>
                     </select>
                   </div>
-                  <div className="form-group">
-                    <label className="text-[10px] uppercase tracking-[2px] text-text-secondary mb-2 block">Branch</label>
-                    <input 
-                      type="text" className="form-control" required 
-                      value={isEditing.branch} onChange={e => setIsEditing({...isEditing, branch: e.target.value})}
-                    />
+                  <div className="form-group grid grid-cols-2 gap-4 col-span-1 md:col-span-2 lg:col-span-1">
+                    <div>
+                      <label className="text-[10px] uppercase tracking-[2px] text-text-secondary mb-2 block">Branch Name</label>
+                      {(data.branches || []).length > 0 ? (
+                        <select 
+                          className="form-control" required
+                          value={isEditing.branch} 
+                          onChange={e => {
+                            const branch = (data.branches || []).find(b => b.name === e.target.value);
+                            setIsEditing({...isEditing, branch: e.target.value, branchCode: branch?.code || ''});
+                          }}
+                        >
+                          <option value="">Select Branch...</option>
+                          {(data.branches || []).map(b => (
+                            <option key={b.id} value={b.name}>{b.name} ({b.code})</option>
+                          ))}
+                        </select>
+                      ) : (
+                        <input 
+                          type="text" className="form-control" required 
+                          value={isEditing.branch} onChange={e => setIsEditing({...isEditing, branch: e.target.value})}
+                        />
+                      )}
+                    </div>
+                    <div>
+                      <label className="text-[10px] uppercase tracking-[2px] text-text-secondary mb-2 block">Branch Code</label>
+                      <input 
+                        type="text" className="form-control" placeholder="e.g. BR001"
+                        value={isEditing.branchCode || ''} onChange={e => setIsEditing({...isEditing, branchCode: e.target.value})}
+                      />
+                    </div>
                   </div>
                   <div className="form-group col-span-2">
                     <label className="text-[10px] uppercase tracking-[2px] text-text-secondary mb-2 block">Profile Picture</label>
@@ -1002,6 +1133,40 @@ export default function StaffManagement({ session, data, onRefresh }: StaffManag
                               />
                               <span className="text-[9px] uppercase tracking-[1px] text-text-secondary group-hover:text-text-primary transition-colors">
                                 {perm.label}
+                              </span>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="space-y-4 pt-4 border-t border-border-accent/30 mt-4">
+                        <label className="text-[10px] uppercase tracking-[2px] text-text-secondary block">Viewable Branches</label>
+                        <p className="text-[10px] text-text-secondary mb-2 leading-relaxed">
+                          Select which branches this user is allowed to view and manage.
+                        </p>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <label className="flex items-center gap-2 cursor-pointer group">
+                            <input 
+                              type="checkbox" 
+                              className="w-3 h-3 accent-brand-accent"
+                              checked={(isEditing.viewableBranches || []).includes('ALL')}
+                              onChange={() => handleBranchToggle('ALL', true)}
+                            />
+                            <span className="text-[9px] uppercase tracking-[1px] text-brand-primary font-bold group-hover:opacity-80 transition-opacity">
+                              ALL BRANCHES
+                            </span>
+                          </label>
+                          {(data.branches || []).map(b => (
+                            <label key={b.name} className="flex items-center gap-2 cursor-pointer group">
+                              <input 
+                                type="checkbox" 
+                                className="w-3 h-3 accent-brand-accent disabled:opacity-50"
+                                checked={(isEditing.viewableBranches || []).includes(b.name) || (isEditing.viewableBranches || []).includes('ALL')}
+                                disabled={(isEditing.viewableBranches || []).includes('ALL')}
+                                onChange={() => handleBranchToggle(b.name, true)}
+                              />
+                              <span className={`text-[9px] uppercase tracking-[1px] ${(isEditing.viewableBranches || []).includes('ALL') ? 'text-text-secondary opacity-50' : 'text-text-secondary group-hover:text-text-primary'} transition-colors`}>
+                                {b.name}
                               </span>
                             </label>
                           ))}

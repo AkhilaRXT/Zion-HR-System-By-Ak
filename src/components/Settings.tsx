@@ -9,6 +9,7 @@ import Notification, { NotificationType } from './Notification';
 import { compressImage } from '../lib/imageUtils';
 import { collection, getDocs, doc, deleteDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
+import BranchManagement from './BranchManagement';
 
 interface SettingsProps {
   session: Session;
@@ -559,6 +560,10 @@ export default function Settings({ session, data, onRefresh }: SettingsProps) {
         >
           <Database className="w-4 h-4" /> Reset System Database
         </button>
+      </div>
+
+      <div className="pt-8">
+        <BranchManagement data={data} onRefresh={onRefresh} />
       </div>
 
       <ConfirmModal 

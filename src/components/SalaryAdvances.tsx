@@ -18,6 +18,15 @@ export default function SalaryAdvances({ session, data }: SalaryAdvancesProps) {
   const hasPayrollPermission = isAdmin && (isMasterAdmin || session.permissions?.includes('payroll'));
   const currentEmpId = session.empId;
   const fuelPrice = data.settings.fuelPrice;
+  const viewableBranches = session.viewableBranches || [];
+
+  const canViewEmployee = (empId: string) => {
+    if (session.email === "zioncommercialcreditampara@gmail.com") return true;
+    if (session.isAdmin && (viewableBranches.length === 0 || viewableBranches.includes('ALL'))) return true;
+    if (viewableBranches.includes('ALL')) return true;
+    const emp = (data.employees || []).find(e => e.id === empId);
+    return emp ? viewableBranches.includes(emp.branch) : false;
+  };
 
   const [notification, setNotification] = useState<{ message: string, type: NotificationType } | null>(null);
   const [newAdvance, setNewAdvance] = useState({ amount: 0, reason: '', attachment: '' });
@@ -128,7 +137,7 @@ export default function SalaryAdvances({ session, data }: SalaryAdvancesProps) {
   const handleExportAdvances = async () => {
     const advancesToExport = (data.advances || [])
       .filter(a => {
-        const matchesPermission = hasPayrollPermission || a.empId === currentEmpId;
+        const matchesPermission = hasPayrollPermission ? canViewEmployee(a.empId) : a.empId === currentEmpId;
         const matchesDate = a.date >= dateRange.from && a.date <= dateRange.to;
         const matchesStatus = activeTab === 'All' || a.status === activeTab;
         return matchesPermission && matchesDate && matchesStatus;
@@ -201,7 +210,7 @@ export default function SalaryAdvances({ session, data }: SalaryAdvancesProps) {
 
   const displayAdvances = (data.advances || [])
     .filter(a => {
-        const matchesPermission = hasPayrollPermission || a.empId === currentEmpId;
+        const matchesPermission = hasPayrollPermission ? canViewEmployee(a.empId) : a.empId === currentEmpId;
         const matchesDate = a.date >= dateRange.from && a.date <= dateRange.to;
         const matchesStatus = activeTab === 'All' || a.status === activeTab;
         return matchesPermission && matchesDate && matchesStatus;

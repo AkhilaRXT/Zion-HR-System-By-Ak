@@ -19,6 +19,15 @@ export default function LeaveManagement({ session, data, onRefresh }: LeaveManag
   const canManageLeaves = isAdmin && (isMasterAdmin || session.permissions?.includes('leave'));
   
   const currentEmpId = session.empId;
+  const viewableBranches = session.viewableBranches || [];
+
+  const canViewEmployee = (empId: string) => {
+    if (session.email === "zioncommercialcreditampara@gmail.com") return true;
+    if (session.isAdmin && (viewableBranches.length === 0 || viewableBranches.includes('ALL'))) return true;
+    if (viewableBranches.includes('ALL')) return true;
+    const emp = (data.employees || []).find(e => e.id === empId);
+    return emp ? viewableBranches.includes(emp.branch) : false;
+  };
   
   const [notification, setNotification] = useState<{ message: string, type: NotificationType } | null>(null);
   const [activeTab, setActiveTab] = useState<'Pending' | 'Approved' | 'Rejected' | 'All'>(canManageLeaves ? 'Pending' : 'All');
@@ -43,21 +52,47 @@ export default function LeaveManagement({ session, data, onRefresh }: LeaveManag
   const policy = data.settings?.leavePolicy || { monthlyLimit: 0, annualTotal: 0, casualTotal: 0, sickTotal: 0 };
   const approvedLeaves = (data.leaves || []).filter(l => l.empId === currentEmpId && l.status === 'Approved');
   
+  const isExcludedDay = (date: Date) => {
+    const day = date.getDay();
+    // Default exclude Sundays if workSchedule says sundays: false
+    if (day === 0 && data.settings?.workSchedule?.sundays === false) return true;
+    
+    // Default exclude Saturdays if workSchedule says saturdays end time is not set or empty, but let's just stick to known sundays check to be safe
+    // If you need saturday off, add logic here
+
+    const dateStr = date.toISOString().split('T')[0];
+    if ((data.holidays || []).some(h => h.date === dateStr)) return true;
+    
+    return false;
+  };
+
   const calculateDays = (from: string, to: string) => {
     if (!from || !to) return 0;
     const start = new Date(from);
+    start.setHours(0,0,0,0);
     const end = new Date(to);
-    const diffTime = Math.abs(end.getTime() - start.getTime());
-    return Math.round(diffTime / (1000 * 60 * 60 * 24)) + 1;
+    end.setHours(0,0,0,0);
+    
+    if (end < start) return 0;
+
+    let count = 0;
+    const current = new Date(start);
+    while (current <= end) {
+      if (!isExcludedDay(current)) {
+        count++;
+      }
+      current.setDate(current.getDate() + 1);
+    }
+    return count;
   };
 
   const annualTaken = approvedLeaves.filter(l => l.type === 'Annual').reduce((acc, l) => acc + calculateDays(l.from, l.to), 0);
   const casualTaken = approvedLeaves.filter(l => l.type === 'Casual').reduce((acc, l) => acc + calculateDays(l.from, l.to), 0);
   const sickTaken = approvedLeaves.filter(l => l.type === 'Sick').reduce((acc, l) => acc + calculateDays(l.from, l.to), 0);
 
-  const casualBalance = (policy.casualTotal || 0) - casualTaken;
-  const sickBalance = (policy.sickTotal || 0) - sickTaken;
-  const annualBalance = (policy.annualTotal || 0) - annualTaken;
+  const casualBalance = Number(policy.casualTotal || 0) - casualTaken;
+  const sickBalance = Number(policy.sickTotal || 0) - sickTaken;
+  const annualBalance = Number(policy.annualTotal || 0) - annualTaken;
 
   const balances = {
     annual: annualBalance,
@@ -114,7 +149,7 @@ export default function LeaveManagement({ session, data, onRefresh }: LeaveManag
   const handleExportLeaves = async () => {
     const leavesToExport = (data.leaves || [])
       .filter(l => {
-        const matchesPermission = canManageLeaves || l.empId === currentEmpId;
+        const matchesPermission = canManageLeaves ? canViewEmployee(l.empId) : l.empId === currentEmpId;
         const matchesDate = l.from >= dateRange.from && l.from <= dateRange.to;
         const matchesStatus = activeTab === 'All' || l.status === activeTab;
         return matchesPermission && matchesDate && matchesStatus;
@@ -148,7 +183,7 @@ export default function LeaveManagement({ session, data, onRefresh }: LeaveManag
 
   const filteredLeaves = filteredByDate
     .filter(l => {
-      const matchesPermission = canManageLeaves || l.empId === currentEmpId;
+      const matchesPermission = canManageLeaves ? canViewEmployee(l.empId) : l.empId === currentEmpId;
       const matchesStatus = activeTab === 'All' || l.status === activeTab;
       return matchesPermission && matchesStatus;
     })
@@ -196,6 +231,17 @@ export default function LeaveManagement({ session, data, onRefresh }: LeaveManag
                 />
               </div>
             </div>
+            {newLeave.from && newLeave.to && new Date(newLeave.to) >= new Date(newLeave.from) && (
+              <div className="bg-brand-accent/5 p-3 rounded-lg border border-brand-accent/10 flex items-center justify-between animate-in fade-in zoom-in duration-300">
+                <div className="flex items-center gap-2">
+                  <Calendar className="w-4 h-4 text-brand-accent" />
+                  <span className="text-xs font-medium text-text-secondary">Requested Duration</span>
+                </div>
+                <span className="text-sm font-bold text-brand-accent">
+                  {calculateDays(newLeave.from, newLeave.to)} day{calculateDays(newLeave.from, newLeave.to) !== 1 ? 's' : ''}
+                </span>
+              </div>
+            )}
             <div className="form-group">
               <label className="text-xs font-medium text-text-secondary mb-2 block">Reason</label>
               <textarea 

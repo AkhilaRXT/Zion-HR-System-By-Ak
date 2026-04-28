@@ -19,6 +19,8 @@ import InternalMail from './components/InternalMail';
 import SalaryAdvances from './components/SalaryAdvances';
 import DCCollection from './components/DCCollection';
 import ReportCenter from './components/ReportCenter';
+import BranchManagement from './components/BranchManagement';
+import HolidayCalendar from './components/HolidayCalendar';
 import { Clock, Menu, Loader2 } from 'lucide-react';
 
 export default function App() {
@@ -87,7 +89,19 @@ export default function App() {
     if (existing) setSession(existing);
 
     const unsubAuth = auth.onAuthStateChanged((user) => {
-      setIsAuthReady(true);
+      if (user) {
+        setIsAuthReady(true);
+      } else if (DataStore.getSession()) {
+        // If there's a custom session but firebase auth lost its anonymous state, restore it.
+        DataStore.ensureAuth()
+          .then(() => setIsAuthReady(true))
+          .catch(() => {
+            DataStore.logout();
+            window.location.reload();
+          });
+      } else {
+        setIsAuthReady(true);
+      }
     });
 
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
@@ -166,6 +180,8 @@ export default function App() {
       unsubs.push(syncCoreCollection('adhocBonuses', 'adhocBonuses'));
       unsubs.push(syncCoreCollection('targets', 'targets'));
       unsubs.push(syncCoreCollection('dcCollections', 'dcCollections'));
+      unsubs.push(syncCoreCollection('branches', 'branches'));
+      unsubs.push(syncCoreCollection('holidays', 'holidays'));
 
       if (session.email === "zioncommercialcreditampara@gmail.com") {
         unsubs.push(syncCoreCollection('systemReports', 'systemReports'));
@@ -188,11 +204,42 @@ export default function App() {
       unsubs.push(unsubPaid);
 
     } else {
+      let myProfile: Employee | null = null;
+      let branchStaff: Employee[] = [];
+      const updateCombinedEmployees = () => {
+        const combined = new Map<string, Employee>();
+        if (myProfile) combined.set(myProfile.id, myProfile);
+        branchStaff.forEach(emp => combined.set(emp.id, emp));
+        updatePart({ employees: Array.from(combined.values()) });
+      };
+
       // EMPLOYEE: Their own record & related data
       const unsubMe = onSnapshot(doc(db, 'employees', session.empId), (snap) => {
-        if (snap.exists()) updatePart({ employees: [snap.data() as Employee] });
+        if (snap.exists()) {
+          myProfile = { ...snap.data(), id: snap.id } as Employee;
+          updateCombinedEmployees();
+        }
       }, (err) => handleErr('my_profile', err));
       unsubs.push(unsubMe);
+
+      // Branch Manager check dependencies - non-admins need branches
+      const syncCoreCollectionForEmployee = (name: string, key: string) => {
+        return onSnapshot(collection(db, name), (snap) => {
+          updatePart({ [key]: snap.docs.map(d => ({ ...d.data(), id: d.id })) });
+        }, (err) => handleErr(name, err));
+      };
+      unsubs.push(syncCoreCollectionForEmployee('branches', 'branches'));
+      unsubs.push(syncCoreCollectionForEmployee('holidays', 'holidays'));
+
+      // If they are a branch manager, fetch their staff
+      if (session.viewableBranches && session.viewableBranches.length > 0) {
+        const branches = session.viewableBranches.slice(0, 10);
+        const qEmp = query(collection(db, 'employees'), where('branch', 'in', branches));
+        unsubs.push(onSnapshot(qEmp, (snap) => {
+          branchStaff = snap.docs.map(d => ({ ...d.data(), id: d.id }) as Employee);
+          updateCombinedEmployees();
+        }, (err) => handleErr('managed_employees', err)));
+      }
 
       // Employee's own collections
       const syncOwn = (coll: string, key: string) => {
@@ -207,7 +254,12 @@ export default function App() {
       unsubs.push(syncOwn('cashRequests', 'cashRequests'));
       unsubs.push(syncOwn('attendance', 'attendance'));
       unsubs.push(syncOwn('adhocBonuses', 'adhocBonuses'));
-      unsubs.push(syncOwn('dcCollections', 'dcCollections'));
+      
+      if (session.viewableBranches && session.viewableBranches.length > 0) {
+        unsubs.push(syncCoreCollectionForEmployee('dcCollections', 'dcCollections'));
+      } else {
+        unsubs.push(syncOwn('dcCollections', 'dcCollections'));
+      }
       
       const unsubPaidOwn = onSnapshot(doc(db, 'paidDeductions', session.empId), (snap) => {
         if (snap.exists()) {
@@ -247,13 +299,14 @@ export default function App() {
 
   // 4. Route-Specific Admin Sync - Fetches only what's needed for the active view
   useEffect(() => {
-    if (!session?.isAdmin || !isAuthReady) return;
-    if (route === 'dashboard') return; // Handled by dashboard effect
-    
+    const isBranchManager = session?.viewableBranches && session.viewableBranches.length > 0;
+    if ((!session?.isAdmin && !isBranchManager) || !isAuthReady) return;
+    if (route === 'dashboard' && !isBranchManager) return; // Admins handled by dashboard effect. Managers don't trigger dashboard effect, so we shouldn't skip for them if they need it. Actually, dashboard effect has its own isAdmin check!
+
     const unsubs: (() => void)[] = [];
     const handleErr = (name: string, err: any) => {
       console.warn(`Route sync failed for ${name}:`, err);
-      setDbError(`Route Sync Error (${name}): ${err.message || String(err)}`);
+      // setDbError(`Route Sync Error (${name}): ${err.message || String(err)}`);
     };
 
     const syncRouteCollection = (coll: string, key: string, qRef?: any) => {
@@ -264,7 +317,7 @@ export default function App() {
       unsubs.push(unsub);
     };
 
-    if (route === 'attendance') {
+    if (route === 'attendance' || (route === 'dashboard' && isBranchManager)) {
       const today = new Date();
       const monthAgo = new Date();
       monthAgo.setDate(today.getDate() - 60); // Show 60 days of history
@@ -273,6 +326,8 @@ export default function App() {
       const fullAttQuery = query(collection(db, 'attendance'), where('date', '>=', monthAgoStr), orderBy('date', 'desc'), limit(2000));
       syncRouteCollection('attendance', 'attendance', fullAttQuery);
     }
+
+    if (!session?.isAdmin) return; // Following collections are STRICTLY for Admins
 
     // Note: leaves, advances, cashRequests, adhocBonuses are now in core sync (Effect 2)
     // for admins to prevent flashing when navigating.
@@ -335,8 +390,8 @@ export default function App() {
 
   if (isLoading) {
     return (
-      <div className="fixed inset-0 bg-bg-primary flex flex-col items-center justify-center gap-8 z-[300]">
-        <div className="relative w-24 h-24 animate-pulse">
+      <div className="fixed inset-0 bg-bg-primary flex flex-col items-center justify-center gap-8 z-[300] px-4 text-center">
+        <div className="relative w-24 h-24 animate-pulse shrink-0">
           {appData.settings.logo ? (
             <img src={appData.settings.logo} alt="Logo" className="w-full h-full object-contain rounded-xl" referrerPolicy="no-referrer" />
           ) : (
@@ -349,7 +404,7 @@ export default function App() {
           <div className="absolute inset-0 border-4 border-brand-accent/30 rounded-full animate-ping" style={{ animationDuration: '2s' }} />
         </div>
         <div className="flex flex-col items-center gap-3">
-          <h2 className="text-text-primary font-serif text-3xl font-bold">{appData.settings?.companyName || 'Zion HR'}</h2>
+          <h2 className="text-text-primary font-serif text-2xl sm:text-3xl font-bold max-w-full truncate whitespace-normal">{appData.settings?.companyName || 'Zion HR'}</h2>
           <div className="flex items-center gap-2">
             <div className="w-2 h-2 bg-brand-accent rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
             <div className="w-2 h-2 bg-brand-accent rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
@@ -376,9 +431,15 @@ export default function App() {
       }
 
       // Always accessible for everyone
-      if (id === 'dashboard' || id === 'myprofile' || id === 'leave' || id === 'payroll' || id === 'advances' || id === 'cash_requests' || id === 'mail' || id === 'dc_collection' || id === 'reports') return true;
+      if (id === 'dashboard' || id === 'myprofile' || id === 'leave' || id === 'payroll' || id === 'advances' || id === 'cash_requests' || id === 'mail' || id === 'dc_collection' || id === 'reports' || id === 'holidays') return true;
       
       if (isMasterAdmin) return true;
+
+      // Branch Managers can access Attendance
+      if (id === 'attendance') {
+        const managedBranches = (appData.branches || []).filter(b => b.managerId === session.empId);
+        if (managedBranches.length > 0) return true;
+      }
 
       // Regular members cannot see anything else
       if (!session.isAdmin) return false;
@@ -402,9 +463,11 @@ export default function App() {
       case 'payroll': return <Payroll session={session} data={appData} onRefresh={refreshData} />;
       case 'advances': return <SalaryAdvances session={session} data={appData} onRefresh={refreshData} />;
       case 'cash_requests': return <CashRequests session={session} data={appData} />;
+      case 'holidays': return <HolidayCalendar session={session} data={appData} onRefresh={refreshData} />;
       case 'mail': return <InternalMail session={session} data={appData} />;
       case 'dc_collection': return <DCCollection session={session} data={appData} />;
       case 'reports': return <ReportCenter session={session} data={appData} />;
+      case 'branches': return <BranchManagement data={appData} onRefresh={refreshData} />;
       case 'myprofile': return <MyProfile session={session} data={appData} onRefresh={refreshData} />;
       case 'settings': return <Settings session={session} data={appData} onRefresh={refreshData} />;
       case 'audit': return <AuditLogs session={session} data={appData} />;
@@ -421,6 +484,7 @@ export default function App() {
       case 'payroll': return 'Payroll Management';
       case 'advances': return session.isAdmin ? 'Advance Management' : 'Salary Advances';
       case 'cash_requests': return 'Cash Requests';
+      case 'holidays': return 'Holiday Calendar';
       case 'mail': return 'Internal Mail';
       case 'dc_collection': return 'DC Collection';
       case 'reports': return 'Report Center';

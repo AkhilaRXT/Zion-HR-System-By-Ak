@@ -32,6 +32,16 @@ export default function Payroll({ session, data, onRefresh }: PayrollProps) {
 
   const [finalizeData, setFinalizeData] = useState<{ empId: string; net: number, notes: string, components: string[] }[] | null>(null);
 
+  const viewableBranches = session.viewableBranches || [];
+
+  const canViewEmployee = (empId: string) => {
+    if (session.email === "zioncommercialcreditampara@gmail.com") return true;
+    if (session.isAdmin && (viewableBranches.length === 0 || viewableBranches.includes('ALL'))) return true;
+    if (viewableBranches.includes('ALL')) return true;
+    const emp = (data.employees || []).find(e => e.id === empId);
+    return emp ? viewableBranches.includes(emp.branch) : false;
+  };
+
   const [activeTab, setActiveTab] = useState<'processing' | 'receipts'>('processing');
   const [showReceipt, setShowReceipt] = useState(false);
   const [expandedReceipt, setExpandedReceipt] = useState<string | null>(null);
@@ -87,7 +97,9 @@ export default function Payroll({ session, data, onRefresh }: PayrollProps) {
     if (payComponents.deductions) selectedCompsBase.push('Deductions');
     if (payComponents.epf) selectedCompsBase.push('EPF');
 
-    const sheetData = (data.employees || []).map(emp => {
+    const sheetData = (data.employees || [])
+      .filter(e => e.status !== 'Dormant' && e.id !== 'EMP003' && canViewEmployee(e.id))
+      .map(emp => {
       const alreadyPaidCmps = (data.paidComponents?.[emp.id]?.[selectedMonth] || []);
       
       // Components actually being paid to THIS employee in THIS run
@@ -406,7 +418,7 @@ export default function Payroll({ session, data, onRefresh }: PayrollProps) {
                 </thead>
                 <tbody>
                 {(data.employees || [])
-                  .filter(e => e.status !== 'Dormant')
+                  .filter(e => e.status !== 'Dormant' && e.id !== 'EMP003' && canViewEmployee(e.id))
                   .map(emp => {
                     const advTotal = (data.advances || [])
                       .filter(a => {

@@ -5,6 +5,7 @@ export interface Employee {
   role: string;
   department: string;
   branch: string;
+  branchCode?: string;
   baseSalary: number;
   travelingAllowance: number;
   vehicleAllowance: number;
@@ -32,13 +33,14 @@ export interface UserCredential {
   password?: string;
   isAdmin: boolean;
   permissions?: string[];
+  viewableBranches?: string[];
 }
 
 export interface Attendance {
   id: number;
   empId: string;
   date: string;
-  status: 'Present' | 'Absent' | 'Half Day' | 'Late' | 'Leave';
+  status: 'Present' | 'Absent' | 'Half Day' | 'Late' | 'Leave' | 'Holiday';
   checkIn: string;
   checkOut: string;
   timestamp: string;
@@ -224,7 +226,36 @@ export interface SystemReport {
   status: 'New' | 'Read' | 'Resolved';
 }
 
+export interface SystemReport {
+  id: string;
+  empId: string;
+  empName: string;
+  subject: string;
+  message: string;
+  timestamp: string;
+  status: 'New' | 'Read' | 'Resolved';
+}
+
+export interface Branch {
+  id: string;
+  code: string;
+  name: string;
+  location?: string;
+  createdAt?: string;
+  managerId?: string;
+  status?: 'Active' | 'Inactive';
+}
+
+export interface Holiday {
+  id: string;
+  name: string;
+  date: string;
+  type: 'National' | 'Regional' | 'Company';
+}
+
 export interface AppData {
+  branches?: Branch[];
+  holidays?: Holiday[];
   employees: Employee[];
   credentials: UserCredential[];
   attendance: Attendance[];
@@ -253,4 +284,5 @@ export interface Session {
   email?: string;
   isAdmin: boolean;
   permissions?: string[];
+  viewableBranches?: string[];
 }

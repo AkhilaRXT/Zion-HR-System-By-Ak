@@ -1,5 +1,20 @@
 {
   "entities": {
+    "Branch": {
+      "title": "Branch",
+      "description": "Company branch or office location",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "code": { "type": "string" },
+        "name": { "type": "string" },
+        "location": { "type": "string" },
+        "managerId": { "type": "string" },
+        "status": { "type": "string", "enum": ["Active", "Inactive"] },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "code", "name"]
+    },
     "Employee": {
       "title": "Employee",
       "description": "Staff member profile and salary details",
@@ -127,9 +142,11 @@
         "empId": { "type": "string" },
         "username": { "type": "string" },
         "password": { "type": "string" },
-        "isAdmin": { "type": "boolean" }
+        "isAdmin": { "type": "boolean" },
+        "permissions": { "type": "array", "items": { "type": "string" } },
+        "viewableBranches": { "type": "array", "items": { "type": "string" } }
       },
-      "required": ["empId", "username", "password"]
+      "required": ["empId", "username"]
     },
     "SystemReport": {
       "title": "System Report",
@@ -145,6 +162,18 @@
         "status": { "type": "string" }
       },
       "required": ["empId", "subject", "message", "timestamp"]
+    },
+    "Holiday": {
+      "title": "Holiday",
+      "description": "Company holiday or non-working day",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "date": { "type": "string" },
+        "type": { "type": "string", "enum": ["National", "Regional", "Company"] }
+      },
+      "required": ["id", "name", "date", "type"]
     }
   },
   "firestore": {
@@ -157,6 +186,8 @@
     "/settings/global": { "schema": "Settings", "description": "Global settings" },
     "/paidDeductions/{empId}": { "schema": "PaidDeductions", "description": "Paid months for deductions" },
     "/credentials/{username}": { "schema": "Credential", "description": "User credentials" },
-    "/systemReports/{id}": { "schema": "SystemReport", "description": "System reports and complaints" }
+    "/systemReports/{id}": { "schema": "SystemReport", "description": "System reports and complaints" },
+    "/branches/{id}": { "schema": "Branch", "description": "Company branches" },
+    "/holidays/{id}": { "schema": "Holiday", "description": "Company holidays" }
   }
 }

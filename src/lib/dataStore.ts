@@ -1,4 +1,4 @@
-import { AppData, Employee, Session, AppSettings, Attendance, LeaveRequest, AdvanceRequest, AuditLog, UserCredential, CashRequest, SystemReport } from '../types';
+import { AppData, Employee, Session, AppSettings, Attendance, LeaveRequest, AdvanceRequest, AuditLog, UserCredential, CashRequest, SystemReport, Branch, Holiday } from '../types';
 import { db, auth } from './firebase';
 import { 
   doc, 
@@ -73,6 +73,8 @@ function handleFirestoreError(error: unknown, operationType: OperationType, path
 }
 
 const initialData: AppData = {
+  branches: [],
+  holidays: [],
   employees: [],
   credentials: [],
   attendance: [],
@@ -308,6 +310,8 @@ export const DataStore = {
       type
     };
     try {
+      await this.ensureAuth();
+      if (!auth.currentUser) return; // Cannot log without auth
       await setDoc(doc(db, 'auditLogs', log.id.toString()), log);
     } catch (error) {
       console.error('Failed to log action:', error);
@@ -350,6 +354,21 @@ export const DataStore = {
         return { success: false, error: 'Invalid username or password.' };
       }
 
+      // Get managed branches dynamically
+      let viewableBranches = cred.viewableBranches || [];
+      if (cred.isAdmin && viewableBranches.length === 0) {
+        viewableBranches = ['ALL'];
+      }
+      try {
+        const branchesSnap = await getDocs(collection(db, 'branches'));
+        const managed = branchesSnap.docs.map(d => d.data()).filter(b => b.managerId === cred.empId).map(b => b.name);
+        if (managed.length > 0) {
+          viewableBranches = [...new Set([...viewableBranches, ...managed])];
+        }
+      } catch (e) {
+        console.warn('Failed to fetch branches during login', e);
+      }
+
       // Sync to users collection for rules (with password token for backend validation)
       // This MUST happen before we fetch the protected employee profile so isOwner() is true
       try {
@@ -357,7 +376,8 @@ export const DataStore = {
           empId: cred.empId,
           role: cred.isAdmin ? 'admin' : 'user',
           username: username.toLowerCase(),
-          passToken: password
+          passToken: password,
+          viewableBranches: viewableBranches
         });
       } catch (e) {
         console.warn('Failed to sync user doc:', e);
@@ -375,7 +395,8 @@ export const DataStore = {
         name: emp ? emp.name : 'Unknown', 
         email: emp?.email || undefined,
         isAdmin: cred.isAdmin,
-        permissions: cred.permissions || []
+        permissions: cred.permissions || [],
+        viewableBranches: viewableBranches
       };
 
       await this.logAction('Login Success', `User ${username} logged in successfully via credentials.`, 'Auth', `${session.name} (${session.empId})`);
@@ -419,12 +440,38 @@ export const DataStore = {
         return { success: false, error: 'Unauthorized: Your Google account is not registered in the system.' };
       }
 
+      // We should check the credentials collection for this user's permissions and viewableBranches
+      let permissions = isAdmin ? ['staff', 'attendance', 'leave', 'payroll', 'settings'] : [];
+      let viewableBranches = isAdmin ? ['ALL'] : [];
+
+      try {
+        const credDocs = await getDocs(query(collection(db, 'credentials'), where('empId', '==', empId)));
+        if (!credDocs.empty) {
+          const credData = credDocs.docs[0].data();
+          if (credData.permissions) permissions = credData.permissions;
+          if (credData.viewableBranches) viewableBranches = credData.viewableBranches;
+        }
+      } catch (e) {
+        console.warn('Failed to fetch credentials for Google User', e);
+      }
+
+      try {
+        const branchesSnap = await getDocs(collection(db, 'branches'));
+        const managed = branchesSnap.docs.map(d => d.data()).filter(b => b.managerId === empId).map(b => b.name);
+        if (managed.length > 0) {
+          viewableBranches = [...new Set([...viewableBranches, ...managed])];
+        }
+      } catch (e) {
+        console.warn('Failed to fetch branches during Google login', e);
+      }
+
       const session: Session = {
         empId,
         name,
         email: user.email || undefined,
         isAdmin,
-        permissions: ['staff', 'attendance', 'leave', 'payroll', 'settings']
+        permissions,
+        viewableBranches
       };
 
       // Sync to users collection for rules
@@ -432,7 +479,8 @@ export const DataStore = {
         await setDoc(doc(db, 'users', user.uid), {
           empId,
           role: isAdmin ? 'admin' : 'user',
-          email: user.email
+          email: user.email,
+          viewableBranches: viewableBranches
         });
       } catch (e) {
         console.warn('Failed to sync user doc:', e);
@@ -457,10 +505,10 @@ export const DataStore = {
     sessionStorage.setItem(AUTH_KEY, JSON.stringify(session));
   },
 
-  logout() {
+  async logout() {
     const session = this.getSession();
     if (session) {
-      this.logAction('Logout', `User ${session.name} (${session.empId}) logged out.`, 'Auth');
+      await this.logAction('Logout', `User ${session.name} (${session.empId}) logged out.`, 'Auth');
     }
     sessionStorage.removeItem(AUTH_KEY);
     auth.signOut().catch(console.error);
@@ -481,7 +529,8 @@ export const DataStore = {
         const { signInAnonymously } = await import('firebase/auth');
         await signInAnonymously(auth);
       } catch (e) {
-        console.error('Failed to establish auth context');
+        console.error('Failed to establish auth context', e);
+        throw e;
       }
     }
   },
@@ -491,7 +540,11 @@ export const DataStore = {
       await this.ensureAuth();
       await setDoc(doc(db, 'employees', emp.id), emp);
       await setDoc(doc(db, 'directory', emp.id), { id: emp.id, name: emp.name });
-      await setDoc(doc(db, 'credentials', cred.username.toLowerCase()), cred);
+      
+      const isMasterAdmin = auth.currentUser?.email === "zioncommercialcreditampara@gmail.com";
+      if (isMasterAdmin) {
+        await setDoc(doc(db, 'credentials', cred.username.toLowerCase()), cred);
+      }
       
       const settingsDoc = await getDoc(doc(db, 'settings', 'global'));
       const settings = settingsDoc.exists() ? settingsDoc.data() as AppSettings : initialData.settings;
@@ -851,6 +904,48 @@ export const DataStore = {
       return { success: true };
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, 'systemReports/' + id);
+      return { success: false, error: String(error) };
+    }
+  },
+
+  async addBranch(branch: Omit<Branch, 'id' | 'createdAt'>) {
+    try {
+      await this.ensureAuth();
+      const id = 'BR' + Date.now().toString().slice(-4);
+      const newBranch: Branch = {
+        ...branch,
+        id,
+        createdAt: new Date().toISOString()
+      };
+      await setDoc(doc(db, 'branches', id), newBranch);
+      await this.logAction('Add Branch', `Added branch ${branch.name} (${branch.code})`, 'Settings');
+      return { success: true, id };
+    } catch (error) {
+       handleFirestoreError(error, OperationType.CREATE, 'branches');
+       return { success: false, error: String(error) };
+    }
+  },
+
+  async updateBranch(id: string, updates: Partial<Branch>) {
+    try {
+      await this.ensureAuth();
+      await updateDoc(doc(db, 'branches', id), updates);
+      await this.logAction('Update Branch', `Updated branch ${id}`, 'Settings');
+      return { success: true };
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `branches/${id}`);
+      return { success: false, error: String(error) };
+    }
+  },
+
+  async deleteBranch(id: string) {
+    try {
+      await this.ensureAuth();
+      await deleteDoc(doc(db, 'branches', id));
+      await this.logAction('Delete Branch', `Deleted branch ${id}`, 'Settings');
+      return { success: true };
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, `branches/${id}`);
       return { success: false, error: String(error) };
     }
   },
@@ -1312,6 +1407,31 @@ export const DataStore = {
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, 'resetPayrollMonth');
       throw error;
+    }
+  },
+
+  async addHoliday(holiday: Omit<Holiday, 'id'>) {
+    try {
+      const hId = `HOL-${Date.now()}`;
+      await setDoc(doc(db, 'holidays', hId), { id: hId, ...holiday });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.CREATE, 'holidays');
+    }
+  },
+
+  async updateHoliday(id: string, holiday: Partial<Holiday>) {
+    try {
+      await updateDoc(doc(db, 'holidays', id), holiday);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `holidays/${id}`);
+    }
+  },
+
+  async deleteHoliday(id: string) {
+    try {
+      await deleteDoc(doc(db, 'holidays', id));
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, `holidays/${id}`);
     }
   }
 };

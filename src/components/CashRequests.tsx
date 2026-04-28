@@ -17,6 +17,15 @@ export default function CashRequests({ session, data }: CashRequestsProps) {
   const canManageCash = isAdmin && (isMasterAdmin || session.permissions?.includes('cash_requests'));
   
   const currentEmpId = session.empId;
+  const viewableBranches = session.viewableBranches || [];
+
+  const canViewEmployee = (empId: string) => {
+    if (session.email === "zioncommercialcreditampara@gmail.com") return true;
+    if (session.isAdmin && (viewableBranches.length === 0 || viewableBranches.includes('ALL'))) return true;
+    if (viewableBranches.includes('ALL')) return true;
+    const emp = (data.employees || []).find(e => e.id === empId);
+    return emp ? viewableBranches.includes(emp.branch) : false;
+  };
   const [notification, setNotification] = useState<{ message: string, type: NotificationType } | null>(null);
 
   const showNotification = (message: string, type: NotificationType = 'success') => {
@@ -79,7 +88,7 @@ export default function CashRequests({ session, data }: CashRequestsProps) {
   };
 
   const filteredRequests = (data.cashRequests || [])
-    .filter(r => canManageCash || r.empId === currentEmpId)
+    .filter(r => (canManageCash && canViewEmployee(r.empId)) || r.empId === currentEmpId)
     .sort((a, b) => b.id - a.id);
 
   const exportToExcel = (type: 'full' | 'monthly' | 'weekly' | 'by_member') => {
