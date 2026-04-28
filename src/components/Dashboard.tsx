@@ -13,7 +13,8 @@ import {
   HandCoins,
   X,
   Trash2,
-  MapPin
+  MapPin,
+  Fingerprint
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import ConfirmModal from './ConfirmModal';
@@ -93,6 +94,7 @@ export default function Dashboard({ session, data, onRefresh }: DashboardProps) 
     }
   }, [empSearch, data.employees, selectedEmpId]);
 
+  const [refreshKey, setRefreshKey] = useState(0);
   const [notification, setNotification] = useState<{ message: string, type: NotificationType } | null>(null);
   const [editingAttendance, setEditingAttendance] = useState<Attendance | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null);
@@ -145,88 +147,110 @@ export default function Dashboard({ session, data, onRefresh }: DashboardProps) 
     });
   };
 
-  const verifyBiometrics = async (empId: string): Promise<boolean> => {
+  const hasBiometricRegistered = (empId: string) => {
+    return !!localStorage.getItem(`zion_bio_cred_${empId}`);
+  };
+
+  const handleRegisterBiometrics = async () => {
+    const empIdToUse = canSeeAttendance ? selectedEmpId : currentEmpId;
     if (!window.PublicKeyCredential) {
-      console.warn('PublicKeyCredential not supported');
-      return true; 
+      showNotification('Biometrics not supported on this device/browser', 'error');
+      return; 
     }
 
     try {
       const available = await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
       if (!available) {
-        console.warn('Platform authenticator not available');
-        return true;
+        showNotification('Fingerprint/Face authenticator not available', 'error');
+        return;
       }
-    } catch (e) {
-      console.warn('Platform authenticator check failed', e);
-    }
+      
+      const challenge = new Uint8Array(32);
+      window.crypto.getRandomValues(challenge);
+      const userId = new Uint8Array(16);
+      window.crypto.getRandomValues(userId);
 
-    const challenge = new Uint8Array(32);
-    window.crypto.getRandomValues(challenge);
+      const credential = await navigator.credentials.create({
+        publicKey: {
+          challenge,
+          rp: { name: 'Zion HR' },
+          user: {
+            id: userId,
+            name: empIdToUse,
+            displayName: 'Employee ' + empIdToUse
+          },
+          pubKeyCredParams: [
+            { type: 'public-key', alg: -7 },
+            { type: 'public-key', alg: -257 }
+          ],
+          authenticatorSelection: {
+            authenticatorAttachment: 'platform',
+            userVerification: 'required'
+          },
+          timeout: 60000
+        }
+      }) as PublicKeyCredential;
+        
+      if (credential) {
+        const bytes = new Uint8Array(credential.rawId);
+        let binary = '';
+        for (let i = 0; i < bytes.byteLength; i++) {
+          binary += String.fromCharCode(bytes[i]);
+        }
+        localStorage.setItem(`zion_bio_cred_${empIdToUse}`, btoa(binary));
+        showNotification('Biometric registered successfully!', 'success');
+        // Force a re-render to hide the register button
+        setRefreshKey(k => k + 1);
+      }
+    } catch (err: any) {
+      console.warn('Biometric registration error:', err);
+      showNotification('Registration failed: ' + err.message, 'error');
+    }
+  };
+
+  const verifyBiometrics = async (empId: string): Promise<boolean> => {
     const storageKey = `zion_bio_cred_${empId}`;
     const savedCredId = localStorage.getItem(storageKey);
+    
+    if (!savedCredId) {
+       showNotification('Please register Fingerprint/Biometrics first!', 'warning');
+       return false;
+    }
+
+    if (!window.PublicKeyCredential) {
+      showNotification('Biometrics not supported here.', 'error');
+      return false; 
+    }
 
     try {
-      if (savedCredId) {
-        const binaryStr = atob(savedCredId);
-        const credIdArray = new Uint8Array(binaryStr.length);
-        for (let i = 0; i < binaryStr.length; i++) {
-          credIdArray[i] = binaryStr.charCodeAt(i);
-        }
-        
-        await navigator.credentials.get({
-          publicKey: {
-            challenge,
-            allowCredentials: [{
-              id: credIdArray,
-              type: 'public-key'
-            }],
-            userVerification: 'required'
-          }
-        });
-        return true;
-      } else {
-        const userId = new Uint8Array(16);
-        window.crypto.getRandomValues(userId);
-
-        const credential = await navigator.credentials.create({
-          publicKey: {
-            challenge,
-            rp: { name: 'Zion HR System' },
-            user: {
-              id: userId,
-              name: empId,
-              displayName: 'Employee ' + empId
-            },
-            pubKeyCredParams: [
-              { type: 'public-key', alg: -7 },
-              { type: 'public-key', alg: -257 }
-            ],
-            authenticatorSelection: {
-              authenticatorAttachment: 'platform',
-              userVerification: 'required'
-            },
-            timeout: 60000
-          }
-        }) as PublicKeyCredential;
-        
-        if (credential) {
-          const bytes = new Uint8Array(credential.rawId);
-          let binary = '';
-          for (let i = 0; i < bytes.byteLength; i++) {
-            binary += String.fromCharCode(bytes[i]);
-          }
-          localStorage.setItem(storageKey, btoa(binary));
-          return true;
-        }
-        return false;
+      const binaryStr = atob(savedCredId);
+      const credIdArray = new Uint8Array(binaryStr.length);
+      for (let i = 0; i < binaryStr.length; i++) {
+        credIdArray[i] = binaryStr.charCodeAt(i);
       }
+      
+      const challenge = new Uint8Array(32);
+      window.crypto.getRandomValues(challenge);
+      
+      await navigator.credentials.get({
+        publicKey: {
+          challenge,
+          allowCredentials: [{
+            id: credIdArray,
+            type: 'public-key'
+          }],
+          userVerification: 'required'
+        }
+      });
+      return true;
     } catch (err: any) {
       console.warn('Biometric error:', err);
       if (err.name === 'NotAllowedError') {
+        showNotification('Verification cancelled.', 'error');
         return false; 
       }
-      return true; 
+      showNotification('Biometric check failed.', 'error');
+      return false; 
     }
   };
 
@@ -367,13 +391,21 @@ export default function Dashboard({ session, data, onRefresh }: DashboardProps) 
               </div>
             </div>
           )}
-          <div className="flex gap-4">
-            <button onClick={handleCheckIn} className="btn btn-primary">
-              Check In
-            </button>
-            <button onClick={handleCheckOut} className="btn btn-outline">
-              Check Out
-            </button>
+          <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-end">
+            <div className="flex gap-4">
+              <button onClick={handleCheckIn} className="btn btn-primary">
+                Check In
+              </button>
+              <button onClick={handleCheckOut} className="btn btn-outline">
+                Check Out
+              </button>
+            </div>
+            {!hasBiometricRegistered(canSeeAttendance ? selectedEmpId : currentEmpId) && (
+              <button onClick={handleRegisterBiometrics} className="btn btn-outline border-dashed gap-2">
+                <Fingerprint className="w-4 h-4" />
+                Register Biometrics
+              </button>
+            )}
           </div>
         </div>
       </motion.div>
