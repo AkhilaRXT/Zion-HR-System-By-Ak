@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { AppData, Session, Attendance as AttendanceType } from '../types';
 import { DataStore } from '../lib/dataStore';
-import { FileDown, Edit3, Save, X, Calendar, Trash2 } from 'lucide-react';
+import { FileDown, Edit3, Save, X, Calendar, Trash2, MapPin } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { motion, AnimatePresence } from 'motion/react';
 import ConfirmModal from './ConfirmModal';
@@ -236,8 +236,26 @@ export default function Attendance({ session, data, onRefresh }: AttendanceProps
                   <td className="font-mono text-sm text-text-secondary">{a.date}</td>
                   <td className="font-medium text-text-primary">{emp?.name || a.empId}</td>
                   <td><span className={`badge ${statusCls}`}>{a.status}</span></td>
-                  <td className="font-mono text-sm text-text-secondary">{a.checkIn}</td>
-                  <td className="font-mono text-sm text-text-secondary">{a.checkOut}</td>
+                  <td className="font-mono text-sm text-text-secondary">
+                    <div className="flex items-center gap-2">
+                       <span>{a.checkIn}</span>
+                       {a.checkInLocation && (
+                         <a href={`https://maps.google.com/?q=${a.checkInLocation}`} target="_blank" rel="noopener noreferrer" title="View Location">
+                           <MapPin className="w-3.5 h-3.5 text-brand-accent hover:text-brand-secondary transition-colors" />
+                         </a>
+                       )}
+                    </div>
+                  </td>
+                  <td className="font-mono text-sm text-text-secondary">
+                    <div className="flex items-center gap-2">
+                       <span>{a.checkOut}</span>
+                       {a.checkOutLocation && (
+                         <a href={`https://maps.google.com/?q=${a.checkOutLocation}`} target="_blank" rel="noopener noreferrer" title="View Location">
+                           <MapPin className="w-3.5 h-3.5 text-emerald-500 hover:text-emerald-600 transition-colors" />
+                         </a>
+                       )}
+                    </div>
+                  </td>
                   {isAdmin && (
                     <td>
                       {isRealRecord ? (

@@ -12,7 +12,8 @@ import {
   Edit3,
   HandCoins,
   X,
-  Trash2
+  Trash2,
+  MapPin
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import ConfirmModal from './ConfirmModal';
@@ -125,7 +126,27 @@ export default function Dashboard({ session, data, onRefresh }: DashboardProps) 
     }
   };
 
+  const getLocationInfo = (): Promise<string | undefined> => {
+    return new Promise((resolve) => {
+      if (!navigator.geolocation) {
+        resolve(undefined);
+        return;
+      }
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          resolve(`${position.coords.latitude},${position.coords.longitude}`);
+        },
+        (error) => {
+          console.warn('Geolocation error:', error);
+          resolve(undefined);
+        },
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+      );
+    });
+  };
+
   const handleCheckIn = async () => {
+    const empIdToUse = canSeeAttendance ? selectedEmpId : currentEmpId;
     const now = new Date();
     const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     const schedule = data.settings.workSchedule;
@@ -134,8 +155,9 @@ export default function Dashboard({ session, data, onRefresh }: DashboardProps) 
     const status = timeStr > startTime ? 'Late' : 'Present';
 
     try {
-      await DataStore.checkIn(selectedEmpId, status, timeStr);
-      const emp = data.employees.find(e => e.id === selectedEmpId);
+      const loc = await getLocationInfo();
+      await DataStore.checkIn(empIdToUse, status, timeStr, loc);
+      const emp = data.employees.find(e => e.id === empIdToUse);
       showNotification(`${emp?.name} checked in!`);
     } catch (err) {
       showNotification('Failed to check in.', 'error');
@@ -143,7 +165,8 @@ export default function Dashboard({ session, data, onRefresh }: DashboardProps) 
   };
 
   const handleCheckOut = async () => {
-    const rec = (data.attendance || []).find(a => a.empId === selectedEmpId && a.date === today);
+    const empIdToUse = canSeeAttendance ? selectedEmpId : currentEmpId;
+    const rec = (data.attendance || []).find(a => a.empId === empIdToUse && a.date === today);
     if (!rec) {
       showNotification(`Employee hasn't checked in yet!`, 'warning');
       return;
@@ -151,8 +174,9 @@ export default function Dashboard({ session, data, onRefresh }: DashboardProps) 
     const now = new Date();
     const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     try {
-      await DataStore.checkOut(rec.id, timeStr);
-      const emp = (data.employees || []).find(e => e.id === selectedEmpId);
+      const loc = await getLocationInfo();
+      await DataStore.checkOut(rec.id, timeStr, loc);
+      const emp = (data.employees || []).find(e => e.id === empIdToUse);
       showNotification(`${emp?.name} checked out!`, 'info');
     } catch (err) {
       showNotification('Failed to check out.', 'error');
@@ -199,16 +223,16 @@ export default function Dashboard({ session, data, onRefresh }: DashboardProps) 
         )}
       </div>
 
-      {canSeeAttendance && (
-        <motion.div 
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="glass-panel p-8"
-        >
-          <h3 className="text-sm font-semibold text-text-primary mb-6 flex items-center gap-2">
-            Mark Attendance
-          </h3>
-          <div className="flex flex-wrap gap-6 items-end">
+      <motion.div 
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="glass-panel p-8"
+      >
+        <h3 className="text-sm font-semibold text-text-primary mb-6 flex items-center gap-2">
+          Mark My Attendance
+        </h3>
+        <div className="flex flex-wrap gap-6 items-end">
+          {canSeeAttendance && (
             <div className="flex-1 min-w-[240px]">
               <label className="text-xs font-medium text-text-secondary mb-2 block">Search & Select Employee</label>
               <div className="space-y-3">
@@ -242,17 +266,17 @@ export default function Dashboard({ session, data, onRefresh }: DashboardProps) 
                 </select>
               </div>
             </div>
-            <div className="flex gap-4">
-              <button onClick={handleCheckIn} className="btn btn-primary">
-                Check In
-              </button>
-              <button onClick={handleCheckOut} className="btn btn-outline">
-                Check Out
-              </button>
-            </div>
+          )}
+          <div className="flex gap-4">
+            <button onClick={handleCheckIn} className="btn btn-primary">
+              Check In
+            </button>
+            <button onClick={handleCheckOut} className="btn btn-outline">
+              Check Out
+            </button>
           </div>
-        </motion.div>
-      )}
+        </div>
+      </motion.div>
 
       <div className="table-container glass-panel">
         <div className="p-6 border-b border-border-accent">
@@ -291,9 +315,27 @@ export default function Dashboard({ session, data, onRefresh }: DashboardProps) 
                       {statusText}
                     </span>
                   </td>
-                  <td className="font-mono text-sm text-text-secondary">{rec ? rec.checkIn : '--'}</td>
-                  <td className="font-mono text-sm text-text-secondary">
-                    {rec ? (rec.checkOut === '--' ? <span className="text-text-secondary italic">Not yet</span> : rec.checkOut) : '--'}
+                  <td className="font-mono text-sm">
+                    <div className="flex items-center gap-2">
+                      <span className={!rec ? 'text-text-secondary' : 'text-text-primary font-medium'}>{rec?.checkIn || '--'}</span>
+                      {rec?.checkInLocation && (
+                         <a href={`https://maps.google.com/?q=${rec.checkInLocation}`} target="_blank" rel="noopener noreferrer" title="View Location">
+                           <MapPin className="w-3.5 h-3.5 text-brand-accent hover:text-brand-secondary transition-colors" />
+                         </a>
+                      )}
+                    </div>
+                  </td>
+                  <td className="font-mono text-sm">
+                    <div className="flex items-center gap-2">
+                      <span className={!rec ? 'text-text-secondary' : 'text-text-primary font-medium'}>
+                        {rec ? (rec.checkOut === '--' ? <span className="text-text-secondary italic">Not yet</span> : rec.checkOut) : '--'}
+                      </span>
+                      {rec?.checkOutLocation && (
+                         <a href={`https://maps.google.com/?q=${rec.checkOutLocation}`} target="_blank" rel="noopener noreferrer" title="View Location">
+                           <MapPin className="w-3.5 h-3.5 text-emerald-500 hover:text-emerald-600 transition-colors" />
+                         </a>
+                      )}
+                    </div>
                   </td>
                   {canSeeAttendance && (
                     <td>

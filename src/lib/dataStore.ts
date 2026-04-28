@@ -950,7 +950,7 @@ export const DataStore = {
     }
   },
 
-  async checkIn(empId: string, status: 'Present' | 'Late', displayTime: string) {
+  async checkIn(empId: string, status: 'Present' | 'Late', displayTime: string, location?: string) {
     const today = new Date();
     const dateStr = today.toISOString().split('T')[0];
     
@@ -967,7 +967,8 @@ export const DataStore = {
         await updateDoc(docRef, {
           status,
           checkIn: displayTime,
-          checkOut: '--'
+          checkOut: '--',
+          ...(location && { checkInLocation: location })
         });
       } else {
         // Create new record
@@ -979,7 +980,8 @@ export const DataStore = {
           status,
           checkIn: displayTime,
           checkOut: '--',
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
+          ...(location && { checkInLocation: location })
         });
       }
       await this.logAction('Attendance In', `Employee ${empId} marked as ${status} at ${displayTime}`, 'Attendance');
@@ -988,10 +990,13 @@ export const DataStore = {
     }
   },
 
-  async checkOut(id: number, time: string) {
+  async checkOut(id: number, time: string, location?: string) {
     try {
       await this.ensureAuth();
-      await updateDoc(doc(db, 'attendance', id.toString()), { checkOut: time });
+      await updateDoc(doc(db, 'attendance', id.toString()), { 
+        checkOut: time,
+        ...(location && { checkOutLocation: location })
+      });
       await this.logAction('Check Out', `Attendance record ${id} checked out at ${time}`, 'Attendance');
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, `attendance/${id}`);

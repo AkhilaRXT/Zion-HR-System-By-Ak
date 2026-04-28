@@ -43,6 +43,8 @@ export interface Attendance {
   status: 'Present' | 'Absent' | 'Half Day' | 'Late' | 'Leave' | 'Holiday';
   checkIn: string;
   checkOut: string;
+  checkInLocation?: string;
+  checkOutLocation?: string;
   timestamp: string;
 }
 
