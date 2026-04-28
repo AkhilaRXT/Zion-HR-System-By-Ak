@@ -145,18 +145,111 @@ export default function Dashboard({ session, data, onRefresh }: DashboardProps) 
     });
   };
 
+  const verifyBiometrics = async (empId: string): Promise<boolean> => {
+    if (!window.PublicKeyCredential) {
+      console.warn('PublicKeyCredential not supported');
+      return true; 
+    }
+
+    try {
+      const available = await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
+      if (!available) {
+        console.warn('Platform authenticator not available');
+        return true;
+      }
+    } catch (e) {
+      console.warn('Platform authenticator check failed', e);
+    }
+
+    const challenge = new Uint8Array(32);
+    window.crypto.getRandomValues(challenge);
+    const storageKey = `zion_bio_cred_${empId}`;
+    const savedCredId = localStorage.getItem(storageKey);
+
+    try {
+      if (savedCredId) {
+        const binaryStr = atob(savedCredId);
+        const credIdArray = new Uint8Array(binaryStr.length);
+        for (let i = 0; i < binaryStr.length; i++) {
+          credIdArray[i] = binaryStr.charCodeAt(i);
+        }
+        
+        await navigator.credentials.get({
+          publicKey: {
+            challenge,
+            allowCredentials: [{
+              id: credIdArray,
+              type: 'public-key'
+            }],
+            userVerification: 'required'
+          }
+        });
+        return true;
+      } else {
+        const userId = new Uint8Array(16);
+        window.crypto.getRandomValues(userId);
+
+        const credential = await navigator.credentials.create({
+          publicKey: {
+            challenge,
+            rp: { name: 'Zion HR System' },
+            user: {
+              id: userId,
+              name: empId,
+              displayName: 'Employee ' + empId
+            },
+            pubKeyCredParams: [
+              { type: 'public-key', alg: -7 },
+              { type: 'public-key', alg: -257 }
+            ],
+            authenticatorSelection: {
+              authenticatorAttachment: 'platform',
+              userVerification: 'required'
+            },
+            timeout: 60000
+          }
+        }) as PublicKeyCredential;
+        
+        if (credential) {
+          const bytes = new Uint8Array(credential.rawId);
+          let binary = '';
+          for (let i = 0; i < bytes.byteLength; i++) {
+            binary += String.fromCharCode(bytes[i]);
+          }
+          localStorage.setItem(storageKey, btoa(binary));
+          return true;
+        }
+        return false;
+      }
+    } catch (err: any) {
+      console.warn('Biometric error:', err);
+      if (err.name === 'NotAllowedError') {
+        return false; 
+      }
+      return true; 
+    }
+  };
+
   const handleCheckIn = async () => {
     const empIdToUse = canSeeAttendance ? selectedEmpId : currentEmpId;
+
+    const isVerified = await verifyBiometrics(empIdToUse);
+    if (!isVerified) {
+      showNotification('Biometric verification cancelled or failed.', 'error');
+      return;
+    }
+
     const now = new Date();
-    const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const compareTime = now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+    const displayTime = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
     const schedule = data.settings.workSchedule;
     const isSaturday = now.getDay() === 6;
     const startTime = isSaturday ? schedule.saturdays.start : schedule.weekdays.start;
-    const status = timeStr > startTime ? 'Late' : 'Present';
+    const status = compareTime > startTime ? 'Late' : 'Present';
 
     try {
       const loc = await getLocationInfo();
-      await DataStore.checkIn(empIdToUse, status, timeStr, loc);
+      await DataStore.checkIn(empIdToUse, status, displayTime, loc);
       const emp = data.employees.find(e => e.id === empIdToUse);
       showNotification(`${emp?.name} checked in!`);
     } catch (err) {
@@ -171,11 +264,18 @@ export default function Dashboard({ session, data, onRefresh }: DashboardProps) 
       showNotification(`Employee hasn't checked in yet!`, 'warning');
       return;
     }
+
+    const isVerified = await verifyBiometrics(empIdToUse);
+    if (!isVerified) {
+      showNotification('Biometric verification cancelled or failed.', 'error');
+      return;
+    }
+
     const now = new Date();
-    const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const displayTime = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
     try {
       const loc = await getLocationInfo();
-      await DataStore.checkOut(rec.id, timeStr, loc);
+      await DataStore.checkOut(rec.id, displayTime, loc);
       const emp = (data.employees || []).find(e => e.id === empIdToUse);
       showNotification(`${emp?.name} checked out!`, 'info');
     } catch (err) {
