@@ -61,8 +61,7 @@ service cloud.firestore {
       return isAuthenticated() && (
         isMasterAdmin() ||
         (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
-         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.empId == empId) ||
-        (request.auth.token.email != null && resource != null && 'email' in resource.data && resource.data.email == request.auth.token.email && request.auth.token.email_verified == true)
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.empId == empId)
       );
     }
 
@@ -105,9 +104,9 @@ service cloud.firestore {
 
     match /attendance/{id} {
       allow read: if isAuthenticated() && (isOwner(resource.data.empId) || isAdmin() || isBranchManager());
-      // For create/update, let them do it if they are branch managers marking attendance!
       allow create: if isAuthenticated() && (isOwner(request.resource.data.empId) || isAdmin() || isBranchManager()) && isValidAttendance(request.resource.data);
-      allow update, delete: if isAdmin() || isBranchManager();
+      allow update: if isAuthenticated() && (isOwner(resource.data.empId) || isAdmin() || isBranchManager());
+      allow delete: if isAdmin() || isBranchManager();
     }
 
     match /leaves/{id} {
