@@ -148,11 +148,18 @@ export default function Dashboard({ session, data, onRefresh }: DashboardProps) 
   };
 
   const hasBiometricRegistered = (empId: string) => {
-    return !!localStorage.getItem(`zion_bio_cred_${empId}`);
+    const emp = data.employees?.find(e => e.id === empId);
+    return !!(emp && emp.passkeyRawId);
   };
 
   const handleRegisterBiometrics = async () => {
     const empIdToUse = canSeeAttendance ? selectedEmpId : currentEmpId;
+
+    if (hasBiometricRegistered(empIdToUse)) {
+      showNotification('This employee already has a device registered. Please contact Master Admin to reset it.', 'warning');
+      return;
+    }
+
     if (!window.PublicKeyCredential) {
       showNotification('Biometrics not supported on this device/browser', 'error');
       return; 
@@ -197,9 +204,10 @@ export default function Dashboard({ session, data, onRefresh }: DashboardProps) 
         for (let i = 0; i < bytes.byteLength; i++) {
           binary += String.fromCharCode(bytes[i]);
         }
-        localStorage.setItem(`zion_bio_cred_${empIdToUse}`, btoa(binary));
+        const encoded = btoa(binary);
+        await DataStore.updateEmployee(empIdToUse, { passkeyRawId: encoded });
         showNotification('Biometric registered successfully!', 'success');
-        // Force a re-render to hide the register button
+        // Force a re-render
         setRefreshKey(k => k + 1);
       }
     } catch (err: any) {
@@ -209,8 +217,8 @@ export default function Dashboard({ session, data, onRefresh }: DashboardProps) 
   };
 
   const verifyBiometrics = async (empId: string): Promise<boolean> => {
-    const storageKey = `zion_bio_cred_${empId}`;
-    const savedCredId = localStorage.getItem(storageKey);
+    const emp = data.employees?.find(e => e.id === empId);
+    const savedCredId = emp?.passkeyRawId;
     
     if (!savedCredId) {
        showNotification('Please register Fingerprint/Biometrics first!', 'warning');

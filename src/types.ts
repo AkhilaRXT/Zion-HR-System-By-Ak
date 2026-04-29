@@ -25,6 +25,7 @@ export interface Employee {
   heldFrom?: string;
   heldTo?: string;
   heldComponents?: string[];
+  passkeyRawId?: string;
 }
 
 export interface UserCredential {

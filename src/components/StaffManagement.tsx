@@ -896,6 +896,33 @@ export default function StaffManagement({ session, data, onRefresh }: StaffManag
                       onChange={(e) => handleProfilePicChange(e, true)}
                     />
                   </div>
+                  {isMasterAdmin && isEditing.passkeyRawId && (
+                    <div className="form-group col-span-2 border border-red-100 p-4 rounded-lg bg-red-50/5">
+                      <label className="text-[10px] uppercase tracking-[2px] text-red-500 mb-2 block font-bold">Hardware Biometrics</label>
+                      <p className="text-xs text-text-secondary mb-4">
+                        This employee has a device registered for Login/Check-in. Resetting it will allow them to register a new phone.
+                      </p>
+                      <button 
+                        type="button" 
+                        className="btn btn-outline border-red-500 text-red-500 hover:bg-red-500 hover:text-white text-xs py-2" 
+                        onClick={async () => {
+                          if (confirm('Are you sure you want to reset the biometric device for this employee?')) {
+                            try {
+                              await DataStore.updateEmployee(isEditing.id, { passkeyRawId: '' });
+                              const next = {...isEditing};
+                              next.passkeyRawId = '';
+                              setIsEditing(next);
+                              showNotification('Biometrics reset successfully.');
+                            } catch (err: any) {
+                              showNotification(err.message, 'error');
+                            }
+                          }
+                        }}
+                      >
+                        Reset Device Registration
+                      </button>
+                    </div>
+                  )}
                   <div className="form-group">
                     <label className="text-[10px] uppercase tracking-[2px] text-text-secondary mb-2 block">Basic Salary</label>
                     <input 
