@@ -90,7 +90,7 @@ service cloud.firestore {
       allow list: if isAuthenticated() && (isAdmin() || isBranchManager() || isOwner(empId));
       allow update: if isAuthenticated() && (
         isAdmin() || 
-        (isOwner(empId) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['profilePic']))
+        (isOwner(empId) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['profilePic', 'passkeyRawId']) && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['passkeyRawId']) || !('passkeyRawId' in resource.data) || resource.data.passkeyRawId == '' || resource.data.passkeyRawId == null))
       );
       allow create, delete: if isAdmin();
     }
