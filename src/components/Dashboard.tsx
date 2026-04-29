@@ -128,10 +128,10 @@ export default function Dashboard({ session, data, onRefresh }: DashboardProps) 
     }
   };
 
-  const getLocationInfo = (): Promise<string | undefined> => {
-    return new Promise((resolve) => {
+  const getLocationInfo = (): Promise<string> => {
+    return new Promise((resolve, reject) => {
       if (!navigator.geolocation) {
-        resolve(undefined);
+        reject(new Error('Geolocation is not supported by your browser.'));
         return;
       }
       navigator.geolocation.getCurrentPosition(
@@ -140,7 +140,15 @@ export default function Dashboard({ session, data, onRefresh }: DashboardProps) 
         },
         (error) => {
           console.warn('Geolocation error:', error);
-          resolve(undefined);
+          let errorMessage = 'Failed to get location. Please allow location access to continue.';
+          if (error.code === error.PERMISSION_DENIED) {
+            errorMessage = 'Location access denied. Please allow location access to check in/out.';
+          } else if (error.code === error.POSITION_UNAVAILABLE) {
+            errorMessage = 'Location information is unavailable.';
+          } else if (error.code === error.TIMEOUT) {
+            errorMessage = 'The request to get user location timed out.';
+          }
+          reject(new Error(errorMessage));
         },
         { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
       );
@@ -284,8 +292,8 @@ export default function Dashboard({ session, data, onRefresh }: DashboardProps) 
       await DataStore.checkIn(empIdToUse, status, displayTime, loc);
       const emp = data.employees.find(e => e.id === empIdToUse);
       showNotification(`${emp?.name} checked in!`);
-    } catch (err) {
-      showNotification('Failed to check in.', 'error');
+    } catch (err: any) {
+      showNotification(err.message || 'Failed to check in.', 'error');
     }
   };
 
@@ -310,8 +318,8 @@ export default function Dashboard({ session, data, onRefresh }: DashboardProps) 
       await DataStore.checkOut(rec.id, displayTime, loc);
       const emp = (data.employees || []).find(e => e.id === empIdToUse);
       showNotification(`${emp?.name} checked out!`, 'info');
-    } catch (err) {
-      showNotification('Failed to check out.', 'error');
+    } catch (err: any) {
+      showNotification(err.message || 'Failed to check out.', 'error');
     }
   };
 

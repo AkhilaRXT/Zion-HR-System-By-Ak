@@ -266,7 +266,7 @@ export default function App() {
         const branches = session.viewableBranches.slice(0, 10);
         const qDcC = query(collection(db, 'dcCollections'), where('branch', 'in', branches), limit(1000));
         unsubs.push(onSnapshot(qDcC, (snap) => {
-          updatePart({ dcCollections: snap.docs.map(d => ({ ...d.data(), id: d.id })) });
+          updatePart({ dcCollections: snap.docs.map(d => ({ ...d.data(), id: d.id } as any)) });
         }, (err) => handleErr('dcCollections_bm', err)));
       } else {
         unsubs.push(syncOwn('dcCollections', 'dcCollections'));

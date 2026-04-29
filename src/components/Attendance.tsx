@@ -45,7 +45,9 @@ export default function Attendance({ session, data, onRefresh }: AttendanceProps
           date: exportDate,
           status: (isHoliday ? 'Holiday' : 'Absent') as any,
           checkIn: '--',
-          checkOut: '--'
+          checkOut: '--',
+          checkInLocation: undefined,
+          checkOutLocation: undefined
         };
       })
     : sortedHistory.filter(a => a.empId !== 'EMP003' && activeEmployees.some(e => e.id === a.empId));
