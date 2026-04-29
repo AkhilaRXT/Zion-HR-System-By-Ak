@@ -547,7 +547,24 @@ export default function Settings({ session, data, onRefresh }: SettingsProps) {
         </div>
       </div>
 
-      <div className="glass-panel p-10 border-red-100">
+      <div className="glass-panel p-10 mt-8 border-brand-accent/20 border">
+        <h3 className="text-sm font-semibold text-text-primary mb-4 flex items-center gap-2">
+          <Database className="w-4 h-4 text-brand-primary" /> System Usage & Quota
+        </h3>
+        <p className="text-xs text-text-secondary font-medium mb-6">
+          To monitor your free tier limits (such as database reads/writes and storage), please visit your Google Firebase console. The system limits have been heavily optimized to prevent unnecessary database reads!
+        </p>
+        <a 
+          href="https://console.firebase.google.com/" 
+          target="_blank" 
+          rel="noopener noreferrer"
+          className="btn btn-outline border-brand-primary text-brand-primary hover:bg-brand-primary/10 justify-center py-3 w-full md:w-auto inline-flex items-center gap-2 text-xs"
+        >
+          Open Firebase Console
+        </a>
+      </div>
+
+      <div className="glass-panel p-10 mt-8 border-red-100">
         <h3 className="text-sm font-semibold text-red-600 mb-4 flex items-center gap-2">
           <ShieldAlert className="w-4 h-4" /> Danger Zone
         </h3>

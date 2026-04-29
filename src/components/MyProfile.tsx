@@ -67,7 +67,7 @@ export default function MyProfile({ session, data, onRefresh }: MyProfileProps) 
     sick: sickBalance
   };
 
-  const myAttendance = (data.attendance || []).filter(a => a.empId === emp.id).sort((a, b) => b.id - a.id).slice(0, 5);
+  const myAttendance = (data.attendance || []).filter(a => a.empId === emp.id).sort((a, b) => b.id - a.id).slice(0, 3);
   const myLeaves = (data.leaves || []).filter(l => l.empId === emp.id).sort((a, b) => b.id - a.id);
   const myAdvances = (data.advances || []).filter(a => a.empId === emp.id).sort((a, b) => b.id - a.id);
   const myCashRequests = (data.cashRequests || []).filter(r => r.empId === emp.id).sort((a, b) => b.id - a.id);

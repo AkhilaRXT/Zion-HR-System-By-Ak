@@ -154,14 +154,14 @@ export default function App() {
     };
 
     // All users need the public directory
-    const unsubDir = onSnapshot(collection(db, 'directory'), (snap) => {
+    const unsubDir = onSnapshot(query(collection(db, 'directory'), limit(1000)), (snap) => {
       updatePart({ directory: snap.docs.map(d => d.data() as any) });
     }, (err) => handleErr('directory', err));
     unsubs.push(unsubDir);
 
     if (session.isAdmin) {
       // ADMIN: Core data (Employees & Paid Deductions logic)
-      const unsubEmployees = onSnapshot(collection(db, 'employees'), (snap) => {
+      const unsubEmployees = onSnapshot(query(collection(db, 'employees'), limit(1000)), (snap) => {
         updatePart({ employees: snap.docs.map(d => ({ ...d.data(), id: d.id }) as Employee) });
       }, (err) => handleErr('employees', err));
       unsubs.push(unsubEmployees);
@@ -169,7 +169,13 @@ export default function App() {
       // Core Request Collections - These are relatively small, needed in multiple views
       // Syncing them once here avoids re-syncing on every page change
       const syncCoreCollection = (name: string, key: string) => {
-        return onSnapshot(collection(db, name), (snap) => {
+        let qRef = query(collection(db, name), limit(150));
+        if (['leaves', 'advances', 'cashRequests', 'targets'].includes(name)) {
+          qRef = query(collection(db, name), orderBy('id', 'desc'), limit(150));
+        } else if (['adhocBonuses', 'dcCollections', 'systemReports'].includes(name)) {
+          qRef = query(collection(db, name), orderBy('timestamp', 'desc'), limit(150));
+        }
+        return onSnapshot(qRef, (snap) => {
           updatePart({ [key]: snap.docs.map(d => ({ ...d.data(), id: d.id })) });
         }, (err) => handleErr(name, err));
       };
@@ -187,7 +193,7 @@ export default function App() {
         unsubs.push(syncCoreCollection('systemReports', 'systemReports'));
       }
 
-      const unsubPaid = onSnapshot(collection(db, 'paidDeductions'), (snap) => {
+      const unsubPaid = onSnapshot(query(collection(db, 'paidDeductions'), limit(2000)), (snap) => {
         const paid: { [key: string]: string[] } = {};
         const paidAmts: { [empId: string]: { [month: string]: number } } = {};
         const paidNts: { [empId: string]: { [month: string]: string } } = {};
@@ -224,7 +230,8 @@ export default function App() {
 
       // Branch Manager check dependencies - non-admins need branches
       const syncCoreCollectionForEmployee = (name: string, key: string) => {
-        return onSnapshot(collection(db, name), (snap) => {
+        const q = query(collection(db, name), limit(1000));
+        return onSnapshot(q, (snap) => {
           updatePart({ [key]: snap.docs.map(d => ({ ...d.data(), id: d.id })) });
         }, (err) => handleErr(name, err));
       };
@@ -243,7 +250,7 @@ export default function App() {
 
       // Employee's own collections
       const syncOwn = (coll: string, key: string) => {
-        const q = query(collection(db, coll), where('empId', '==', session.empId));
+        const q = query(collection(db, coll), where('empId', '==', session.empId), limit(1000));
         return onSnapshot(q, (snap) => {
           updatePart({ [key]: snap.docs.map(d => ({ ...d.data(), id: d.id })) });
         }, (err) => handleErr(`own_${coll}`, err));
@@ -256,7 +263,11 @@ export default function App() {
       unsubs.push(syncOwn('adhocBonuses', 'adhocBonuses'));
       
       if (session.viewableBranches && session.viewableBranches.length > 0) {
-        unsubs.push(syncCoreCollectionForEmployee('dcCollections', 'dcCollections'));
+        const branches = session.viewableBranches.slice(0, 10);
+        const qDcC = query(collection(db, 'dcCollections'), where('branch', 'in', branches), limit(1000));
+        unsubs.push(onSnapshot(qDcC, (snap) => {
+          updatePart({ dcCollections: snap.docs.map(d => ({ ...d.data(), id: d.id })) });
+        }, (err) => handleErr('dcCollections_bm', err)));
       } else {
         unsubs.push(syncOwn('dcCollections', 'dcCollections'));
       }
@@ -310,31 +321,54 @@ export default function App() {
     };
 
     const syncRouteCollection = (coll: string, key: string, qRef?: any) => {
-      const ref = qRef || collection(db, coll);
+      const ref = qRef || query(collection(db, coll), limit(1000));
       const unsub = onSnapshot(ref, (snapshot) => {
         updatePart({ [key]: snapshot.docs.map(d => ({ ...d.data(), id: d.id })) });
       }, (err) => handleErr(coll, err));
       unsubs.push(unsub);
     };
 
-    if (route === 'attendance' || (route === 'dashboard' && isBranchManager)) {
+    if (route === 'attendance') {
       const today = new Date();
       const monthAgo = new Date();
-      monthAgo.setDate(today.getDate() - 60); // Show 60 days of history
+      monthAgo.setDate(today.getDate() - 30); // Show 30 days of history
       const monthAgoStr = monthAgo.toISOString().split('T')[0];
 
-      const fullAttQuery = query(collection(db, 'attendance'), where('date', '>=', monthAgoStr), orderBy('date', 'desc'), limit(2000));
+      const fullAttQuery = query(collection(db, 'attendance'), where('date', '>=', monthAgoStr), orderBy('date', 'desc'), limit(1500));
       syncRouteCollection('attendance', 'attendance', fullAttQuery);
+    }
+
+    if (route === 'dashboard' && isBranchManager) {
+      const todayStr = new Date().toISOString().split('T')[0];
+      const todayAttQuery = query(collection(db, 'attendance'), where('date', '==', todayStr), limit(200));
+      syncRouteCollection('attendance', 'attendance', todayAttQuery);
     }
 
     if (!session?.isAdmin) return; // Following collections are STRICTLY for Admins
 
-    // Note: leaves, advances, cashRequests, adhocBonuses are now in core sync (Effect 2)
-    // for admins to prevent flashing when navigating.
+    // Expanded history for specific pages
+    if (route === 'leave') {
+      const q = query(collection(db, 'leaves'), orderBy('id', 'desc'), limit(500));
+      syncRouteCollection('leaves', 'leaves', q);
+    }
+    
+    if (route === 'advances') {
+      const q = query(collection(db, 'advances'), orderBy('id', 'desc'), limit(500));
+      syncRouteCollection('advances', 'advances', q);
+    }
+
+    if (route === 'cash_requests') {
+      const q = query(collection(db, 'cashRequests'), orderBy('id', 'desc'), limit(500));
+      syncRouteCollection('cashRequests', 'cashRequests', q);
+    }
 
     if (route === 'payroll') {
       const receiptQuery = query(collection(db, 'payrollReceipts'), orderBy('timestamp', 'desc'), limit(100));
       syncRouteCollection('payrollReceipts', 'payrollReceipts', receiptQuery);
+      
+      // Also fetch deeper adhoc bonuses and advances for payroll view
+      const bonusQuery = query(collection(db, 'adhocBonuses'), orderBy('timestamp', 'desc'), limit(500));
+      syncRouteCollection('adhocBonuses', 'adhocBonuses', bonusQuery);
     }
 
     if (route === 'staff') {
