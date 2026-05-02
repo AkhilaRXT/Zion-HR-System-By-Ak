@@ -18,7 +18,8 @@ import {
   Wallet,
   ShieldCheck,
   CheckCircle,
-  RotateCcw
+  RotateCcw,
+  Edit
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { motion, AnimatePresence } from 'motion/react';
@@ -38,6 +39,7 @@ export default function DCCollection({ session, data }: DCCollectionProps) {
   const [notification, setNotification] = useState<{ message: string, type: NotificationType } | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [confirmUndo, setConfirmUndo] = useState<string | null>(null);
+  const [editingReceipt, setEditingReceipt] = useState<DCCollectionType | null>(null);
   const [verifySearch, setVerifySearch] = useState('');
   const [verifyTab, setVerifyTab] = useState<'all' | 'pending' | 'verified'>('pending');
 
@@ -119,6 +121,26 @@ export default function DCCollection({ session, data }: DCCollectionProps) {
       } catch (err) {
         showNotification('Failed to delete record', 'error');
       }
+    }
+  };
+
+  const handleUpdateReceipt = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingReceipt) return;
+
+    try {
+      await DataStore.updateDCCollection(editingReceipt.id, {
+        customerName: editingReceipt.customerName,
+        nic: editingReceipt.nic,
+        documentCharge: Number(editingReceipt.documentCharge),
+        loanAmount: Number(editingReceipt.loanAmount),
+        paymentMethod: editingReceipt.paymentMethod,
+        collectionType: editingReceipt.collectionType
+      });
+      showNotification('Receipt updated successfully');
+      setEditingReceipt(null);
+    } catch (err) {
+      showNotification('Failed to update receipt', 'error');
     }
   };
 
@@ -627,6 +649,15 @@ export default function DCCollection({ session, data }: DCCollectionProps) {
                         <td className="text-[10px] font-bold text-text-secondary uppercase">{c.collectedBy}</td>
                         <td className="text-right">
                           <div className="flex justify-end gap-2">
+                              {(session.email === "zioncommercialcreditampara@gmail.com" || session.permissions?.includes('Dc Resipt Edit')) && (
+                               <button 
+                                 onClick={() => setEditingReceipt(c)}
+                                 className="p-2 hover:bg-brand-accent/5 text-text-secondary hover:text-brand-accent rounded-lg transition-all"
+                                 title="Edit Receipt"
+                               >
+                                  <Edit className="w-4 h-4" />
+                               </button>
+                             )}
                              {session.email === "zioncommercialcreditampara@gmail.com" && (
                                <button 
                                  onClick={() => setConfirmDelete(c.id)}
@@ -848,6 +879,109 @@ export default function DCCollection({ session, data }: DCCollectionProps) {
         onCancel={() => setConfirmUndo(null)}
         type="warning"
       />
+
+      <AnimatePresence>
+        {editingReceipt && (
+          <motion.div 
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+          >
+            <motion.div 
+              initial={{ scale: 0.95, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.95, opacity: 0, y: 20 }}
+              className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden border border-border-accent"
+            >
+              <div className="flex items-center justify-between p-6 border-b border-border-accent bg-gray-50/50">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-brand-accent/10 rounded-lg">
+                    <Edit className="w-5 h-5 text-brand-accent" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-bold text-text-primary uppercase tracking-wider">Edit Receipt</h3>
+                    <p className="text-[10px] text-text-secondary uppercase tracking-widest">{editingReceipt.receiptNo}</p>
+                  </div>
+                </div>
+                <button onClick={() => setEditingReceipt(null)} className="p-2 text-text-secondary hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <form onSubmit={handleUpdateReceipt} className="p-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="form-group col-span-full">
+                    <label className="text-[10px] uppercase tracking-[2px] text-text-secondary mb-2 block">Customer Name</label>
+                    <input 
+                      type="text" required className="form-control"
+                      value={editingReceipt.customerName} onChange={e => setEditingReceipt({...editingReceipt, customerName: e.target.value})}
+                    />
+                  </div>
+                  
+                  <div className="form-group">
+                    <label className="text-[10px] uppercase tracking-[2px] text-text-secondary mb-2 block">Customer NIC</label>
+                    <input 
+                      type="text" className="form-control"
+                      value={editingReceipt.nic} onChange={e => setEditingReceipt({...editingReceipt, nic: e.target.value})}
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label className="text-[10px] uppercase tracking-[2px] text-text-secondary mb-2 block">Collection Type</label>
+                    <select 
+                      className="form-control"
+                      value={editingReceipt.collectionType} onChange={e => setEditingReceipt({...editingReceipt, collectionType: e.target.value})}
+                    >
+                      <option value="Loan">Loan</option>
+                      <option value="Savings">Savings</option>
+                      <option value="Inquiry">Inquiry</option>
+                      <option value="Other">Other</option>
+                    </select>
+                  </div>
+
+                  <div className="form-group">
+                    <label className="text-[10px] uppercase tracking-[2px] text-text-secondary mb-2 block">Loan Amount</label>
+                    <input 
+                      type="number" step="0.01" className="form-control"
+                      value={editingReceipt.loanAmount || ''} onChange={e => setEditingReceipt({...editingReceipt, loanAmount: Number(e.target.value)})}
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label className="text-[10px] uppercase tracking-[2px] text-emerald-600 mb-2 block font-bold">Document Charge (DC)</label>
+                    <input 
+                      type="number" step="0.01" required className="form-control border-emerald-200 focus:border-emerald-500"
+                      value={editingReceipt.documentCharge || ''} onChange={e => setEditingReceipt({...editingReceipt, documentCharge: Number(e.target.value)})}
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label className="text-[10px] uppercase tracking-[2px] text-text-secondary mb-2 block">Payment Method</label>
+                    <select 
+                      className="form-control"
+                      value={editingReceipt.paymentMethod} onChange={e => setEditingReceipt({...editingReceipt, paymentMethod: e.target.value})}
+                    >
+                      <option value="Cash">Cash</option>
+                      <option value="Bank Transfer">Bank Transfer</option>
+                      <option value="Card">Card</option>
+                      <option value="Cheque">Cheque</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="mt-8 pt-6 border-t border-border-accent flex justify-end gap-3 flex-wrap">
+                  <button type="button" onClick={() => setEditingReceipt(null)} className="px-6 py-3 rounded-lg text-xs font-bold uppercase tracking-wider text-text-secondary hover:bg-gray-100 transition-colors">
+                    Cancel
+                  </button>
+                  <button type="submit" className="px-8 py-3 rounded-lg text-xs font-bold uppercase tracking-wider bg-brand-accent text-white hover:bg-brand-accent/90 shadow-lg shadow-brand-accent/20 transition-all flex items-center gap-2">
+                    <CheckCircle className="w-4 h-4" />
+                    Update Receipt
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {notification && (
         <Notification 

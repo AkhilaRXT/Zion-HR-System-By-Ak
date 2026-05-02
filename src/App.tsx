@@ -254,7 +254,9 @@ export default function App() {
       const syncOwn = (coll: string, key: string) => {
         let q = query(collection(db, coll), where('empId', '==', session.empId), limit(1000));
         if (coll === 'attendance') {
-           q = query(collection(db, coll), where('empId', '==', session.empId), orderBy('date', 'desc'), limit(150));
+           const todayStr = new Date().toISOString().split('T')[0];
+           // Two equality wheres DO NOT require a composite index in Firestore
+           q = query(collection(db, coll), where('empId', '==', session.empId), where('date', '==', todayStr), limit(2));
         }
         return onSnapshot(q, (snap) => {
           updatePart({ [key]: snap.docs.map(d => ({ ...d.data(), id: d.id })) });
@@ -301,12 +303,9 @@ export default function App() {
      
      // Only if on dashboard, get recent stuff for stats
      if (route === 'dashboard') {
-        const today = new Date();
-        const weekAgo = new Date();
-        weekAgo.setDate(today.getDate() - 7);
-        const weekAgoStr = weekAgo.toISOString().split('T')[0];
+        const todayStr = new Date().toISOString().split('T')[0];
         
-        const qAttendance = query(collection(db, 'attendance'), where('date', '>=', weekAgoStr), orderBy('date', 'desc'), limit(500));
+        const qAttendance = query(collection(db, 'attendance'), where('date', '==', todayStr), limit(500));
         unsubs.push(onSnapshot(qAttendance, (snap) => updatePart({ attendance: snap.docs.map(d => ({ ...d.data(), id: d.id }) as any) }), (err) => console.log('Stat sync skipped:', err)));
      }
      
@@ -388,7 +387,7 @@ export default function App() {
   // Loader lifecycle
   useEffect(() => {
     if (session && isAuthReady && isSettingsReady) {
-      const timer = setTimeout(() => setIsLoading(false), 1200);
+      const timer = setTimeout(() => setIsLoading(false), 3000);
       return () => clearTimeout(timer);
     }
   }, [session, isAuthReady, isSettingsReady]);

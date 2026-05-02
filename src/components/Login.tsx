@@ -35,7 +35,7 @@ export default function Login({ onLogin, data }: LoginProps) {
     setIsLoading(true);
     setError('');
     try {
-      const result = await DataStore.login(username, password);
+      const result = await DataStore.login(username.trim(), password);
       if ('error' in result && result.error) {
         setError(result.error);
         setPassword('');

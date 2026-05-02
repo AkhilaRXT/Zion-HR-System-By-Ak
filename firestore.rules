@@ -166,7 +166,7 @@ service cloud.firestore {
 
     match /credentials/{username} {
       allow get: if isAuthenticated();
-      allow list, write: if isMasterAdmin();
+      allow list, write: if isAdmin();
     }
 
     match /test/{id} {

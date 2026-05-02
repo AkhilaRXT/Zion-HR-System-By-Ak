@@ -129,8 +129,8 @@ export default function StaffManagement({ session, data, onRefresh }: StaffManag
 
     const cred = {
       empId: id,
-      username: newEmp.username || id.toLowerCase(),
-      password: newEmp.password || 'pass123',
+      username: (newEmp.username || id.toLowerCase()).trim(),
+      password: (newEmp.password || 'pass123').trim(),
       isAdmin: newEmp.isSystemAdmin,
       permissions: newEmp.isSystemAdmin ? newEmp.permissions : [],
       viewableBranches: newEmp.isSystemAdmin ? newEmp.viewableBranches : []
@@ -179,8 +179,8 @@ export default function StaffManagement({ session, data, onRefresh }: StaffManag
       let credUpdates: any = undefined;
       if (isMasterAdmin) {
         credUpdates = {};
-        if (username) credUpdates.username = username;
-        if (password) credUpdates.password = password;
+        if (username) credUpdates.username = username.trim();
+        if (password) credUpdates.password = password.trim();
         credUpdates.isAdmin = isSystemAdmin;
         credUpdates.permissions = isSystemAdmin ? permissions : [];
         credUpdates.viewableBranches = isSystemAdmin ? viewableBranches : [];
@@ -202,8 +202,34 @@ export default function StaffManagement({ session, data, onRefresh }: StaffManag
     }
   };
 
-  const startEditing = (emp: Employee) => {
-    const cred = (data.credentials || []).find(c => c.empId === emp.id);
+  const startEditing = async (emp: Employee) => {
+    let cred = (data.credentials || []).find(c => c.empId === emp.id);
+    
+    // In case there are duplicates, prefer the one with isAdmin if any
+    const allCreds = (data.credentials || []).filter(c => c.empId === emp.id);
+    if (allCreds.length > 1) {
+      cred = allCreds.find(c => c.isAdmin) || cred;
+      console.warn('Multiple credentials found for', emp.id, allCreds);
+    }
+    
+    // If not found in memory, try fetching directly from DB in case sync is slow
+    if (!cred) {
+      try {
+        const { getDocs, query, collection, where } = await import('firebase/firestore');
+        const { db } = await import('../lib/firebase');
+        const snap = await getDocs(query(collection(db, 'credentials'), where('empId', '==', emp.id)));
+        if (!snap.empty) {
+          const docs = snap.docs.map(d => d.data() as any);
+          cred = docs.find(c => c.isAdmin) || docs[0];
+          console.log('Fetched missing credential from DB:', cred);
+        }
+      } catch (e) {
+        console.warn('Failed to direct fetch credentials', e);
+      }
+    }
+    
+    console.log('Editing', emp.id, 'Found cred:', cred);
+
     setOriginalId(emp.id);
     setIsEditing({
       ...emp,
@@ -624,7 +650,8 @@ export default function StaffManagement({ session, data, onRefresh }: StaffManag
                           { id: 'attendance', label: 'Attendance' },
                           { id: 'leave', label: 'Leave Management' },
                           { id: 'payroll', label: 'Payroll' },
-                          { id: 'cash_requests', label: 'Cash Requests' }
+                          { id: 'cash_requests', label: 'Cash Requests' },
+                          { id: 'Dc Resipt Edit', label: 'DC Receipt Edit' }
                         ].map(perm => (
                           <label key={perm.id} className="flex items-center gap-2 cursor-pointer group">
                             <input 
@@ -1147,7 +1174,8 @@ export default function StaffManagement({ session, data, onRefresh }: StaffManag
                             { id: 'attendance', label: 'Attendance' },
                             { id: 'leave', label: 'Leave Management' },
                             { id: 'payroll', label: 'Payroll' },
-                            { id: 'cash_requests', label: 'Cash Requests' }
+                            { id: 'cash_requests', label: 'Cash Requests' },
+                            { id: 'Dc Resipt Edit', label: 'DC Receipt Edit' }
                           ].map(perm => (
                             <label key={perm.id} className="flex items-center gap-2 cursor-pointer group">
                               <input 

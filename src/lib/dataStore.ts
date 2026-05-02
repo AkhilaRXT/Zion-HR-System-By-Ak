@@ -541,8 +541,7 @@ export const DataStore = {
       await setDoc(doc(db, 'employees', emp.id), emp);
       await setDoc(doc(db, 'directory', emp.id), { id: emp.id, name: emp.name });
       
-      const isMasterAdmin = auth.currentUser?.email === "zioncommercialcreditampara@gmail.com";
-      if (isMasterAdmin) {
+      if (cred && cred.username) {
         await setDoc(doc(db, 'credentials', cred.username.toLowerCase()), cred);
       }
       
@@ -846,6 +845,18 @@ export const DataStore = {
       return { success: true };
     } catch (error) {
       handleFirestoreError(error, OperationType.CREATE, `dcCollections/${collection.id}`);
+      throw error;
+    }
+  },
+
+  async updateDCCollection(id: string, updates: any) {
+    try {
+      await this.ensureAuth();
+      await updateDoc(doc(db, 'dcCollections', id), updates);
+      await this.logAction('DC Collection', `Updated Receipt ${updates.receiptNo || id}`, 'Cash');
+      return { success: true };
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `dcCollections/${id}`);
       throw error;
     }
   },
