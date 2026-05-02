@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { AppData, Session, CashRequest } from '../types';
 import { DataStore } from '../lib/dataStore';
-import { Check, X, FileText, Paperclip, FileDown } from 'lucide-react';
+import { Check, X, FileText, Paperclip, FileDown, Search } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import Notification, { NotificationType } from './Notification';
 import { fileToBase64 } from '../lib/fileUtils';
@@ -27,6 +27,37 @@ export default function CashRequests({ session, data }: CashRequestsProps) {
     return emp ? viewableBranches.includes(emp.branch) : false;
   };
   const [notification, setNotification] = useState<{ message: string, type: NotificationType } | null>(null);
+
+  const [activeTab, setActiveTab] = useState<'Pending' | 'Approved' | 'Rejected' | 'All'>(canManageCash ? 'Pending' : 'All');
+
+  const formatDateForInput = (date: Date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  const [dateRange, setDateRange] = useState({
+    from: formatDateForInput(new Date(new Date().getFullYear(), new Date().getMonth(), 1)),
+    to: formatDateForInput(new Date())
+  });
+
+  const [searchedRequests, setSearchedRequests] = useState<CashRequest[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [hasSearched, setHasSearched] = useState(false);
+
+  const handleSearch = async () => {
+    setIsSearching(true);
+    try {
+      const results = await DataStore.searchCashRequests(dateRange.from, dateRange.to);
+      setSearchedRequests(results);
+      setHasSearched(true);
+    } catch(err) {
+      showNotification('Failed to fetch cash requests.', 'error');
+    } finally {
+      setIsSearching(false);
+    }
+  };
 
   const showNotification = (message: string, type: NotificationType = 'success') => {
     setNotification({ message, type });
@@ -73,6 +104,7 @@ export default function CashRequests({ session, data }: CashRequestsProps) {
       await DataStore.addCashRequest(request);
       showNotification('Cash request submitted successfully!');
       setNewRequest({ amount: 0, category: 'Petty Cash', description: '', attachment: '' });
+      setSearchedRequests(prev => [request, ...prev]);
     } catch (err) {
       showNotification('Failed to submit cash request.', 'error');
     }
@@ -82,34 +114,23 @@ export default function CashRequests({ session, data }: CashRequestsProps) {
     try {
       await DataStore.updateCashRequestStatus(id, status, session.name);
       showNotification(`Cash request ${status.toLowerCase()}.`);
+      setSearchedRequests(prev => prev.map(r => r.id === id ? { ...r, status, actionedBy: session.name } : r));
     } catch (err) {
       showNotification('Failed to update status.', 'error');
     }
   };
 
-  const filteredRequests = (data.cashRequests || [])
-    .filter(r => (canManageCash && canViewEmployee(r.empId)) || r.empId === currentEmpId)
+  const filteredRequests = searchedRequests
+    .filter(r => {
+      const matchesPermission = canManageCash ? canViewEmployee(r.empId) : r.empId === currentEmpId;
+      const matchesDate = r.date >= dateRange.from && r.date <= dateRange.to;
+      const matchesStatus = activeTab === 'All' || r.status === activeTab;
+      return matchesPermission && matchesDate && matchesStatus;
+    })
     .sort((a, b) => b.id - a.id);
 
-  const exportToExcel = (type: 'full' | 'monthly' | 'weekly' | 'by_member') => {
-    let requestsToExport = [...filteredRequests];
-    const now = new Date();
-
-    if (type === 'monthly') {
-      const currentMonth = now.getMonth();
-      const currentYear = now.getFullYear();
-      requestsToExport = requestsToExport.filter(r => {
-        const d = new Date(r.date);
-        return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
-      });
-    } else if (type === 'weekly') {
-      const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-      requestsToExport = requestsToExport.filter(r => new Date(r.date) >= oneWeekAgo);
-    } else if (type === 'by_member') {
-      requestsToExport.sort((a, b) => a.empId.localeCompare(b.empId));
-    }
-
-    const sheetData = requestsToExport.map(r => {
+  const exportToExcel = () => {
+    const sheetData = filteredRequests.map(r => {
       const emp = (data.employees || []).find(e => e.id === r.empId);
       return {
         Date: r.date,
@@ -125,8 +146,8 @@ export default function CashRequests({ session, data }: CashRequestsProps) {
     const ws = XLSX.utils.json_to_sheet(sheetData);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Cash Requests');
-    XLSX.writeFile(wb, `Cash_Requests_${type}_${new Date().toISOString().split('T')[0]}.xlsx`);
-    DataStore.logAction('Export Data', `Exported Cash Requests (${type}) to Excel`, 'Cash');
+    XLSX.writeFile(wb, `Cash_Requests_${dateRange.from}_to_${dateRange.to}.xlsx`);
+    DataStore.logAction('Export Data', `Exported Cash Requests (${dateRange.from} to ${dateRange.to}) to Excel`, 'Cash');
   };
 
   return (
@@ -190,28 +211,74 @@ export default function CashRequests({ session, data }: CashRequestsProps) {
         </div>
 
         <div className="w-full lg:w-2/3 space-y-8">
-          {canManageCash && (
-            <div className="flex flex-wrap gap-3">
-              <button onClick={() => exportToExcel('full')} className="btn btn-outline flex items-center gap-2 text-xs py-2 px-4 h-auto">
-                <FileDown className="w-3.5 h-3.5" /> Full History
+          <div className="glass-panel p-4 md:p-6 flex flex-col md:flex-row gap-4 justify-between items-end">
+            <div className="flex flex-col sm:flex-row gap-4 w-full md:w-auto">
+              <div className="form-group flex-1 sm:flex-none">
+                <label className="text-[10px] font-semibold text-text-secondary uppercase tracking-widest mb-2 block">From Date</label>
+                <input 
+                  type="date" 
+                  className="form-control text-xs py-2.5 bg-background shadow-inner"
+                  value={dateRange.from} onChange={e => setDateRange({...dateRange, from: e.target.value})}
+                />
+              </div>
+              <div className="form-group flex-1 sm:flex-none">
+                <label className="text-[10px] font-semibold text-text-secondary uppercase tracking-widest mb-2 block">To Date</label>
+                <input 
+                  type="date" 
+                  className="form-control text-xs py-2.5 bg-background shadow-inner"
+                  value={dateRange.to} onChange={e => setDateRange({...dateRange, to: e.target.value})}
+                />
+              </div>
+            </div>
+            <div className="flex gap-4 w-full md:w-auto">
+              <button 
+                onClick={handleSearch}
+                disabled={isSearching}
+                className="btn btn-primary py-2.5 px-6 h-auto text-xs flex-1 md:flex-none justify-center"
+              >
+                <Search className="w-4 h-4 ml-0 mr-2" />
+                {isSearching ? '...' : 'Search'}
               </button>
-              <button onClick={() => exportToExcel('monthly')} className="btn btn-outline flex items-center gap-2 text-xs py-2 px-4 h-auto">
-                <FileDown className="w-3.5 h-3.5" /> Monthly
-              </button>
-              <button onClick={() => exportToExcel('weekly')} className="btn btn-outline flex items-center gap-2 text-xs py-2 px-4 h-auto">
-                <FileDown className="w-3.5 h-3.5" /> Weekly
-              </button>
-              <button onClick={() => exportToExcel('by_member')} className="btn btn-outline flex items-center gap-2 text-xs py-2 px-4 h-auto">
-                <FileDown className="w-3.5 h-3.5" /> By Member
+              <button 
+                onClick={exportToExcel}
+                className="btn btn-outline py-2.5 px-6 h-auto text-xs flex-1 md:flex-none justify-center"
+              >
+                <FileDown className="w-4 h-4 ml-0 mr-2" />
+                Export
               </button>
             </div>
-          )}
+          </div>
 
           <div className="table-container">
-            <div className="p-6 border-b border-border-accent">
-              <h3 className="text-sm font-semibold text-text-primary">
-                {canManageCash ? 'All Cash Requests' : 'My Cash Requests'}
-              </h3>
+            <div className="p-6 border-b border-border-accent bg-background">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+                <div>
+                  <h3 className="text-sm font-semibold text-text-primary">
+                    {canManageCash ? 'All Cash Requests' : 'My Cash Requests'}
+                  </h3>
+                  <p className="text-[10px] text-text-secondary font-medium mt-1 uppercase tracking-widest">
+                    {hasSearched ? `Showing results from ${dateRange.from} to ${dateRange.to}` : 'Click search to load cash requests'}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex gap-6 mt-6 border-b border-border-accent">
+                {(['Pending', 'Approved', 'Rejected', 'All'] as const).map(tab => (
+                  <button
+                    key={tab}
+                    onClick={() => setActiveTab(tab)}
+                    className={`pb-3 text-xs font-semibold tracking-wide capitalize transition-colors relative
+                      ${activeTab === tab 
+                        ? 'text-brand-primary' 
+                        : 'text-text-tertiary hover:text-text-secondary'}`}
+                  >
+                    {tab}
+                    {activeTab === tab && (
+                      <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-brand-primary rounded-t-full shadow-[0_-2px_8px_rgba(59,130,246,0.5)]" />
+                    )}
+                  </button>
+                ))}
+              </div>
             </div>
             <table>
               <thead>
@@ -278,8 +345,12 @@ export default function CashRequests({ session, data }: CashRequestsProps) {
                 })}
                 {filteredRequests.length === 0 && (
                   <tr>
-                    <td colSpan={canManageCash ? 6 : 5} className="text-center py-8 text-text-secondary text-[11px] uppercase tracking-[2px]">
-                      No cash requests found
+                    <td colSpan={canManageCash ? 6 : 5} className="text-center py-12 text-text-secondary font-medium italic">
+                      {!hasSearched ? (
+                        'Click search to load cash requests.'
+                      ) : (
+                        `No ${activeTab !== 'All' ? activeTab.toLowerCase() : ''} cash requests found for the selected date range.`
+                      )}
                     </td>
                   </tr>
                 )}

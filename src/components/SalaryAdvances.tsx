@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { AppData, Session, AdvanceRequest } from '../types';
 import { DataStore } from '../lib/dataStore';
-import { HandCoins, Check, X, FileDown, Paperclip, Clock } from 'lucide-react';
+import { HandCoins, Check, X, FileDown, Paperclip, Clock, Pencil, Search } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import Notification, { NotificationType } from './Notification';
 import { fileToBase64 } from '../lib/fileUtils';
@@ -31,6 +31,7 @@ export default function SalaryAdvances({ session, data }: SalaryAdvancesProps) {
   const [notification, setNotification] = useState<{ message: string, type: NotificationType } | null>(null);
   const [newAdvance, setNewAdvance] = useState({ amount: 0, reason: '', attachment: '' });
   const [activeTab, setActiveTab] = useState<'Pending' | 'Approved' | 'Rejected' | 'All'>(hasPayrollPermission ? 'Pending' : 'All');
+  const [editingAdvance, setEditingAdvance] = useState<AdvanceRequest | null>(null);
   const formatDateForInput = (date: Date) => {
     const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -39,9 +40,26 @@ export default function SalaryAdvances({ session, data }: SalaryAdvancesProps) {
   };
 
   const [dateRange, setDateRange] = useState({
-    from: formatDateForInput(new Date(new Date().getFullYear(), new Date().getMonth() - 6, 1)),
+    from: formatDateForInput(new Date(new Date().getFullYear(), new Date().getMonth(), 1)),
     to: formatDateForInput(new Date())
   });
+
+  const [searchedAdvances, setSearchedAdvances] = useState<AdvanceRequest[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [hasSearched, setHasSearched] = useState(false);
+
+  const handleSearch = async () => {
+    setIsSearching(true);
+    try {
+      const results = await DataStore.searchAdvances(dateRange.from, dateRange.to);
+      setSearchedAdvances(results);
+      setHasSearched(true);
+    } catch(err) {
+      showNotification('Failed to fetch advances.', 'error');
+    } finally {
+      setIsSearching(false);
+    }
+  };
 
   const showNotification = (message: string, type: NotificationType = 'success') => {
     setNotification({ message, type });
@@ -79,7 +97,7 @@ export default function SalaryAdvances({ session, data }: SalaryAdvancesProps) {
     const currentMonth = new Date().toLocaleString('default', { month: 'long', year: 'numeric' });
     const advTotal = (data.advances || [])
       .filter(a => {
-        const advanceDateStr = a.date;
+        const advanceDateStr = a.approvedDate || a.date;
         const [mStr, yStr] = currentMonth.split(' ');
         const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
         const monthIndex = months.indexOf(mStr);
@@ -130,6 +148,7 @@ export default function SalaryAdvances({ session, data }: SalaryAdvancesProps) {
       await DataStore.addAdvanceRequest(request);
       showNotification('Salary advance requested successfully!');
       setNewAdvance({ amount: 0, reason: '', attachment: '' });
+      setSearchedAdvances(prev => [request, ...prev]);
     } catch (err) {
       showNotification('Failed to request advance.', 'error');
     }
@@ -139,23 +158,41 @@ export default function SalaryAdvances({ session, data }: SalaryAdvancesProps) {
     try {
       await DataStore.updateAdvanceStatus(id, status, session.name);
       showNotification(`Advance request ${status.toLowerCase()}.`);
+      setSearchedAdvances(prev => prev.map(a => a.id === id ? { ...a, status, actionedBy: session.name } : a));
     } catch (err) {
       showNotification('Failed to update advance status.', 'error');
     }
   };
 
-  const handleTogglePaid = async (id: number, currentPaidStatus: boolean) => {
-    if (!window.confirm(`Are you sure you want to mark this advance as ${currentPaidStatus ? 'UNPAID' : 'PAID'}?`)) return;
+  const handleUpdateAdvance = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingAdvance) return;
+
     try {
-      await DataStore.toggleAdvancePaid(id, !currentPaidStatus, session.name);
-      showNotification(`Advance manually marked as ${!currentPaidStatus ? 'Paid' : 'Unpaid'}.`);
+      const updates: any = {
+        amount: editingAdvance.amount,
+        date: editingAdvance.date,
+        status: editingAdvance.status,
+        isPaid: editingAdvance.isPaid || false
+      };
+      
+      if (editingAdvance.approvedDate) {
+        updates.approvedDate = editingAdvance.approvedDate;
+      } else {
+        updates.approvedDate = null;
+      }
+
+      await DataStore.updateAdvance(editingAdvance.id, updates, session.name);
+      showNotification('Advance updated successfully.');
+      setSearchedAdvances(prev => prev.map(a => a.id === editingAdvance.id ? { ...a, ...updates } : a));
+      setEditingAdvance(null);
     } catch (err) {
-      showNotification('Failed to update advance payment status.', 'error');
+      showNotification('Failed to update advance.', 'error');
     }
   };
 
   const handleExportAdvances = async () => {
-    const advancesToExport = (data.advances || [])
+    const advancesToExport = searchedAdvances
       .filter(a => {
         const matchesPermission = hasPayrollPermission ? canViewEmployee(a.empId) : a.empId === currentEmpId;
         const matchesDate = a.date >= dateRange.from && a.date <= dateRange.to;
@@ -213,7 +250,7 @@ export default function SalaryAdvances({ session, data }: SalaryAdvancesProps) {
     // Deductions
     const advTotal = (data.advances || [])
       .filter(a => {
-        const advanceDateStr = a.date;
+        const advanceDateStr = a.approvedDate || a.date;
         const [mStr, yStr] = currentMonth.split(' ');
         const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
         const monthIndex = months.indexOf(mStr);
@@ -238,7 +275,7 @@ export default function SalaryAdvances({ session, data }: SalaryAdvancesProps) {
     return Math.max(0, totalEarnings - totalDeductions);
   };
 
-  const displayAdvances = (data.advances || [])
+  const displayAdvances = searchedAdvances
     .filter(a => {
         const matchesPermission = hasPayrollPermission ? canViewEmployee(a.empId) : a.empId === currentEmpId;
         const matchesDate = a.date >= dateRange.from && a.date <= dateRange.to;
@@ -248,7 +285,8 @@ export default function SalaryAdvances({ session, data }: SalaryAdvancesProps) {
     .sort((a, b) => b.id - a.id);
 
   return (
-    <div className="space-y-12">
+    <>
+      <div className="space-y-12">
       {notification && (
         <Notification 
           message={notification.message} 
@@ -312,13 +350,23 @@ export default function SalaryAdvances({ session, data }: SalaryAdvancesProps) {
                 />
               </div>
             </div>
-            <button 
-              onClick={handleExportAdvances}
-              className="btn btn-outline py-2.5 px-6 h-auto text-xs w-full md:w-auto"
-            >
-              <FileDown className="w-4 h-4" />
-              Export to Excel
-            </button>
+            <div className="flex gap-4 w-full md:w-auto">
+              <button 
+                onClick={handleSearch}
+                disabled={isSearching}
+                className="btn btn-primary py-2.5 px-6 h-auto text-xs flex-1 md:flex-none justify-center"
+              >
+                <Search className="w-4 h-4 ml-0 mr-2" />
+                {isSearching ? '...' : 'Search'}
+              </button>
+              <button 
+                onClick={handleExportAdvances}
+                className="btn btn-outline py-2.5 px-6 h-auto text-xs flex-1 md:flex-none justify-center"
+              >
+                <FileDown className="w-4 h-4 ml-0 mr-2" />
+                Export
+              </button>
+            </div>
           </div>
 
           <div className="table-container">
@@ -329,7 +377,7 @@ export default function SalaryAdvances({ session, data }: SalaryAdvancesProps) {
                     {hasPayrollPermission ? 'Salary Advance Management' : 'My Advance Requests'}
                   </h3>
                   <p className="text-[10px] text-text-secondary font-medium mt-1 uppercase tracking-widest">
-                    Showing results from {dateRange.from} to {dateRange.to}
+                    {hasSearched ? `Showing results from ${dateRange.from} to ${dateRange.to}` : 'Click search to load advance requests'}
                   </p>
                 </div>
               </div>
@@ -419,37 +467,39 @@ export default function SalaryAdvances({ session, data }: SalaryAdvancesProps) {
                       </td>
                       {hasPayrollPermission && (
                         <td className="text-right">
-                          {a.status === 'Pending' ? (
-                            <div className="flex gap-2 justify-end">
+                          <div className="flex gap-2 justify-end">
+                            {(a.status === 'Pending' || isMasterAdmin) && (
+                              <>
+                                {a.status !== 'Approved' && (
+                                  <button 
+                                    onClick={() => handleAdvanceStatus(a.id, 'Approved')}
+                                    className="p-2 bg-emerald-50 text-emerald-600 rounded-lg hover:bg-emerald-600 hover:text-white transition-all shadow-sm"
+                                    title="Approve"
+                                  >
+                                    <Check className="w-4 h-4" />
+                                  </button>
+                                )}
+                                {a.status !== 'Rejected' && (
+                                  <button 
+                                    onClick={() => handleAdvanceStatus(a.id, 'Rejected')}
+                                    className="p-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-600 hover:text-white transition-all shadow-sm"
+                                    title="Reject"
+                                  >
+                                    <X className="w-4 h-4" />
+                                  </button>
+                                )}
+                              </>
+                            )}
+                            {isMasterAdmin && (
                               <button 
-                                onClick={() => handleAdvanceStatus(a.id, 'Approved')}
-                                className="p-2 bg-emerald-50 text-emerald-600 rounded-lg hover:bg-emerald-600 hover:text-white transition-all shadow-sm"
-                                title="Approve"
+                                onClick={() => setEditingAdvance(a)}
+                                className="p-2 bg-indigo-50 text-indigo-600 rounded-lg hover:bg-indigo-600 hover:text-white transition-all shadow-sm"
+                                title="Edit"
                               >
-                                <Check className="w-4 h-4" />
+                                <Pencil className="w-4 h-4" />
                               </button>
-                              <button 
-                                onClick={() => handleAdvanceStatus(a.id, 'Rejected')}
-                                className="p-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-600 hover:text-white transition-all shadow-sm"
-                                title="Reject"
-                              >
-                                <X className="w-4 h-4" />
-                              </button>
-                            </div>
-                          ) : (
-                            a.status === 'Approved' ? (
-                              <button 
-                                onClick={() => handleTogglePaid(a.id, !!a.isPaid)}
-                                className={`text-[10px] font-bold px-3 py-1.5 rounded-md transition-all shadow-sm uppercase tracking-wider ${
-                                  a.isPaid 
-                                    ? 'bg-amber-50 text-amber-600 hover:bg-amber-600 hover:text-white' 
-                                    : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-600 hover:text-white'
-                                }`}
-                              >
-                                {a.isPaid ? 'Make Unpaid' : 'Mark Paid'}
-                              </button>
-                            ) : '-'
-                          )}
+                            )}
+                          </div>
                         </td>
                       )}
                     </tr>
@@ -457,7 +507,11 @@ export default function SalaryAdvances({ session, data }: SalaryAdvancesProps) {
                 }) : (
                   <tr>
                     <td colSpan={hasPayrollPermission ? 5 : 4} className="text-center py-12 text-text-secondary font-medium italic">
-                      No {activeTab !== 'All' ? activeTab.toLowerCase() : ''} requests found for the selected date range.
+                      {!hasSearched ? (
+                        'Click search to load advance requests.'
+                      ) : (
+                        `No ${activeTab !== 'All' ? activeTab.toLowerCase() : ''} requests found for the selected date range.`
+                      )}
                     </td>
                   </tr>
                 )}
@@ -467,5 +521,111 @@ export default function SalaryAdvances({ session, data }: SalaryAdvancesProps) {
         </div>
       </div>
     </div>
+
+      {editingAdvance && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+            <div className="bg-indigo-600 p-6 text-white flex justify-between items-center">
+              <div>
+                <h3 className="text-xl font-bold">Edit Advance Request</h3>
+                <p className="text-indigo-100 text-sm">Modify advance details manually</p>
+              </div>
+              <button 
+                onClick={() => setEditingAdvance(null)}
+                className="p-2 hover:bg-white/10 rounded-full transition-colors"
+                id="close-edit-modal"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+            <form onSubmit={handleUpdateAdvance} className="p-6 space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-text-secondary uppercase tracking-wider mb-1.5">
+                    Amount (LKR)
+                  </label>
+                  <input
+                    type="number"
+                    value={editingAdvance.amount}
+                    onChange={(e) => setEditingAdvance({ ...editingAdvance, amount: parseFloat(e.target.value) })}
+                    className="w-full px-4 py-2 bg-background-secondary border border-border-primary rounded-xl focus:ring-2 focus:ring-indigo-500 transition-all outline-none"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-text-secondary uppercase tracking-wider mb-1.5">
+                    Status
+                  </label>
+                  <select
+                    value={editingAdvance.status}
+                    onChange={(e) => setEditingAdvance({ ...editingAdvance, status: e.target.value as any })}
+                    className="w-full px-4 py-2 bg-background-secondary border border-border-primary rounded-xl focus:ring-2 focus:ring-indigo-500 transition-all outline-none"
+                  >
+                    <option value="Pending">Pending</option>
+                    <option value="Approved">Approved</option>
+                    <option value="Rejected">Rejected</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-text-secondary uppercase tracking-wider mb-1.5">
+                  Request Date
+                </label>
+                <input
+                  type="date"
+                  value={editingAdvance.date}
+                  onChange={(e) => setEditingAdvance({ ...editingAdvance, date: e.target.value })}
+                  className="w-full px-4 py-2 bg-background-secondary border border-border-primary rounded-xl focus:ring-2 focus:ring-indigo-500 transition-all outline-none"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-text-secondary uppercase tracking-wider mb-1.5">
+                  Approved Date
+                </label>
+                <input
+                  type="date"
+                  value={editingAdvance.approvedDate || ''}
+                  onChange={(e) => setEditingAdvance({ ...editingAdvance, approvedDate: e.target.value })}
+                  className="w-full px-4 py-2 bg-background-secondary border border-border-primary rounded-xl focus:ring-2 focus:ring-indigo-500 transition-all outline-none"
+                />
+                <p className="text-[10px] text-text-secondary mt-1">Deduction month calculation is based on this date if present.</p>
+              </div>
+
+              <div className="flex items-center gap-3 p-4 bg-background-secondary rounded-xl">
+                <input
+                  type="checkbox"
+                  id="edit-is-paid"
+                  checked={editingAdvance.isPaid || false}
+                  onChange={(e) => setEditingAdvance({ ...editingAdvance, isPaid: e.target.checked })}
+                  className="w-5 h-5 rounded border-border-primary text-indigo-600 focus:ring-indigo-500"
+                />
+                <label htmlFor="edit-is-paid" className="text-sm font-medium text-text-primary">
+                  Marked as Settled (Paid)
+                </label>
+              </div>
+
+              <div className="pt-4 flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setEditingAdvance(null)}
+                  className="flex-1 px-6 py-3 border border-border-primary text-text-secondary font-bold rounded-xl hover:bg-background-secondary transition-all"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 px-6 py-3 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 shadow-lg shadow-indigo-200 transition-all"
+                >
+                  Save Changes
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </>
   );
 }

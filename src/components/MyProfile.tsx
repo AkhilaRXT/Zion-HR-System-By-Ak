@@ -85,7 +85,7 @@ export default function MyProfile({ session, data, onRefresh }: MyProfileProps) 
   const currentMonth = new Date().toLocaleString('default', { month: 'long', year: 'numeric' });
   const advTotal = (data.advances || [])
     .filter(a => {
-      const advanceDateStr = a.date;
+      const advanceDateStr = a.approvedDate || a.date;
       const [mStr, yStr] = currentMonth.split(' ');
       const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
       const monthIndex = months.indexOf(mStr);

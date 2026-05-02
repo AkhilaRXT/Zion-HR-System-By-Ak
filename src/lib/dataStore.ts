@@ -1003,6 +1003,22 @@ export const DataStore = {
     }
   },
 
+  async searchLeaves(fromDate: string, toDate: string): Promise<LeaveRequest[]> {
+    try {
+      const q = query(
+        collection(db, 'leaves'),
+        where('from', '>=', fromDate),
+        where('from', '<=', toDate)
+      );
+      const snap = await getDocs(q);
+      const results = snap.docs.map(d => ({ ...d.data(), id: Number(d.id) } as LeaveRequest));
+      return results.sort((a, b) => b.id - a.id);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.GET, 'leaves');
+      return [];
+    }
+  },
+
   async addLeaveRequest(request: LeaveRequest) {
     try {
       await this.ensureAuth();
@@ -1093,6 +1109,10 @@ export const DataStore = {
       const updates: any = actionedBy ? { status, actionedBy } : { status };
       updates.actionHistory = arrayUnion(historyItem);
       
+      if (status === 'Approved') {
+        updates.approvedDate = new Date().toISOString().split('T')[0];
+      }
+      
       await updateDoc(advRef, updates);
       await this.logAction('Advance Decision', `${status} advance request for ${advData.empId} (LKR ${advData.amount.toLocaleString()})`, 'Advance');
     } catch (error) {
@@ -1100,20 +1120,55 @@ export const DataStore = {
     }
   },
 
-  async toggleAdvancePaid(id: number, isPaid: boolean, actionedBy: string) {
+  async updateAdvance(id: number, updates: Partial<AdvanceRequest>, actionedBy: string) {
     try {
       const advRef = doc(db, 'advances', id.toString());
-      const actor = actionedBy || 'System';
-      const historyItem = { action: isPaid ? 'Manually Marked Paid' : 'Manually Marked Unpaid', by: actor, date: new Date().toISOString() };
+      const historyItem = { 
+        action: 'Manual Edit by Admin', 
+        by: actionedBy, 
+        date: new Date().toISOString(),
+        details: JSON.stringify(updates)
+      };
       
-      await updateDoc(advRef, {
-        isPaid,
-        actionedBy: actor,
-        actionHistory: arrayUnion(historyItem)
-      });
-      await this.logAction('Advance Payment Status', `Advance ${id} manually marked as ${isPaid ? 'Paid' : 'Unpaid'} by ${actor}`, 'Advance');
+      const finalUpdates: any = { ...updates };
+      finalUpdates.actionHistory = arrayUnion(historyItem);
+      
+      await updateDoc(advRef, finalUpdates);
+      await this.logAction('Advance Edit', `Advance ${id} modified by ${actionedBy}`, 'Advance');
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, `advances/${id}`);
+    }
+  },
+
+  async searchAdvances(fromDate: string, toDate: string): Promise<AdvanceRequest[]> {
+    try {
+      const q = query(
+        collection(db, 'advances'),
+        where('date', '>=', fromDate),
+        where('date', '<=', toDate)
+      );
+      const snap = await getDocs(q);
+      const results = snap.docs.map(d => ({ ...d.data(), id: Number(d.id) } as AdvanceRequest));
+      return results.sort((a, b) => b.id - a.id);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.GET, 'advances');
+      return [];
+    }
+  },
+
+  async searchCashRequests(fromDate: string, toDate: string): Promise<CashRequest[]> {
+    try {
+      const q = query(
+        collection(db, 'cashRequests'),
+        where('date', '>=', fromDate),
+        where('date', '<=', toDate)
+      );
+      const snap = await getDocs(q);
+      const results = snap.docs.map(d => ({ ...d.data(), id: Number(d.id) } as CashRequest));
+      return results.sort((a, b) => b.id - a.id);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.GET, 'cashRequests');
+      return [];
     }
   },
 
@@ -1187,7 +1242,7 @@ export const DataStore = {
       const advUpdatePromises: Promise<void>[] = [];
       advancesSnap.docs.forEach(d => {
         const adv = d.data() as AdvanceRequest;
-        const advanceDateStr = adv.date;
+        const advanceDateStr = adv.approvedDate || adv.date;
         const [mStr, yStr] = month.split(' ');
         const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
         const monthIndex = months.indexOf(mStr);
@@ -1298,7 +1353,7 @@ export const DataStore = {
       const advancesSnap = await getDocs(collection(db, 'advances'));
       advancesSnap.docs.forEach(d => {
         const adv = d.data() as AdvanceRequest;
-        const advanceDateStr = adv.date;
+        const advanceDateStr = adv.approvedDate || adv.date;
         const [mStr, yStr] = month.split(' ');
         const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
         const monthIndex = months.indexOf(mStr);
@@ -1408,7 +1463,7 @@ export const DataStore = {
       const advUpdatePromises: Promise<void>[] = [];
       advancesSnap.docs.forEach(d => {
         const adv = d.data() as AdvanceRequest;
-        const advanceDateStr = adv.date;
+        const advanceDateStr = adv.approvedDate || adv.date;
         const [mStr, yStr] = month.split(' ');
         const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
         const monthIndex = months.indexOf(mStr);

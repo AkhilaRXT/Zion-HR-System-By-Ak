@@ -47,16 +47,23 @@ export default function Dashboard({ session, data, onRefresh }: DashboardProps) 
     return emp ? viewableBranches.includes(emp.branch) : false;
   };
 
-  const activeStaff = (data.employees || []).filter(e => e.status !== 'Dormant' && e.id !== 'EMP003' && canViewEmployee(e.id));
+  const activeStaff = (data.employees || []).filter(e => {
+    if (e.status === 'Dormant' || e.id === 'EMP003') return false;
+    if (session.email === "zioncommercialcreditampara@gmail.com") return true;
+    if (isAdmin && (viewableBranches.length === 0 || viewableBranches.includes('ALL'))) return true;
+    if (viewableBranches.includes('ALL')) return true;
+    return viewableBranches.includes(e.branch);
+  });
+  
   const totalStaff = activeStaff.length;
-  const presentToday = new Set(
-    (data.attendance || [])
-      .filter(a => a.date === today && (a.status === 'Present' || a.status === 'Late' || a.status === 'Half Day') && canViewEmployee(a.empId))
-      .map(a => a.empId)
-      .filter(id => (data.employees || []).some(e => e.id === id))
-  ).size;
-  const pendingLeavesCount = (data.leaves || []).filter(l => l.status === 'Pending' && canViewEmployee(l.empId)).length;
-  const approvedAdvancesCount = (data.advances || []).filter(a => a.status === 'Approved' && canViewEmployee(a.empId)).length;
+  const activeStaffIds = new Set(activeStaff.map(e => e.id));
+
+  const presentToday = (data.attendance || [])
+      .filter(a => a.date === today && (a.status === 'Present' || a.status === 'Late' || a.status === 'Half Day') && activeStaffIds.has(a.empId))
+      .length;
+
+  const pendingLeavesCount = (data.leaves || []).filter(l => l.status === 'Pending' && activeStaffIds.has(l.empId)).length;
+  const approvedAdvancesCount = (data.advances || []).filter(a => a.status === 'Approved' && activeStaffIds.has(a.empId)).length;
 
   // Member Stats
   const myAttendance = (data.attendance || []).find(a => a.empId === currentEmpId && a.date === today);

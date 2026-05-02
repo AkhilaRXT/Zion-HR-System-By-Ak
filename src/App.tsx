@@ -252,7 +252,10 @@ export default function App() {
 
       // Employee's own collections
       const syncOwn = (coll: string, key: string) => {
-        const q = query(collection(db, coll), where('empId', '==', session.empId), limit(1000));
+        let q = query(collection(db, coll), where('empId', '==', session.empId), limit(1000));
+        if (coll === 'attendance') {
+           q = query(collection(db, coll), where('empId', '==', session.empId), orderBy('date', 'desc'), limit(150));
+        }
         return onSnapshot(q, (snap) => {
           updatePart({ [key]: snap.docs.map(d => ({ ...d.data(), id: d.id })) });
         }, (err) => handleErr(`own_${coll}`, err));
@@ -348,16 +351,9 @@ export default function App() {
 
     if (!session?.isAdmin) return; // Following collections are STRICTLY for Admins
 
-    // Expanded history for specific pages
-    if (route === 'leave') {
-      const q = query(collection(db, 'leaves'), orderBy('id', 'desc'), limit(500));
-      syncRouteCollection('leaves', 'leaves', q);
-    }
-    
-    if (route === 'advances') {
-      const q = query(collection(db, 'advances'), orderBy('id', 'desc'), limit(500));
-      syncRouteCollection('advances', 'advances', q);
-    }
+    // Expanded history for specific pages is disabled for leaves and advances to reduce DB reads.
+    // They now fetch their own data using a manual search function.
+
 
     if (route === 'cash_requests') {
       const q = query(collection(db, 'cashRequests'), orderBy('id', 'desc'), limit(500));
@@ -383,13 +379,7 @@ export default function App() {
     }
 
     if (route === 'mail') {
-      const q = query(collection(db, 'messages'), where('participants', 'array-contains', session.empId), limit(50));
-      const unsub = onSnapshot(q, (snap) => {
-        const docs = snap.docs.map(d => ({ ...d.data(), id: d.id }) as any);
-        docs.sort((a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-        updatePart({ internalMessages: docs });
-      }, (err) => handleErr('messages', err));
-      unsubs.push(unsub);
+      // Mail fetching is now handled manually inside the Mail component to reduce DB reads.
     }
 
     return () => unsubs.forEach(u => u());

@@ -75,6 +75,7 @@ export interface AdvanceRequest {
   empId: string;
   amount: number;
   date: string;
+  approvedDate?: string;
   status: 'Pending' | 'Approved' | 'Rejected';
   reason: string;
   isPaid?: boolean;

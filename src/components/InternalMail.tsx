@@ -1,12 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Inbox, Send, Edit, Trash2, Mail, Users, ArrowLeft,
-  CheckCircle2, CornerUpLeft, Search, Plus
+  CheckCircle2, CornerUpLeft, Search, Plus, RefreshCw
 } from 'lucide-react';
 import { Session, AppData, InternalMessage } from '../types';
 import { db } from '../lib/firebase';
-import { collection, addDoc, updateDoc, doc, deleteDoc } from 'firebase/firestore';
+import { collection, addDoc, updateDoc, doc, deleteDoc, getDocs, query, where, limit } from 'firebase/firestore';
 
 interface InternalMailProps {
   session: Session;
@@ -27,8 +27,34 @@ export default function InternalMail({ session, data }: InternalMailProps) {
   const [body, setBody] = useState('');
   const [isSending, setIsSending] = useState(false);
 
+  // Mail states
+  const [myMessages, setMyMessages] = useState<InternalMessage[]>(data.internalMessages || []);
+  const [isUpdating, setIsUpdating] = useState(false);
+
+  const updateMail = async () => {
+    setIsUpdating(true);
+    try {
+      const q = query(
+        collection(db, 'messages'), 
+        where('participants', 'array-contains', session.empId), 
+        limit(50)
+      );
+      const snap = await getDocs(q);
+      const docs = snap.docs.map(d => ({ ...d.data(), id: d.id }) as any);
+      docs.sort((a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+      setMyMessages(docs);
+    } catch (err) {
+      console.error("Failed to fetch mail:", err);
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  useEffect(() => {
+    updateMail();
+  }, [session.empId]);
+
   // Derive mail lists
-  const myMessages = data.internalMessages || [];
   const inbox = myMessages.filter(m => 
     (m.to && m.to.includes(session.empId)) || 
     (m.cc && m.cc.includes(session.empId)) || 
@@ -182,6 +208,14 @@ export default function InternalMail({ session, data }: InternalMailProps) {
           className={`flex items-center gap-3 p-3 rounded-lg text-sm font-medium transition-colors ${view === 'sent' ? 'bg-brand-accent/10 text-brand-accent' : 'text-text-secondary hover:bg-gray-100 hover:text-text-primary'}`}
         >
           <Send className="w-4 h-4" /> Sent
+        </button>
+        <button
+          onClick={updateMail}
+          disabled={isUpdating}
+          className={`flex items-center gap-3 p-3 rounded-lg text-sm font-medium transition-colors text-text-secondary hover:bg-gray-100 hover:text-text-primary mt-auto`}
+        >
+          <RefreshCw className={`w-4 h-4 ${isUpdating ? 'animate-spin text-brand-accent' : ''}`} /> 
+          {isUpdating ? 'Updating...' : 'Update'}
         </button>
       </div>
 

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { AppData, Session, LeaveRequest } from '../types';
 import { DataStore } from '../lib/dataStore';
-import { Check, X, PlaneTakeoff, Paperclip, FileDown, Calendar } from 'lucide-react';
+import { Check, X, PlaneTakeoff, Paperclip, FileDown, Calendar, Search } from 'lucide-react';
 import { AnimatePresence } from 'motion/react';
 import Notification, { NotificationType } from './Notification';
 import * as XLSX from 'xlsx';
@@ -40,9 +40,26 @@ export default function LeaveManagement({ session, data, onRefresh }: LeaveManag
   };
 
   const [dateRange, setDateRange] = useState({
-    from: formatDateForInput(new Date(new Date().getFullYear(), new Date().getMonth() - 2, 1)),
-    to: formatDateForInput(new Date(new Date().getFullYear(), new Date().getMonth() + 4, 0))
+    from: formatDateForInput(new Date(new Date().getFullYear(), new Date().getMonth(), 1)),
+    to: formatDateForInput(new Date())
   });
+
+  const [searchedLeaves, setSearchedLeaves] = useState<LeaveRequest[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [hasSearched, setHasSearched] = useState(false);
+
+  const handleSearch = async () => {
+    setIsSearching(true);
+    try {
+      const results = await DataStore.searchLeaves(dateRange.from, dateRange.to);
+      setSearchedLeaves(results);
+      setHasSearched(true);
+    } catch(err) {
+      showNotification('Failed to fetch leaves.', 'error');
+    } finally {
+      setIsSearching(false);
+    }
+  };
 
   const showNotification = (message: string, type: NotificationType = 'success') => {
     setNotification({ message, type });
@@ -132,6 +149,7 @@ export default function LeaveManagement({ session, data, onRefresh }: LeaveManag
       await DataStore.addLeaveRequest(request);
       showNotification('Leave Application Submitted!');
       setNewLeave({ type: 'Annual', from: '', to: '', reason: '', attachment: '' });
+      setSearchedLeaves(prev => [request, ...prev]);
     } catch (err) {
       showNotification('Failed to submit leave request.', 'error');
     }
@@ -141,13 +159,14 @@ export default function LeaveManagement({ session, data, onRefresh }: LeaveManag
     try {
       await DataStore.updateLeaveStatus(id, status, session.name);
       showNotification(`Leave request ${status.toLowerCase()}.`);
+      setSearchedLeaves(prev => prev.map(l => l.id === id ? { ...l, status, actionedBy: session.name } : l));
     } catch (err) {
       showNotification('Failed to update leave status.', 'error');
     }
   };
 
   const handleExportLeaves = async () => {
-    const leavesToExport = (data.leaves || [])
+    const leavesToExport = searchedLeaves
       .filter(l => {
         const matchesPermission = canManageLeaves ? canViewEmployee(l.empId) : l.empId === currentEmpId;
         const matchesDate = l.from >= dateRange.from && l.from <= dateRange.to;
@@ -178,14 +197,12 @@ export default function LeaveManagement({ session, data, onRefresh }: LeaveManag
     showNotification('Leave report exported successfully.');
   };
 
-  const filteredByDate = (data.leaves || [])
-    .filter(l => l.from >= dateRange.from && l.from <= dateRange.to);
-
-  const filteredLeaves = filteredByDate
+  const filteredLeaves = searchedLeaves
     .filter(l => {
       const matchesPermission = canManageLeaves ? canViewEmployee(l.empId) : l.empId === currentEmpId;
+      const matchesDate = l.from >= dateRange.from && l.from <= dateRange.to;
       const matchesStatus = activeTab === 'All' || l.status === activeTab;
-      return matchesPermission && matchesStatus;
+      return matchesPermission && matchesDate && matchesStatus;
     })
     .sort((a, b) => Number(b.id) - Number(a.id));
 
@@ -283,13 +300,23 @@ export default function LeaveManagement({ session, data, onRefresh }: LeaveManag
                 />
               </div>
             </div>
-            <button 
-              onClick={handleExportLeaves}
-              className="btn btn-outline py-2.5 px-6 h-auto text-xs w-full md:w-auto"
-            >
-              <FileDown className="w-4 h-4" />
-              Export to Excel
-            </button>
+            <div className="flex gap-4 w-full md:w-auto">
+              <button 
+                onClick={handleSearch}
+                disabled={isSearching}
+                className="btn btn-primary py-2.5 px-6 h-auto text-xs flex-1 md:flex-none justify-center"
+              >
+                <Search className="w-4 h-4 ml-0 mr-2" />
+                {isSearching ? '...' : 'Search'}
+              </button>
+              <button 
+                onClick={handleExportLeaves}
+                className="btn btn-outline py-2.5 px-6 h-auto text-xs flex-1 md:flex-none justify-center"
+              >
+                <FileDown className="w-4 h-4 ml-0 mr-2" />
+                Export
+              </button>
+            </div>
           </div>
 
           <div className="table-container">
@@ -300,7 +327,7 @@ export default function LeaveManagement({ session, data, onRefresh }: LeaveManag
                     {canManageLeaves ? 'All Leave Requests' : 'My Leave Requests'}
                   </h3>
                   <p className="text-[10px] text-text-secondary font-medium mt-1 uppercase tracking-widest">
-                    Showing results from {dateRange.from} to {dateRange.to}
+                    {hasSearched ? `Showing results from ${dateRange.from} to ${dateRange.to}` : 'Click search to load leave requests'}
                   </p>
                 </div>
               </div>
@@ -417,7 +444,11 @@ export default function LeaveManagement({ session, data, onRefresh }: LeaveManag
                 }) : (
                   <tr>
                     <td colSpan={canManageLeaves ? 4 : 3} className="text-center py-12 text-text-secondary font-medium italic">
-                      No leave requests found for the selected date range.
+                      {!hasSearched ? (
+                        'Click search to load leave requests.'
+                      ) : (
+                        `No ${activeTab !== 'All' ? activeTab.toLowerCase() : ''} leave requests found for the selected date range.`
+                      )}
                     </td>
                   </tr>
                 )}

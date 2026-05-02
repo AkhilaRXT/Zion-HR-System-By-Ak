@@ -108,7 +108,7 @@ export default function Payroll({ session, data, onRefresh }: PayrollProps) {
 
       const advTotal = (data.advances || [])
         .filter(a => {
-          const advanceDateStr = a.date;
+          const advanceDateStr = a.approvedDate || a.date;
           const [mStr, yStr] = selectedMonth.split(' ');
           const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
           const monthIndex = months.indexOf(mStr);
@@ -432,7 +432,7 @@ export default function Payroll({ session, data, onRefresh }: PayrollProps) {
                   .map(emp => {
                     const advTotal = (data.advances || [])
                       .filter(a => {
-                        const advanceDateStr = a.date;
+                        const advanceDateStr = a.approvedDate || a.date;
                         const [mStr, yStr] = selectedMonth.split(' ');
                         const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
                         const monthIndex = months.indexOf(mStr);
