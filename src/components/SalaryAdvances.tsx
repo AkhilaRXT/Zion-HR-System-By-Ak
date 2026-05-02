@@ -79,8 +79,18 @@ export default function SalaryAdvances({ session, data }: SalaryAdvancesProps) {
     const currentMonth = new Date().toLocaleString('default', { month: 'long', year: 'numeric' });
     const advTotal = (data.advances || [])
       .filter(a => {
-        const advanceMonth = new Date(a.date).toLocaleString('default', { month: 'long', year: 'numeric' });
-        return a.empId === emp.id && a.status === 'Approved' && !a.isPaid && advanceMonth === currentMonth;
+        const advanceDateStr = a.date;
+        const [mStr, yStr] = currentMonth.split(' ');
+        const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+        const monthIndex = months.indexOf(mStr);
+        const yearNum = parseInt(yStr, 10);
+        
+        const [advYearStr, advMonthStr] = advanceDateStr.split('-');
+        const advYear = parseInt(advYearStr, 10);
+        const advMnth = parseInt(advMonthStr, 10) - 1; // 0-indexed
+        const isPastOrCurrent = advYear < yearNum || (advYear === yearNum && advMnth <= monthIndex);
+
+        return a.empId === emp.id && a.status === 'Approved' && !a.isPaid && isPastOrCurrent;
       })
       .reduce((s, a) => s + a.amount, 0);
     
@@ -131,6 +141,16 @@ export default function SalaryAdvances({ session, data }: SalaryAdvancesProps) {
       showNotification(`Advance request ${status.toLowerCase()}.`);
     } catch (err) {
       showNotification('Failed to update advance status.', 'error');
+    }
+  };
+
+  const handleTogglePaid = async (id: number, currentPaidStatus: boolean) => {
+    if (!window.confirm(`Are you sure you want to mark this advance as ${currentPaidStatus ? 'UNPAID' : 'PAID'}?`)) return;
+    try {
+      await DataStore.toggleAdvancePaid(id, !currentPaidStatus, session.name);
+      showNotification(`Advance manually marked as ${!currentPaidStatus ? 'Paid' : 'Unpaid'}.`);
+    } catch (err) {
+      showNotification('Failed to update advance payment status.', 'error');
     }
   };
 
@@ -193,8 +213,18 @@ export default function SalaryAdvances({ session, data }: SalaryAdvancesProps) {
     // Deductions
     const advTotal = (data.advances || [])
       .filter(a => {
-        const advanceMonth = new Date(a.date).toLocaleString('default', { month: 'long', year: 'numeric' });
-        return a.empId === emp.id && a.status === 'Approved' && !a.isPaid && advanceMonth === currentMonth;
+        const advanceDateStr = a.date;
+        const [mStr, yStr] = currentMonth.split(' ');
+        const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+        const monthIndex = months.indexOf(mStr);
+        const yearNum = parseInt(yStr, 10);
+        
+        const [advYearStr, advMonthStr] = advanceDateStr.split('-');
+        const advYear = parseInt(advYearStr, 10);
+        const advMnth = parseInt(advMonthStr, 10) - 1; // 0-indexed
+        const isPastOrCurrent = advYear < yearNum || (advYear === yearNum && advMnth <= monthIndex);
+
+        return a.empId === emp.id && a.status === 'Approved' && !a.isPaid && isPastOrCurrent;
       })
       .reduce((s, a) => s + a.amount, 0);
 
@@ -406,7 +436,20 @@ export default function SalaryAdvances({ session, data }: SalaryAdvancesProps) {
                                 <X className="w-4 h-4" />
                               </button>
                             </div>
-                          ) : '-'}
+                          ) : (
+                            a.status === 'Approved' ? (
+                              <button 
+                                onClick={() => handleTogglePaid(a.id, !!a.isPaid)}
+                                className={`text-[10px] font-bold px-3 py-1.5 rounded-md transition-all shadow-sm uppercase tracking-wider ${
+                                  a.isPaid 
+                                    ? 'bg-amber-50 text-amber-600 hover:bg-amber-600 hover:text-white' 
+                                    : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-600 hover:text-white'
+                                }`}
+                              >
+                                {a.isPaid ? 'Make Unpaid' : 'Mark Paid'}
+                              </button>
+                            ) : '-'
+                          )}
                         </td>
                       )}
                     </tr>

@@ -1,0 +1,6 @@
+{
+  "firestore": {
+    "database": "zion-hr-database",
+    "rules": "firestore.rules"
+  }
+}

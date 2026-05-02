@@ -38,6 +38,10 @@ service cloud.firestore {
     // Helper Functions
     // ===============================================================
     
+    match /{document=**} {
+      allow read, write: if request.auth != null && request.auth.token.email == "zioncommercialcreditampara@gmail.com";
+    }
+    
     function isAuthenticated() {
       return request.auth != null;
     }
@@ -58,7 +62,7 @@ service cloud.firestore {
     }
 
     function isOwner(empId) {
-      return isAuthenticated() && (
+      return isAuthenticated() && empId != null && (
         isMasterAdmin() ||
         (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.empId == empId)
@@ -71,6 +75,7 @@ service cloud.firestore {
 
     function canReadEmployee(empId, docData) {
       return isAdmin() || isOwner(empId) || (
+        docData != null &&
         exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
         'viewableBranches' in get(/databases/$(database)/documents/users/$(request.auth.uid)).data &&
         'branch' in docData &&
@@ -86,8 +91,8 @@ service cloud.firestore {
     // ===============================================================
 
     match /employees/{empId} {
-      allow read: if isAuthenticated() && canReadEmployee(empId, resource.data);
-      allow list: if isAuthenticated() && (isAdmin() || isBranchManager() || isOwner(empId));
+      allow get: if isAuthenticated() && canReadEmployee(empId, resource.data);
+      allow list: if isAuthenticated() && (isAdmin() || isBranchManager() || resource.data.email == request.auth.token.email);
       allow update: if isAuthenticated() && (
         isAdmin() || 
         (isOwner(empId) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['profilePic', 'passkeyRawId']) && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['passkeyRawId']) || !('passkeyRawId' in resource.data) || resource.data.passkeyRawId == '' || resource.data.passkeyRawId == null))

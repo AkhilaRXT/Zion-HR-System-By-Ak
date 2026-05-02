@@ -331,10 +331,10 @@ export const DataStore = {
         }
       } catch (authErr: any) {
         console.warn('Anonymous Auth error:', authErr);
-        if (authErr.code === 'auth/admin-restricted-operation') {
+        if (authErr.code === 'auth/admin-restricted-operation' || authErr.code === 'auth/operation-not-allowed') {
           return { 
             success: false, 
-            error: 'System Error: Please enable "Anonymous Authentication" in your Firebase Console to allow Username/Password login.' 
+            error: 'System Error: Please enable "Anonymous" provider in Firebase Authentication to allow Username/Password login.' 
           };
         } else if (authErr.message && authErr.message.includes('timed out')) {
            return { success: false, error: authErr.message };
@@ -343,7 +343,7 @@ export const DataStore = {
 
       // Add a timeout to reading credentials to prevent hanging if quota is fully blocked
       const credDocPromise = getDoc(doc(db, 'credentials', username.toLowerCase()));
-      const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Database request timed out. You may have exceeded your Firebase quota limits.')), 20000));
+      const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Database request timed out. Please check your internet connection or try again later.')), 20000));
       const credDoc = await Promise.race([credDocPromise, timeoutPromise]) as any;
 
       if (!credDoc.exists()) {
@@ -1089,11 +1089,29 @@ export const DataStore = {
       const actor = actionedBy || 'System';
       const historyItem = { action: status, by: actor, date: new Date().toISOString() };
       
+      // Force isPaid to false when tracking changes outside of payroll, to avoid dirty state.
       const updates: any = actionedBy ? { status, actionedBy } : { status };
       updates.actionHistory = arrayUnion(historyItem);
       
       await updateDoc(advRef, updates);
       await this.logAction('Advance Decision', `${status} advance request for ${advData.empId} (LKR ${advData.amount.toLocaleString()})`, 'Advance');
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `advances/${id}`);
+    }
+  },
+
+  async toggleAdvancePaid(id: number, isPaid: boolean, actionedBy: string) {
+    try {
+      const advRef = doc(db, 'advances', id.toString());
+      const actor = actionedBy || 'System';
+      const historyItem = { action: isPaid ? 'Manually Marked Paid' : 'Manually Marked Unpaid', by: actor, date: new Date().toISOString() };
+      
+      await updateDoc(advRef, {
+        isPaid,
+        actionedBy: actor,
+        actionHistory: arrayUnion(historyItem)
+      });
+      await this.logAction('Advance Payment Status', `Advance ${id} manually marked as ${isPaid ? 'Paid' : 'Unpaid'} by ${actor}`, 'Advance');
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, `advances/${id}`);
     }
@@ -1169,12 +1187,21 @@ export const DataStore = {
       const advUpdatePromises: Promise<void>[] = [];
       advancesSnap.docs.forEach(d => {
         const adv = d.data() as AdvanceRequest;
-        const advanceMonth = new Date(adv.date).toLocaleString('default', { month: 'long', year: 'numeric' });
+        const advanceDateStr = adv.date;
+        const [mStr, yStr] = month.split(' ');
+        const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+        const monthIndex = months.indexOf(mStr);
+        const yearNum = parseInt(yStr, 10);
+        
+        const [advYearStr, advMonthStr] = advanceDateStr.split('-');
+        const advYear = parseInt(advYearStr, 10);
+        const advMnth = parseInt(advMonthStr, 10) - 1; // 0-indexed
+        const isPastOrCurrent = advYear < yearNum || (advYear === yearNum && advMnth <= monthIndex);
         
         // Find if this employee is in the current payment run, AND if deductions were selected for them
         const empPayment = payments.find(p => p.empId === adv.empId);
         
-        if (advanceMonth === month && !adv.isPaid && empPayment && empPayment.components.includes('Deductions')) {
+        if (isPastOrCurrent && !adv.isPaid && empPayment && empPayment.components.includes('Deductions')) {
           const actor = currentSession?.name || 'System';
           advUpdatePromises.push(updateDoc(d.ref, { 
             isPaid: true, 
@@ -1271,13 +1298,24 @@ export const DataStore = {
       const advancesSnap = await getDocs(collection(db, 'advances'));
       advancesSnap.docs.forEach(d => {
         const adv = d.data() as AdvanceRequest;
-        const advanceMonth = new Date(adv.date).toLocaleString('default', { month: 'long', year: 'numeric' });
+        const advanceDateStr = adv.date;
+        const [mStr, yStr] = month.split(' ');
+        const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+        const monthIndex = months.indexOf(mStr);
+        const yearNum = parseInt(yStr, 10);
+        
+        const [advYearStr, advMonthStr] = advanceDateStr.split('-');
+        const advYear = parseInt(advYearStr, 10);
+        const advMnth = parseInt(advMonthStr, 10) - 1; // 0-indexed
+        const isPastOrCurrent = advYear < yearNum || (advYear === yearNum && advMnth <= monthIndex);
         
         const empPayment = transactions.find((p: any) => p.empId === adv.empId);
         const hasDeductions = empPayment && empPayment.components && empPayment.components.includes('Deductions');
         const isLegacyReceipt = empPayment && !empPayment.components;
         
-        if (advanceMonth === month && adv.isPaid && empPayment && (hasDeductions || isLegacyReceipt)) {
+        // If it was settled in THIS month's receipt, the history would say 'Settled via Payroll'.
+        // For safety, we only revert if it is currently paid, and falls within the period.
+        if (isPastOrCurrent && adv.isPaid && empPayment && (hasDeductions || isLegacyReceipt)) {
           const actor = currentSession?.name || 'System';
           batch.update(d.ref, { 
              isPaid: false, 
@@ -1370,8 +1408,18 @@ export const DataStore = {
       const advUpdatePromises: Promise<void>[] = [];
       advancesSnap.docs.forEach(d => {
         const adv = d.data() as AdvanceRequest;
-        const advanceMonth = new Date(adv.date).toLocaleString('default', { month: 'long', year: 'numeric' });
-        if (advanceMonth === month && adv.isPaid) {
+        const advanceDateStr = adv.date;
+        const [mStr, yStr] = month.split(' ');
+        const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+        const monthIndex = months.indexOf(mStr);
+        const yearNum = parseInt(yStr, 10);
+        
+        const [advYearStr, advMonthStr] = advanceDateStr.split('-');
+        const advYear = parseInt(advYearStr, 10);
+        const advMnth = parseInt(advMonthStr, 10) - 1; // 0-indexed
+        const isPastOrCurrent = advYear < yearNum || (advYear === yearNum && advMnth <= monthIndex);
+
+        if (isPastOrCurrent && adv.isPaid) {
           const actor = currentSession?.name || 'System';
           advUpdatePromises.push(updateDoc(d.ref, { 
              isPaid: false, 

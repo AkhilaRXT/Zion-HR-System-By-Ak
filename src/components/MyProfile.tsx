@@ -85,9 +85,18 @@ export default function MyProfile({ session, data, onRefresh }: MyProfileProps) 
   const currentMonth = new Date().toLocaleString('default', { month: 'long', year: 'numeric' });
   const advTotal = (data.advances || [])
     .filter(a => {
-      const advanceMonth = new Date(a.date).toLocaleString('default', { month: 'long', year: 'numeric' });
-      // In the profile view, show all approved advances for the month, regardless of isPaid, so they can see their total advance deduction for the month's breakdown
-      return a.empId === emp.id && a.status === 'Approved' && advanceMonth === currentMonth;
+      const advanceDateStr = a.date;
+      const [mStr, yStr] = currentMonth.split(' ');
+      const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+      const monthIndex = months.indexOf(mStr);
+      const yearNum = parseInt(yStr, 10);
+      
+      const [advYearStr, advMonthStr] = advanceDateStr.split('-');
+      const advYear = parseInt(advYearStr, 10);
+      const advMnth = parseInt(advMonthStr, 10) - 1; // 0-indexed
+      const isPastOrCurrent = advYear < yearNum || (advYear === yearNum && advMnth <= monthIndex);
+
+      return a.empId === emp.id && a.status === 'Approved' && !a.isPaid && isPastOrCurrent;
     })
     .reduce((s, a) => s + a.amount, 0);
   

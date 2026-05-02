@@ -42,8 +42,19 @@ export default function Login({ onLogin, data }: LoginProps) {
       } else if (result.success && result.session) {
         onLogin(result.session);
       }
-    } catch (err) {
-      setError('An error occurred during login.');
+    } catch (err: any) {
+      let msg = 'An error occurred during login.';
+      try {
+        const parsed = JSON.parse(err.message);
+        if (parsed.error) {
+             msg = parsed.error;
+        }
+      } catch (e) {
+        if (err.message) {
+             msg = err.message;
+        }
+      }
+      setError(msg);
     } finally {
       setIsLoading(false);
     }

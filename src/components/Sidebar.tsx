@@ -18,7 +18,8 @@ import {
   Mail,
   AlertCircle,
   MapPin,
-  Calendar
+  Calendar,
+  Database
 } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -82,12 +83,13 @@ export default function Sidebar({ session, data, activeRoute, onNavigate, onLogo
     ...(isMasterAdmin ? [{ id: 'branches', label: 'Branches', icon: MapPin }] : []),
     { id: 'audit', label: 'Audit Logs', icon: History },
     ...(isMasterAdmin ? [{ id: 'settings', label: 'Control Panel', icon: Settings }] : []),
+    ...(isMasterAdmin ? [{ id: 'migration', label: 'Data Migration', icon: Database }] : []),
     { id: 'myprofile', label: 'My Profile', icon: UserCircle },
   ];
 
   const hasPermission = (id: string) => {
     // Specifically protect settings
-    if (id === 'settings' || id === 'branches') {
+    if (id === 'settings' || id === 'branches' || id === 'migration') {
       return isMasterAdmin;
     }
 

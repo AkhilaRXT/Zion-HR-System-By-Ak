@@ -21,6 +21,7 @@ import DCCollection from './components/DCCollection';
 import ReportCenter from './components/ReportCenter';
 import BranchManagement from './components/BranchManagement';
 import HolidayCalendar from './components/HolidayCalendar';
+import DataMigration from './components/DataMigration';
 import { Clock, Menu, Loader2 } from 'lucide-react';
 
 export default function App() {
@@ -130,7 +131,8 @@ export default function App() {
       }
     }, (err) => {
       console.warn('Permission denied or error fetching settings:', err);
-      if (err.message.toLocaleLowerCase().includes('quota')) setDbError('Firebase Daily Quota Exceeded. Some data may not load until tomorrow.');
+      if (err.message.toLocaleLowerCase().includes('quota')) setDbError('Firebase Daily Quota Exceeded. Some data may not load until tomorrow (or maybe Firebase takes time to update after Blaze upgrade).');
+      else setDbError('Database Connection Error (' + err.message + ')');
       setIsSettingsReady(true);
     });
     return () => unsubSettings();
@@ -145,7 +147,7 @@ export default function App() {
       console.warn(`Error in ${name}:`, err);
       const msg = err.message || String(err);
       if (msg.toLowerCase().includes('quota')) {
-        setDbError('Firebase Daily quota exceeded. Try again tomorrow or enable billing.');
+        setDbError('Firebase App is experiencing limits or upgrading taking effect.');
       } else if (msg.toLowerCase().includes('permission-denied')) {
         setDbError(`Permission Denied for ${name}. Ensure your account has correct roles.`);
       } else {
@@ -502,6 +504,7 @@ export default function App() {
       case 'dc_collection': return <DCCollection session={session} data={appData} />;
       case 'reports': return <ReportCenter session={session} data={appData} />;
       case 'branches': return <BranchManagement data={appData} onRefresh={refreshData} />;
+      case 'migration': return <DataMigration session={session} />;
       case 'myprofile': return <MyProfile session={session} data={appData} onRefresh={refreshData} />;
       case 'settings': return <Settings session={session} data={appData} onRefresh={refreshData} />;
       case 'audit': return <AuditLogs session={session} data={appData} />;

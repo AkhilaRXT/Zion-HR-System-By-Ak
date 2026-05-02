@@ -24,6 +24,7 @@ export default function StaffManagement({ session, data, onRefresh }: StaffManag
   const isAdmin = session.isAdmin;
   const isMasterAdmin = session.email === "zioncommercialcreditampara@gmail.com";
   const fuelPrice = data.settings?.fuelPrice || 398;
+  const [activeTab, setActiveTab] = useState<'directory' | 'roster'>('directory');
   const [searchTerm, setSearchTerm] = useState('');
   const [originalId, setOriginalId] = useState<string | null>(null);
   const [isEditing, setIsEditing] = useState<(Employee & { username?: string, password?: string, isSystemAdmin?: boolean, permissions?: string[], viewableBranches?: string[] }) | null>(null);
@@ -234,6 +235,10 @@ export default function StaffManagement({ session, data, onRefresh }: StaffManag
       e.id.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
+  const displayedEmployees = searchTerm.trim() 
+    ? filteredEmployees 
+    : filteredEmployees.slice(0, 10);
+
   const handlePermissionToggle = (perm: string) => {
     setNewEmp(prev => ({
       ...prev,
@@ -262,9 +267,25 @@ export default function StaffManagement({ session, data, onRefresh }: StaffManag
 
   return (
     <div className="space-y-12">
-      <div className="flex flex-wrap gap-12 items-start">
+      <div className="flex gap-4 border-b border-border-accent pb-4">
+        <button 
+          onClick={() => setActiveTab('directory')}
+          className={`px-6 py-3 text-[11px] uppercase tracking-[2px] transition-colors ${activeTab === 'directory' ? 'bg-brand-accent text-bg-primary' : 'text-text-secondary hover:text-text-primary bg-bg-secondary'}`}
+        >
+          Employee Directory
+        </button>
+        <button 
+          onClick={() => setActiveTab('roster')}
+          className={`px-6 py-3 text-[11px] uppercase tracking-[2px] transition-colors ${activeTab === 'roster' ? 'bg-brand-accent text-bg-primary' : 'text-text-secondary hover:text-text-primary bg-bg-secondary'}`}
+        >
+          Staff Roster
+        </button>
+      </div>
+
+      {activeTab === 'directory' && (
+      <div className="flex flex-wrap gap-12 items-start justify-center">
         {isAdmin && (
-          <div className="flex-1 min-w-[400px] bg-bg-secondary border border-border-accent p-10">
+          <div className="flex-1 max-w-[800px] w-full bg-bg-secondary border border-border-accent p-10">
             <h3 className="text-[11px] uppercase tracking-[3px] text-brand-accent mb-8">Add New Employee</h3>
             
             <form onSubmit={handleAddStaff} className="space-y-8">
@@ -664,112 +685,95 @@ export default function StaffManagement({ session, data, onRefresh }: StaffManag
           </div>
         )}
 
-        <div className="flex-[2] min-w-[320px] space-y-8">
-          <div className="flex items-center gap-4 bg-bg-secondary border border-border-accent px-6 py-4">
-            <Search className="w-4 h-4 text-text-secondary" />
-            <input 
-              type="text" 
-              placeholder="Search by name or ID..." 
-              className="bg-transparent border-none outline-none flex-1 text-[12px] uppercase tracking-[1px] py-1"
-              value={searchTerm}
-              onChange={e => setSearchTerm(e.target.value)}
-            />
-          </div>
+        </div>
+      )}
 
-          <div className="table-container">
-            <div className="p-6 border-b border-border-accent flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-text-primary">
-                Staff Roster
-              </h3>
-              <span className="text-xs font-medium text-text-secondary">{filteredEmployees.length} members</span>
+      {activeTab === 'roster' && (
+        <div className="bg-bg-secondary border border-border-accent p-10">
+          <div className="flex justify-between items-center mb-8">
+            <h3 className="text-[11px] uppercase tracking-[3px] text-brand-accent">Staff Roster</h3>
+            <div className="flex items-center gap-4 bg-white border border-border-accent px-4 py-2">
+              <Search className="w-4 h-4 text-text-secondary" />
+              <input 
+                type="text" 
+                placeholder="Search..." 
+                className="bg-transparent border-none outline-none text-[11px] uppercase tracking-[1px] w-[150px]"
+                value={searchTerm}
+                onChange={e => setSearchTerm(e.target.value)}
+              />
             </div>
-            <table>
-              <thead>
-                <tr>
-                  <th>EMP No</th>
-                  <th>Name</th>
-                  <th>Role</th>
-                  <th>Branch</th>
-                  <th>Dept</th>
-                  {isAdmin && (
-                    <>
-                      <th>Gross Salary</th>
-                      <th>Actions</th>
-                    </>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            {displayedEmployees.map(emp => {
+              const grossSalary = (emp.baseSalary || 0) + 
+                (emp.performanceAllowance || 0) + 
+                (emp.travelingAllowance || 0) + 
+                (emp.vehicleAllowance || 0) + 
+                (emp.attendanceBonus || 0) + 
+                (emp.overtime || 0) + 
+                ((emp.petrolLitres || 0) * (data.settings.fuelPrice || 0));
+
+              return (
+              <div key={emp.id} className="border border-border-accent p-6 flex flex-col items-center text-center hover:border-brand-accent transition-colors relative group">
+                {isAdmin && (
+                  <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button 
+                      onClick={() => startEditing(emp)}
+                      className="p-1.5 bg-gray-100 text-text-secondary hover:text-brand-accent hover:bg-brand-accent/10 rounded-md transition-colors"
+                      title="Edit Employee"
+                    >
+                      <Edit className="w-3.5 h-3.5" />
+                    </button>
+                    <button 
+                      onClick={() => setConfirmDelete(emp.id)}
+                      className="p-1.5 bg-gray-100 text-text-secondary hover:text-red-500 hover:bg-red-50 rounded-md transition-colors"
+                      title="Delete Employee"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                )}
+                
+                <div className="w-20 h-20 bg-gray-100 border border-border-accent flex flex-col items-center justify-center overflow-hidden rounded-full shadow-sm mb-4">
+                  {emp.profilePic ? (
+                    <img src={emp.profilePic} alt={emp.name} className="w-full h-full object-cover" />
+                  ) : (
+                    <User size={24} className="text-gray-400" />
                   )}
-                </tr>
-              </thead>
-              <tbody>
-                {filteredEmployees.map(emp => {
-                  const petrolLKR = (emp.petrolLitres || 0) * fuelPrice;
-                  const gross = (emp.baseSalary || 0) + (emp.travelingAllowance || 0) + (emp.vehicleAllowance || 0) + (emp.performanceAllowance || 0) + petrolLKR + (emp.attendanceBonus || 0) + (emp.overtime || 0);
-                  return (
-                    <tr key={emp.id}>
-                      <td>
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 bg-gray-100 border border-border-accent flex items-center justify-center overflow-hidden rounded-full shadow-sm">
-                            {emp.profilePic ? (
-                              <img src={emp.profilePic} alt={emp.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                            ) : (
-                              <User className="w-5 h-5 text-text-secondary" />
-                            )}
-                          </div>
-                          <span className="font-mono text-sm text-brand-accent">{emp.id}</span>
-                        </div>
-                      </td>
-                      <td className="font-medium text-text-primary">
-                        {emp.name}
-                        {emp.status === 'Dormant' && (
-                          <span className="ml-2 text-[8px] px-1.5 py-0.5 bg-gray-100 text-gray-500 rounded border border-gray-200 uppercase font-bold tracking-tighter">Dormant</span>
-                        )}
-                        {emp.salaryStatus && emp.salaryStatus !== 'Active' && (
-                          <span 
-                            title={(emp.heldComponents || []).length > 0 ? `Holding: ${emp.heldComponents?.join(', ')}` : "All components held"}
-                            className="ml-2 text-[8px] px-1.5 py-0.5 bg-red-50 text-red-600 rounded border border-red-100 uppercase font-bold tracking-tighter cursor-help"
-                          >
-                            {(emp.heldComponents || []).length > 0 ? 'Partial Hold' : 'Full Hold'} ({
-                              emp.salaryStatus === 'Custom' 
-                                ? `${new Date(emp.heldFrom!).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })} - ${new Date(emp.heldTo!).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}`
-                                : emp.salaryStatus?.replace('Held_', '').replace('Forever', '∞')
-                            })
-                          </span>
-                        )}
-                      </td>
-                      <td className="text-sm text-text-secondary">{emp.role}</td>
-                      <td>
-                        <span className="text-xs text-text-primary block">{emp.branch}</span>
-                        {emp.branchCode && <span className="font-mono text-[9px] text-text-secondary leading-none">{emp.branchCode}</span>}
-                      </td>
-                      <td><span className="badge badge-info">{emp.department}</span></td>
-                      {isAdmin && (
-                        <>
-                          <td className="font-mono text-sm text-text-primary">LKR {gross.toLocaleString()}</td>
-                          <td>
-                            <div className="flex gap-4">
-                              <button 
-                                onClick={() => startEditing(emp)}
-                                className="text-text-secondary hover:text-brand-accent transition-colors"
-                              >
-                                <Edit className="w-4 h-4" />
-                              </button>
-                              <button 
-                                onClick={() => setConfirmDelete(emp.id)}
-                                className="text-text-secondary hover:text-red-500 transition-colors"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
-                            </div>
-                          </td>
-                        </>
-                      )}
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                </div>
+                <h4 className="text-[14px] font-medium text-text-primary mb-1">
+                  {emp.name}
+                  {emp.status === 'Dormant' && (
+                    <span className="block mt-1 text-[8px] px-1.5 py-0.5 bg-gray-100 text-gray-500 rounded border border-gray-200 uppercase font-bold tracking-tighter">Dormant</span>
+                  )}
+                </h4>
+                <p className="text-[11px] text-brand-accent tracking-[1px] uppercase mb-1">{emp.role}</p>
+                <p className="text-[10px] text-text-secondary uppercase tracking-[1px]">{emp.branch || 'Head Office'}</p>
+                
+                <div className="mt-6 w-full pt-4 border-t border-border-accent text-left space-y-2">
+                  <div className="flex justify-between items-center text-[11px]">
+                    <span className="text-text-secondary uppercase tracking-[1px]">EMP ID</span>
+                    <span className="font-mono text-text-primary">{emp.id}</span>
+                  </div>
+                  <div className="flex justify-between items-center text-[11px]">
+                    <span className="text-text-secondary uppercase tracking-[1px]">Department</span>
+                    <span className="text-text-primary badge badge-info">{emp.department}</span>
+                  </div>
+                  <div className="flex justify-between items-center text-[11px]">
+                    <span className="text-text-secondary uppercase tracking-[1px]">Gross Salary</span>
+                    <span className="font-mono text-emerald-600 font-semibold">LKR {grossSalary.toLocaleString()}</span>
+                  </div>
+                </div>
+              </div>
+            )})}
+            {filteredEmployees.length === 0 && (
+              <div className="col-span-full py-12 text-center text-text-secondary text-[12px] uppercase tracking-[2px]">
+                No staff found for roster view
+              </div>
+            )}
           </div>
         </div>
-      </div>
+      )}
 
       <AnimatePresence>
         {isEditing && (
