@@ -130,6 +130,7 @@ export default function DCCollection({ session, data }: DCCollectionProps) {
 
     try {
       await DataStore.updateDCCollection(editingReceipt.id, {
+        date: editingReceipt.date,
         customerName: editingReceipt.customerName,
         nic: editingReceipt.nic,
         documentCharge: Number(editingReceipt.documentCharge),
@@ -914,6 +915,14 @@ export default function DCCollection({ session, data }: DCCollectionProps) {
                     <input 
                       type="text" required className="form-control"
                       value={editingReceipt.customerName} onChange={e => setEditingReceipt({...editingReceipt, customerName: e.target.value})}
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label className="text-[10px] uppercase tracking-[2px] text-text-secondary mb-2 block">Receipt Date</label>
+                    <input 
+                      type="date" required className="form-control"
+                      value={editingReceipt.date} onChange={e => setEditingReceipt({...editingReceipt, date: e.target.value})}
                     />
                   </div>
                   

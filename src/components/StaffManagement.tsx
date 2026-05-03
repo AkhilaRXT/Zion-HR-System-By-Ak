@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { AppData, Session, Employee } from '../types';
 import { DataStore } from '../lib/dataStore';
 import { compressImage } from '../lib/imageUtils';
+import { db } from '../lib/firebase';
+import { getDocs, query, collection, where } from 'firebase/firestore';
 import { 
   Trash2, 
   Edit, 
@@ -215,8 +217,6 @@ export default function StaffManagement({ session, data, onRefresh }: StaffManag
     // If not found in memory, try fetching directly from DB in case sync is slow
     if (!cred) {
       try {
-        const { getDocs, query, collection, where } = await import('firebase/firestore');
-        const { db } = await import('../lib/firebase');
         const snap = await getDocs(query(collection(db, 'credentials'), where('empId', '==', emp.id)));
         if (!snap.empty) {
           const docs = snap.docs.map(d => d.data() as any);
