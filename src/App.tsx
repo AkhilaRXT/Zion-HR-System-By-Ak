@@ -387,8 +387,7 @@ export default function App() {
   // Loader lifecycle
   useEffect(() => {
     if (session && isAuthReady && isSettingsReady) {
-      const timer = setTimeout(() => setIsLoading(false), 3000);
-      return () => clearTimeout(timer);
+      setIsLoading(false);
     }
   }, [session, isAuthReady, isSettingsReady]);
 
