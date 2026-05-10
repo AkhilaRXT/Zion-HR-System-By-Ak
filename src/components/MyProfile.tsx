@@ -138,7 +138,7 @@ export default function MyProfile({ session, data, onRefresh }: MyProfileProps) 
             ) : (
               <User className="w-16 h-16 text-brand-accent/50" />
             )}
-            <div className="absolute inset-0 bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+            <div className="absolute inset-0 bg-black/60 flex items-center justify-center opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
               <Camera className="w-6 h-6 text-white" />
             </div>
             <input 

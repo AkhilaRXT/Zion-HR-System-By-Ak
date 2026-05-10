@@ -743,7 +743,7 @@ export default function StaffManagement({ session, data, onRefresh }: StaffManag
               return (
               <div key={emp.id} className="border border-border-accent p-6 flex flex-col items-center text-center hover:border-brand-accent transition-colors relative group">
                 {isAdmin && (
-                  <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div className="absolute top-4 right-4 flex gap-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
                     <button 
                       onClick={() => startEditing(emp)}
                       className="p-1.5 bg-gray-100 text-text-secondary hover:text-brand-accent hover:bg-brand-accent/10 rounded-md transition-colors"

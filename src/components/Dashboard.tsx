@@ -141,24 +141,37 @@ export default function Dashboard({ session, data, onRefresh }: DashboardProps) 
         reject(new Error('Geolocation is not supported by your browser.'));
         return;
       }
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          resolve(`${position.coords.latitude},${position.coords.longitude}`);
-        },
-        (error) => {
-          console.warn('Geolocation error:', error);
-          let errorMessage = 'Failed to get location. Please allow location access to continue.';
-          if (error.code === error.PERMISSION_DENIED) {
-            errorMessage = 'Location access denied. Please allow location access to check in/out.';
-          } else if (error.code === error.POSITION_UNAVAILABLE) {
-            errorMessage = 'Location information is unavailable.';
-          } else if (error.code === error.TIMEOUT) {
-            errorMessage = 'The request to get user location timed out.';
-          }
-          reject(new Error(errorMessage));
-        },
-        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-      );
+
+      const tryGetLocation = (highAccuracy: boolean, retriesLeft: number) => {
+        navigator.geolocation.getCurrentPosition(
+          (position) => {
+            resolve(`${position.coords.latitude},${position.coords.longitude}`);
+          },
+          (error) => {
+            console.warn('Geolocation error:', error);
+            if (error.code === error.TIMEOUT) {
+              if (retriesLeft > 0) {
+                console.warn(`Geolocation timeout (${highAccuracy ? 'High' : 'Low'} Accuracy). Retrying with low accuracy...`);
+                tryGetLocation(false, retriesLeft - 1);
+              } else {
+                reject(new Error('The request to get user location timed out multiple times. Please move to an open area with better GPS signal or adjust your device location settings (Try opening Maps first).'));
+              }
+            } else {
+              let errorMessage = 'Failed to get location. Please allow location access to continue.';
+              if (error.code === error.PERMISSION_DENIED) {
+                errorMessage = 'Location access denied. Please allow location access to check in/out.';
+              } else if (error.code === error.POSITION_UNAVAILABLE) {
+                errorMessage = 'Location information is unavailable.';
+              }
+              reject(new Error(errorMessage));
+            }
+          },
+          { enableHighAccuracy: highAccuracy, timeout: 15000, maximumAge: highAccuracy ? 0 : 60000 }
+        );
+      };
+
+      // Try High Accuracy first, allow 1 retry (which will drop to Low Accuracy)
+      tryGetLocation(true, 1);
     });
   };
 

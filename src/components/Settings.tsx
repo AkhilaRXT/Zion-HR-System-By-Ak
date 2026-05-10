@@ -194,7 +194,7 @@ export default function Settings({ session, data, onRefresh }: SettingsProps) {
                 ) : (
                   <div className="text-brand-accent/20 text-3xl font-bold">Z</div>
                 )}
-                <div className="absolute inset-0 bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                <div className="absolute inset-0 bg-black/60 flex items-center justify-center opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
                   <Camera className="w-5 h-5 text-white" />
                 </div>
               </div>
