@@ -137,6 +137,11 @@ const initialData: AppData = {
 
 export const DataStore = {
   async init() {
+    const danglingSession = sessionStorage.getItem(AUTH_KEY);
+    if (danglingSession) {
+      localStorage.setItem(AUTH_KEY, danglingSession);
+      sessionStorage.removeItem(AUTH_KEY);
+    }
     try {
       // Basic check for settings
       const settingsDoc = await getDoc(doc(db, 'settings', 'global'));

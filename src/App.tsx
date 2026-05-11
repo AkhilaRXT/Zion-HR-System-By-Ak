@@ -32,7 +32,7 @@ export default function App() {
   const routePattern = location.pathname.replace(/^\//, '').replace(/-/g, '_').toLowerCase();
   const route = routePattern === 'login' || !routePattern ? 'dashboard' : routePattern;
 
-  const [session, setSession] = useState<Session | null>(null);
+  const [session, setSession] = useState<Session | null>(DataStore.getSession());
   const [currentTime, setCurrentTime] = useState(new Date());
 
   const [appData, setAppData] = useState<AppData>(DataStore.getData());
@@ -70,8 +70,6 @@ export default function App() {
 
   useEffect(() => {
     DataStore.init();
-    const existing = DataStore.getSession();
-    if (existing) setSession(existing);
 
     const unsubAuth = auth.onAuthStateChanged((user) => {
       if (user) {
