@@ -21,6 +21,11 @@ import {
 export const STORAGE_KEY = 'zion_hr_v2_data';
 const AUTH_KEY = 'zion_hr_v2_session';
 
+export function getLocalIsoDate(date = new Date()) {
+  const parts = date.toLocaleDateString('en-CA', { year: 'numeric', month: '2-digit', day: '2-digit' }).split('-');
+  return `${parts[0]}-${parts[1]}-${parts[2]}`;
+}
+
 enum OperationType {
   CREATE = 'create',
   UPDATE = 'update',
@@ -963,7 +968,7 @@ export const DataStore = {
 
   async checkIn(empId: string, status: 'Present' | 'Late', displayTime: string, location?: string) {
     const today = new Date();
-    const dateStr = today.toISOString().split('T')[0];
+    const dateStr = getLocalIsoDate(today);
     
     try {
       await this.ensureAuth();

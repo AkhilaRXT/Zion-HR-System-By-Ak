@@ -77,6 +77,7 @@ export default function Payroll({ session, data, onRefresh }: PayrollProps) {
     attendanceBonus: true,
     overtime: true,
     deductions: true,
+    loans: true,
     epf: true
   });
 
@@ -95,6 +96,7 @@ export default function Payroll({ session, data, onRefresh }: PayrollProps) {
     if (payComponents.attendanceBonus) selectedCompsBase.push('Attendance');
     if (payComponents.overtime) selectedCompsBase.push('Overtime');
     if (payComponents.deductions) selectedCompsBase.push('Deductions');
+    if (payComponents.loans) selectedCompsBase.push('Loans');
     if (payComponents.epf) selectedCompsBase.push('EPF');
 
     const sheetData = (data.employees || [])
@@ -143,8 +145,8 @@ export default function Payroll({ session, data, onRefresh }: PayrollProps) {
 
       const deductions = {
         'Salary Advances': payComponents.deductions ? advTotal : 0,
-        'Bike Installment': (payComponents.deductions && !isAlreadyFinalized) ? (emp.bikeInstallment || 0) : 0,
-        'Staff Loan': (payComponents.deductions && !isAlreadyFinalized) ? (emp.staffLoan || 0) : 0,
+        'Bike Installment': (payComponents.loans && !isAlreadyFinalized) ? (emp.bikeInstallment || 0) : 0,
+        'Staff Loan': (payComponents.loans && !isAlreadyFinalized) ? (emp.staffLoan || 0) : 0,
         [`EPF (${epfPercentage}%)`]: (!isAlreadyFinalized) ? epf : 0,
       };
 
@@ -300,7 +302,8 @@ export default function Payroll({ session, data, onRefresh }: PayrollProps) {
                       { id: 'petrolAllowance', label: 'Petrol' },
                       { id: 'attendanceBonus', label: 'Attendance' },
                       { id: 'overtime', label: 'Overtime' },
-                      { id: 'deductions', label: 'Deductions (Advances/Loans)' },
+                      { id: 'deductions', label: 'Salary Advances' },
+                      { id: 'loans', label: 'Loans & Bike Installment' },
                       { id: 'epf', label: 'EPF Deduction' }
                     ].map(comp => (
                       <label key={comp.id} className="flex items-center gap-3 cursor-pointer group">
@@ -509,10 +512,11 @@ export default function Payroll({ session, data, onRefresh }: PayrollProps) {
 
                     // Deductions are usually not held unless the entire salary is held and net is 0.
                     // We'll allow deductions as long as there are earnings to cover them.
-                    const totalDeductions = !payComponents.deductions ? 0 : (advTotal + 
-                                            ((!isAlreadyFinalized) ? (emp.bikeInstallment || 0) : 0) + 
-                                            ((!isAlreadyFinalized) ? (emp.staffLoan || 0) : 0) + 
-                                            ((!isAlreadyFinalized) ? epf : 0));
+                    const advDeduction = payComponents.deductions ? advTotal : 0;
+                    const loanDeduction = payComponents.loans && !isAlreadyFinalized ? ((emp.bikeInstallment || 0) + (emp.staffLoan || 0)) : 0;
+                    const epfDeduction = !isAlreadyFinalized ? epf : 0;
+                    
+                    const totalDeductions = advDeduction + loanDeduction + epfDeduction;
                                             
                     const net = Math.max(0, totalEarnings - totalDeductions);
 

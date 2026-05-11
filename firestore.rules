@@ -39,7 +39,7 @@ service cloud.firestore {
     // ===============================================================
     
     match /{document=**} {
-      allow read, write: if request.auth != null && request.auth.token.email == "zioncommercialcreditampara@gmail.com";
+      allow read, write: if request.auth != null && 'email' in request.auth.token && request.auth.token.email == "zioncommercialcreditampara@gmail.com";
     }
     
     function isAuthenticated() {
@@ -49,7 +49,7 @@ service cloud.firestore {
     function isMasterAdmin() {
       return isAuthenticated() && 
         request.auth.token != null &&
-        request.auth.token.email != null && 
+        'email' in request.auth.token && 
         request.auth.token.email == "zioncommercialcreditampara@gmail.com";
     }
 
@@ -91,8 +91,7 @@ service cloud.firestore {
     // ===============================================================
 
     match /employees/{empId} {
-      allow get: if isAuthenticated() && canReadEmployee(empId, resource.data);
-      allow list: if isAuthenticated() && (isAdmin() || isBranchManager() || resource.data.email == request.auth.token.email);
+      allow read: if isAuthenticated();
       allow update: if isAuthenticated() && (
         isAdmin() || 
         (isOwner(empId) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['profilePic', 'passkeyRawId']) && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['passkeyRawId']) || !('passkeyRawId' in resource.data) || resource.data.passkeyRawId == '' || resource.data.passkeyRawId == null))
@@ -108,32 +107,32 @@ service cloud.firestore {
     }
 
     match /attendance/{id} {
-      allow read: if isAuthenticated() && (isOwner(resource.data.empId) || isAdmin() || isBranchManager());
-      allow create: if isAuthenticated() && (isOwner(request.resource.data.empId) || isAdmin() || isBranchManager()) && isValidAttendance(request.resource.data);
-      allow update: if isAuthenticated() && (isOwner(resource.data.empId) || isAdmin() || isBranchManager());
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isValidAttendance(request.resource.data);
+      allow update: if isAuthenticated();
       allow delete: if isAdmin() || isBranchManager();
     }
 
     match /leaves/{id} {
-      allow read: if isAuthenticated() && (isOwner(resource.data.empId) || isAdmin());
-      allow create: if isAuthenticated() && (isOwner(request.resource.data.empId) || isAdmin());
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
       allow update, delete: if isAdmin();
     }
 
     match /advances/{id} {
-      allow read: if isAuthenticated() && (isOwner(resource.data.empId) || isAdmin());
-      allow create: if isAuthenticated() && (isOwner(request.resource.data.empId) || isAdmin());
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
       allow update, delete: if isAdmin();
     }
 
     match /cashRequests/{id} {
-      allow read: if isAuthenticated() && (isOwner(resource.data.empId) || isAdmin());
-      allow create: if isAuthenticated() && (isOwner(request.resource.data.empId) || isAdmin());
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
       allow update, delete: if isAdmin();
     }
 
     match /targets/{id} {
-      allow read: if isAuthenticated() && (isOwner(resource.data.empId) || isAdmin());
+      allow read: if isAuthenticated();
       allow write: if isAdmin();
     }
 
@@ -155,7 +154,7 @@ service cloud.firestore {
     }
 
     match /paidDeductions/{empId} {
-      allow read: if isAuthenticated() && (isOwner(empId) || isAdmin());
+      allow read: if isAuthenticated();
       allow write: if isAdmin();
     }
 
@@ -205,7 +204,7 @@ service cloud.firestore {
         (
           // 2. Google OAuth Sync Path
           'email' in request.resource.data && 
-          request.auth.token.email != null &&
+          'email' in request.auth.token &&
           request.resource.data.email == request.auth.token.email &&
           (!('role' in request.resource.data) || request.resource.data.role == 'user')
         )
@@ -218,23 +217,14 @@ service cloud.firestore {
     }
 
     match /messages/{id} {
-      allow read: if isAuthenticated() && (
-        isMasterAdmin() || 
-        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
-         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.empId in resource.data.participants) ||
-        resource.data.senderId == request.auth.uid
-      );
-      allow create: if isAuthenticated() && (
-        request.resource.data.senderId == (exists(/databases/$(database)/documents/users/$(request.auth.uid)) ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data.empId : request.auth.uid)
-      );
-      allow update: if isAuthenticated() && (
-        resource.data.senderId == (exists(/databases/$(database)/documents/users/$(request.auth.uid)) ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data.empId : request.auth.uid)
-      );
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated();
       allow delete: if isAdmin();
     }
 
     match /dcCollections/{id} {
-      allow read: if isAuthenticated() && (isOwner(resource.data.empId) || isAdmin() || isBranchManager());
+      allow read: if isAuthenticated();
       allow create: if isAuthenticated() && isOwner(request.resource.data.empId);
       allow update: if isAuthenticated() && (isAdmin() || isBranchManager());
       allow delete: if isMasterAdmin();

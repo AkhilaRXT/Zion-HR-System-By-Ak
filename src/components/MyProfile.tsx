@@ -67,7 +67,23 @@ export default function MyProfile({ session, data, onRefresh }: MyProfileProps) 
     sick: sickBalance
   };
 
-  const myAttendance = (data.attendance || []).filter(a => a.empId === emp.id).sort((a, b) => b.id - a.id).slice(0, 3);
+  const last3Days = Array.from({ length: 3 }).map((_, i) => {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    return d.toISOString().split('T')[0];
+  });
+
+  const myAttendance = last3Days.map(date => {
+    const rec = (data.attendance || []).find(a => a.empId === emp.id && a.date === date);
+    const isHoliday = (data.holidays || []).some(h => h.date === date);
+    const status = rec ? rec.status : (isHoliday ? 'Holiday' : 'Absent');
+    return { 
+      id: rec?.id || date, 
+      date, 
+      status, 
+      checkIn: rec?.checkIn || '--:--' 
+    };
+  });
   const myLeaves = (data.leaves || []).filter(l => l.empId === emp.id).sort((a, b) => b.id - a.id);
   const myAdvances = (data.advances || []).filter(a => a.empId === emp.id).sort((a, b) => b.id - a.id);
   const myCashRequests = (data.cashRequests || []).filter(r => r.empId === emp.id).sort((a, b) => b.id - a.id);
@@ -352,7 +368,16 @@ export default function MyProfile({ session, data, onRefresh }: MyProfileProps) 
               {myAttendance.map(a => (
                 <tr key={a.id}>
                   <td className="font-mono text-sm text-text-secondary">{a.date}</td>
-                  <td><span className="badge badge-success">Present</span></td>
+                  <td>
+                    <span className={`badge ${
+                      a.status === 'Present' ? 'badge-success' : 
+                      a.status === 'Half Day' ? 'badge-warning' : 
+                      a.status === 'Holiday' ? 'bg-emerald-100 text-emerald-800' : 
+                      'badge-danger'
+                    }`}>
+                      {a.status}
+                    </span>
+                  </td>
                   <td className="font-mono text-sm">{a.checkIn}</td>
                 </tr>
               ))}

@@ -61,6 +61,12 @@ export default function LeaveManagement({ session, data, onRefresh }: LeaveManag
     }
   };
 
+  React.useEffect(() => {
+    if (!hasSearched) {
+      handleSearch();
+    }
+  }, []);
+
   const showNotification = (message: string, type: NotificationType = 'success') => {
     setNotification({ message, type });
   };

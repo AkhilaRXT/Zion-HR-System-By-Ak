@@ -17,12 +17,13 @@ export function printPayAdvice(
     petrolAllowance: true,
     attendanceBonus: true,
     overtime: true,
-    deductions: true
+    deductions: true,
+    loans: true
   },
   customBonus: number = 0
 ) {
   const petrolLKR = payComponents.petrolAllowance ? (employee.petrolLitres || 0) * fuelPrice : 0;
-  const epf = (deductEPF && payComponents.deductions) ? (employee.baseSalary || 0) * (epfPercentage / 100) : 0;
+  const epf = (deductEPF && payComponents.epf) ? (employee.baseSalary || 0) * (epfPercentage / 100) : 0;
   
   const earnings = {
     baseSalary: payComponents.baseSalary ? (employee.baseSalary || 0) : 0,
@@ -43,8 +44,8 @@ export function printPayAdvice(
 
   const deductions = {
     advances: payComponents.deductions ? advancesTotal : 0,
-    bike: payComponents.deductions ? (employee.bikeInstallment || 0) : 0,
-    loan: payComponents.deductions ? (employee.staffLoan || 0) : 0,
+    bike: payComponents.loans ? (employee.bikeInstallment || 0) : 0,
+    loan: payComponents.loans ? (employee.staffLoan || 0) : 0,
     epf: epf,
     late: payComponents.deductions ? lateMark : 0
   };

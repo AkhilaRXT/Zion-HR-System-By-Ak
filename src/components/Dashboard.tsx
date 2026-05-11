@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { AppData, Session, Attendance } from '../types';
-import { DataStore } from '../lib/dataStore';
+import { DataStore, getLocalIsoDate } from '../lib/dataStore';
 import { 
   Users, 
   CalendarDays, 
@@ -28,7 +28,7 @@ interface DashboardProps {
 
 export default function Dashboard({ session, data, onRefresh }: DashboardProps) {
   const isAdmin = session.isAdmin;
-  const today = new Date().toISOString().split('T')[0];
+  const today = getLocalIsoDate();
   const currentEmpId = session.empId;
   
   // Admin Stats

@@ -59,6 +59,12 @@ export default function CashRequests({ session, data }: CashRequestsProps) {
     }
   };
 
+  React.useEffect(() => {
+    if (!hasSearched) {
+      handleSearch();
+    }
+  }, []);
+
   const showNotification = (message: string, type: NotificationType = 'success') => {
     setNotification({ message, type });
   };

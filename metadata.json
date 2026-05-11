@@ -1,6 +1,8 @@
 {
-  "name": "Remix: Zion HR System",
+  "name": "Zion HR System AK",
   "description": "Internal HR Portal for Zion Commercial Credit (PVT) Ltd — Attendance, Leave, Payroll and Target Management.",
-  "requestFramePermissions": ["geolocation"],
+  "requestFramePermissions": [
+    "geolocation"
+  ],
   "majorCapabilities": []
 }

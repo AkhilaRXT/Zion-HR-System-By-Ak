@@ -24,6 +24,8 @@ import {
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 
+import { Link } from 'react-router-dom';
+
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
@@ -149,10 +151,11 @@ export default function Sidebar({ session, data, activeRoute, onNavigate, onLogo
         </div>
 
       <nav className="flex-1 overflow-y-auto pr-2 custom-scrollbar my-4">
-        <ul className="space-y-4">
+        <div className="space-y-4 flex flex-col">
           {menuItems.filter(item => hasPermission(item.id)).map((item) => (
-            <li 
+            <Link 
               key={item.id}
+              to={`/${item.id.replace(/_/g, '-')}`}
               onClick={() => onNavigate(item.id)}
               className={cn(
                 "group px-4 py-3 cursor-pointer font-sans text-sm font-medium transition-all duration-200 flex items-center gap-3 rounded-lg",
@@ -164,9 +167,9 @@ export default function Sidebar({ session, data, activeRoute, onNavigate, onLogo
               <item.icon className={cn("w-5 h-5", activeRoute === item.id ? "text-white" : "text-text-secondary group-hover:text-brand-accent")} />
               <span className="flex-1">{item.label}</span>
               {activeRoute === item.id && <ChevronRight className="w-3 h-3" />}
-            </li>
+            </Link>
           ))}
-        </ul>
+        </div>
       </nav>
 
       <div className="mt-auto pt-8 border-t border-border-accent flex items-center gap-4">

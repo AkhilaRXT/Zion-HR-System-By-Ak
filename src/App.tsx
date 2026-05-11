@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { DataStore, STORAGE_KEY } from './lib/dataStore';
+import { DataStore, STORAGE_KEY, getLocalIsoDate } from './lib/dataStore';
 import { Session, AppData, Employee, Attendance, LeaveRequest, AdvanceRequest, Target, AuditLog, AppSettings, CashRequest, UserCredential, AdhocBonus } from './types';
 import { db, auth } from './lib/firebase';
 import { collection, onSnapshot, doc, query, limit, orderBy, where, QuerySnapshot, DocumentData } from 'firebase/firestore';
@@ -23,19 +23,16 @@ import BranchManagement from './components/BranchManagement';
 import HolidayCalendar from './components/HolidayCalendar';
 import DataMigration from './components/DataMigration';
 import { Clock, Menu, Loader2 } from 'lucide-react';
+import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 
 export default function App() {
-  const urlToRoute = () => {
-    const p = window.location.pathname.replace(/^\//, '').replace(/-/g, '_').toLowerCase();
-    return p === 'login' || !p ? 'dashboard' : p;
-  };
+  const location = useLocation();
+  const navigate = useNavigate();
 
-  const routeToUrl = (r: string) => {
-    return `/${r.replace(/_/g, '-')}`;
-  };
+  const routePattern = location.pathname.replace(/^\//, '').replace(/-/g, '_').toLowerCase();
+  const route = routePattern === 'login' || !routePattern ? 'dashboard' : routePattern;
 
   const [session, setSession] = useState<Session | null>(null);
-  const [route, setRoute] = useState(urlToRoute());
   const [currentTime, setCurrentTime] = useState(new Date());
 
   const [appData, setAppData] = useState<AppData>(DataStore.getData());
@@ -47,23 +44,10 @@ export default function App() {
 
   // URL Sync Effects
   useEffect(() => {
-    const handlePopState = () => setRoute(urlToRoute());
-    window.addEventListener('popstate', handlePopState);
-    return () => window.removeEventListener('popstate', handlePopState);
-  }, []);
-
-  useEffect(() => {
-    if (!session && !isLoading) {
-      if (window.location.pathname.toLowerCase() !== '/login') {
-        window.history.replaceState(null, '', '/login');
-      }
-    } else if (session) {
-      const targetUrl = routeToUrl(route);
-      if (window.location.pathname !== targetUrl) {
-        window.history.pushState(null, '', targetUrl);
-      }
+    if (!session && !isLoading && location.pathname.toLowerCase() !== '/login') {
+      navigate('/login', { replace: true });
     }
-  }, [route, session, isLoading]);
+  }, [session, isLoading, location.pathname, navigate]);
 
   // Safety fallback for all loading states
   useEffect(() => {
@@ -252,12 +236,7 @@ export default function App() {
 
       // Employee's own collections
       const syncOwn = (coll: string, key: string) => {
-        let q = query(collection(db, coll), where('empId', '==', session.empId), limit(1000));
-        if (coll === 'attendance') {
-           const todayStr = new Date().toISOString().split('T')[0];
-           // Two equality wheres DO NOT require a composite index in Firestore
-           q = query(collection(db, coll), where('empId', '==', session.empId), where('date', '==', todayStr), limit(2));
-        }
+        let q = query(collection(db, coll), where('empId', '==', session.empId));
         return onSnapshot(q, (snap) => {
           updatePart({ [key]: snap.docs.map(d => ({ ...d.data(), id: d.id })) });
         }, (err) => handleErr(`own_${coll}`, err));
@@ -303,7 +282,7 @@ export default function App() {
      
      // Only if on dashboard, get recent stuff for stats
      if (route === 'dashboard') {
-        const todayStr = new Date().toISOString().split('T')[0];
+        const todayStr = getLocalIsoDate();
         
         const qAttendance = query(collection(db, 'attendance'), where('date', '==', todayStr), limit(500));
         unsubs.push(onSnapshot(qAttendance, (snap) => updatePart({ attendance: snap.docs.map(d => ({ ...d.data(), id: d.id }) as any) }), (err) => console.log('Stat sync skipped:', err)));
@@ -336,14 +315,14 @@ export default function App() {
       const today = new Date();
       const monthAgo = new Date();
       monthAgo.setDate(today.getDate() - 30); // Show 30 days of history
-      const monthAgoStr = monthAgo.toISOString().split('T')[0];
+      const monthAgoStr = getLocalIsoDate(monthAgo);
 
       const fullAttQuery = query(collection(db, 'attendance'), where('date', '>=', monthAgoStr), orderBy('date', 'desc'), limit(1500));
       syncRouteCollection('attendance', 'attendance', fullAttQuery);
     }
 
     if (route === 'dashboard' && isBranchManager) {
-      const todayStr = new Date().toISOString().split('T')[0];
+      const todayStr = getLocalIsoDate();
       const todayAttQuery = query(collection(db, 'attendance'), where('date', '==', todayStr), limit(200));
       syncRouteCollection('attendance', 'attendance', todayAttQuery);
     }
@@ -386,10 +365,10 @@ export default function App() {
 
   // Loader lifecycle
   useEffect(() => {
-    if (session && isAuthReady && isSettingsReady) {
+    if (isAuthReady && isSettingsReady) {
       setIsLoading(false);
     }
-  }, [session, isAuthReady, isSettingsReady]);
+  }, [isAuthReady, isSettingsReady]);
 
   const refreshData = () => {
     window.location.reload();
@@ -398,7 +377,7 @@ export default function App() {
   const handleLogin = (newSession: Session) => {
     DataStore.setSession(newSession);
     setSession(newSession);
-    setRoute('dashboard');
+    navigate('/dashboard');
   };
 
   useEffect(() => {
@@ -567,7 +546,6 @@ export default function App() {
         data={appData}
         activeRoute={route} 
         onNavigate={(r) => {
-          setRoute(r);
           setIsSidebarOpen(false);
         }} 
         onLogout={handleLogout}
