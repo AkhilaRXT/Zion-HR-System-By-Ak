@@ -47,6 +47,7 @@ export default function SalaryAdvances({ session, data }: SalaryAdvancesProps) {
   const [searchedAdvances, setSearchedAdvances] = useState<AdvanceRequest[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
 
   const handleSearch = async () => {
     setIsSearching(true);
@@ -286,7 +287,17 @@ export default function SalaryAdvances({ session, data }: SalaryAdvancesProps) {
         const matchesPermission = hasPayrollPermission ? canViewEmployee(a.empId) : a.empId === currentEmpId;
         const matchesDate = a.date >= dateRange.from && a.date <= dateRange.to;
         const matchesStatus = activeTab === 'All' || a.status === activeTab;
-        return matchesPermission && matchesDate && matchesStatus;
+        
+        let matchesSearchTerm = true;
+        if (searchTerm) {
+          const emp = (data.employees || []).find(e => e.id === a.empId);
+          const empName = emp?.name?.toLowerCase() || '';
+          const empIdStr = a.empId.toLowerCase();
+          const q = searchTerm.toLowerCase();
+          matchesSearchTerm = empName.includes(q) || empIdStr.includes(q);
+        }
+
+        return matchesPermission && matchesDate && matchesStatus && matchesSearchTerm;
     })
     .sort((a, b) => b.id - a.id);
 
@@ -340,15 +351,28 @@ export default function SalaryAdvances({ session, data }: SalaryAdvancesProps) {
 
         <div className="lg:col-span-2 space-y-6">
           <div className="glass-panel p-6 flex flex-col md:flex-row gap-6 items-end">
-            <div className="flex-1 grid grid-cols-2 gap-4 w-full">
-              <div className="form-group">
+            <div className="flex-1 grid grid-cols-1 md:grid-cols-3 gap-4 w-full">
+              <div className="form-group md:col-span-1">
+                <label className="text-[10px] font-bold text-text-secondary uppercase tracking-widest mb-1 block">Search Employee</label>
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-secondary" />
+                  <input
+                    type="text"
+                    className="form-control text-xs pl-9"
+                    placeholder="Search Name or ID..."
+                    value={searchTerm}
+                    onChange={e => setSearchTerm(e.target.value)}
+                  />
+                </div>
+              </div>
+              <div className="form-group md:col-span-1">
                 <label className="text-[10px] font-bold text-text-secondary uppercase tracking-widest mb-1 block">From Date</label>
                 <input 
                   type="date" className="form-control text-xs" 
                   value={dateRange.from} onChange={e => setDateRange({...dateRange, from: e.target.value})}
                 />
               </div>
-              <div className="form-group">
+              <div className="form-group md:col-span-1">
                 <label className="text-[10px] font-bold text-text-secondary uppercase tracking-widest mb-1 block">To Date</label>
                 <input 
                   type="date" className="form-control text-xs" 

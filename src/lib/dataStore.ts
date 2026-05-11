@@ -174,7 +174,7 @@ export const DataStore = {
       }
       localStorage.setItem('zion_last_maint_v2', now.toString());
 
-      const currentSessionStr = sessionStorage.getItem(AUTH_KEY);
+      const currentSessionStr = localStorage.getItem(AUTH_KEY);
       if (currentSessionStr) {
         const currentSession = JSON.parse(currentSessionStr) as Session;
         
@@ -502,12 +502,12 @@ export const DataStore = {
   },
 
   getSession(): Session | null {
-    const raw = sessionStorage.getItem(AUTH_KEY);
+    const raw = localStorage.getItem(AUTH_KEY);
     return raw ? JSON.parse(raw) : null;
   },
 
   setSession(session: Session) {
-    sessionStorage.setItem(AUTH_KEY, JSON.stringify(session));
+    localStorage.setItem(AUTH_KEY, JSON.stringify(session));
   },
 
   async logout() {
@@ -515,7 +515,7 @@ export const DataStore = {
     if (session) {
       await this.logAction('Logout', `User ${session.name} (${session.empId}) logged out.`, 'Auth');
     }
-    sessionStorage.removeItem(AUTH_KEY);
+    localStorage.removeItem(AUTH_KEY);
     auth.signOut().catch(console.error);
   },
 
