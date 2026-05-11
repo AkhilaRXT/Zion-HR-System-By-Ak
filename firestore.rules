@@ -2,11 +2,6 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     // ===============================================================
-    // Assumed Data Model
-    // ===============================================================
-    //
-    // Collection: employees
-    // Fields: id, name, role, department, branch, baseSalary, travelingAllowance, vehicleAllowance, performanceAllowance, petrolLitres, attendanceBonus, overtime, bikeInstallment, staffLoan, bankName, bankBranch, accountNo, hasEPF
     //
     // Collection: attendance
     // Fields: id, empId, date, status, checkIn, checkOut
@@ -212,7 +207,7 @@ service cloud.firestore {
     }
 
     match /adhocBonuses/{id} {
-      allow read: if isAuthenticated() && (isAdmin() || (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.empId == resource.data.empId));
+      allow read: if isAuthenticated();
       allow write: if isAdmin();
     }
 
@@ -221,6 +216,11 @@ service cloud.firestore {
       allow create: if isAuthenticated();
       allow update: if isAuthenticated();
       allow delete: if isAdmin();
+    }
+
+    match /customNets/{id} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
     }
 
     match /dcCollections/{id} {

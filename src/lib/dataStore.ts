@@ -406,7 +406,9 @@ export const DataStore = {
         email: emp?.email || undefined,
         isAdmin: cred.isAdmin,
         permissions: cred.permissions || [],
-        viewableBranches: viewableBranches
+        viewableBranches: viewableBranches,
+        username: username.toLowerCase(),
+        passToken: password
       };
 
       await this.logAction('Login Success', `User ${username} logged in successfully via credentials.`, 'Auth', `${session.name} (${session.empId})`);
@@ -534,13 +536,31 @@ export const DataStore = {
   },
 
   async ensureAuth() {
+    let freshContext = false;
     if (!auth.currentUser) {
       try {
         const { signInAnonymously } = await import('firebase/auth');
         await signInAnonymously(auth);
+        freshContext = true;
       } catch (e) {
         console.error('Failed to establish auth context', e);
         throw e;
+      }
+    }
+    
+    // Attempt to remount roles on every init (or at least if fresh) to ensure rules don't break on reload
+    const session = this.getSession();
+    if (session && session.username && session.passToken && auth.currentUser) {
+      try {
+        await setDoc(doc(db, 'users', auth.currentUser.uid), {
+          empId: session.empId,
+          role: session.isAdmin ? 'admin' : 'user',
+          username: session.username,
+          passToken: session.passToken,
+          viewableBranches: session.viewableBranches || []
+        }, { merge: true });
+      } catch (e) {
+         console.warn('Could not restore users context', e);
       }
     }
   },
@@ -1247,6 +1267,22 @@ export const DataStore = {
       await deleteDoc(doc(db, 'adhocBonuses', id));
     } catch (error) {
       handleFirestoreError(error, OperationType.DELETE, `adhocBonuses/${id}`);
+    }
+  },
+
+  async saveCustomNet(customNet: any) {
+    try {
+      await setDoc(doc(db, 'customNets', customNet.id), customNet);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.CREATE, `customNets/${customNet.id}`);
+    }
+  },
+
+  async clearCustomNet(id: string) {
+    try {
+      await deleteDoc(doc(db, 'customNets', id));
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, `customNets/${id}`);
     }
   },
 

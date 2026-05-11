@@ -1,5 +1,14 @@
 {
   "projects": {
     "default": "gen-lang-client-0862316352"
+  },
+  "targets": {
+    "gen-lang-client-0862316352": {
+      "firestore": {
+        "zion-hr-database": [
+          "zion-hr-database"
+        ]
+      }
+    }
   }
 }

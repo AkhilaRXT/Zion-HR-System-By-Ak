@@ -53,6 +53,8 @@ export default function Payroll({ session, data, onRefresh }: PayrollProps) {
 
   const [customBonuses, setCustomBonuses] = useState<Record<string, number>>({});
 
+  const [customNetsState, setCustomNetsState] = useState<Record<string, number>>({});
+
   React.useEffect(() => {
     const bonusesForMonth = (data.adhocBonuses || []).filter(b => b.month === selectedMonth);
     const bonusMap: Record<string, number> = {};
@@ -60,7 +62,14 @@ export default function Payroll({ session, data, onRefresh }: PayrollProps) {
       bonusMap[b.empId] = b.amount;
     });
     setCustomBonuses(bonusMap);
-  }, [selectedMonth, data.adhocBonuses]);
+
+    const netsForMonth = (data.customNets || []).filter(n => n.month === selectedMonth);
+    const netsMap: Record<string, number> = {};
+    netsForMonth.forEach(n => {
+      netsMap[n.empId] = n.amount;
+    });
+    setCustomNetsState(netsMap);
+  }, [selectedMonth, data.adhocBonuses, data.customNets]);
 
   const [globalBonusTemplate, setGlobalBonusTemplate] = useState<number>(0);
 
@@ -152,10 +161,15 @@ export default function Payroll({ session, data, onRefresh }: PayrollProps) {
 
       const totalDeductions = Object.values(deductions).reduce((s, v) => s + v, 0);
       
-      const net = Math.max(0, totalEarnings - totalDeductions);
+      let net = Math.max(0, totalEarnings - totalDeductions);
+      let isManualNet = false;
+      if (customNetsState[emp.id] !== undefined) {
+         net = customNetsState[emp.id];
+         isManualNet = true;
+      }
       
       // If we are paying something OR if it is the first time we are locking deductions for this month
-      if (net > 0 || !isAlreadyFinalized) {
+      if (net > 0 || !isAlreadyFinalized || isManualNet) {
         if (earnings['Ad-Hoc Bonus'] > 0) actuallyPayingCmps.push('CustomBonus');
         const finalNote = notesStr ? `${notesStr} (LKR ${net.toLocaleString()})` : `Payout (LKR ${net.toLocaleString()})`;
         nets.push({ empId: emp.id, net, notes: finalNote, components: actuallyPayingCmps });
@@ -518,7 +532,13 @@ export default function Payroll({ session, data, onRefresh }: PayrollProps) {
                     
                     const totalDeductions = advDeduction + loanDeduction + epfDeduction;
                                             
-                    const net = Math.max(0, totalEarnings - totalDeductions);
+                    const calculatedNet = Math.max(0, totalEarnings - totalDeductions);
+                    let net = calculatedNet;
+                    let isManualNet = false;
+                    if (customNetsState[emp.id] !== undefined) {
+                      net = customNetsState[emp.id];
+                      isManualNet = true;
+                    }
 
                     return (
                       <tr key={emp.id}>
@@ -574,7 +594,57 @@ export default function Payroll({ session, data, onRefresh }: PayrollProps) {
                             <span className="text-xs text-emerald-600 font-semibold italic">Paid ({manualBonus})</span>
                           )}
                         </td>
-                        <td className="font-mono text-sm font-semibold text-text-primary">LKR {net.toLocaleString()}</td>
+                        <td>
+                          {(!alreadyPaidCmps.includes('CustomBonus') && !isAlreadyFinalized) ? (
+                            <div className="flex items-center gap-1 max-w-[120px]">
+                              <span className="text-xs text-text-secondary">LKR</span>
+                              <input 
+                                type="number" 
+                                min="0"
+                                className={`w-full text-sm font-bold border rounded px-2 py-1 outline-none transition-colors ${
+                                  isManualNet 
+                                    ? 'text-brand-primary bg-brand-primary/5 hover:bg-brand-primary/10 border-brand-accent/30 focus:border-brand-accent' 
+                                    : 'text-text-primary bg-bg-secondary border-bg-tertiary focus:border-brand-primary'
+                                }`}
+                                value={customNetsState[emp.id] ?? ''}
+                                onChange={e => {
+                                  const val = e.target.value;
+                                  if (val === '') {
+                                    setCustomNetsState(prev => {
+                                      const next = { ...prev };
+                                      delete next[emp.id];
+                                      return next;
+                                    });
+                                  } else {
+                                    setCustomNetsState(prev => ({ ...prev, [emp.id]: Number(val) }));
+                                  }
+                                }}
+                                onBlur={async (e) => {
+                                  const val = e.target.value;
+                                  if (val !== '') {
+                                    await DataStore.saveCustomNet({
+                                      id: `${selectedMonth}_${emp.id}`,
+                                      empId: emp.id,
+                                      month: selectedMonth,
+                                      amount: Number(val),
+                                      addedBy: session.name,
+                                      timestamp: new Date().toISOString()
+                                    });
+                                    showNotification('Net Salary manually overridden', 'success');
+                                  } else {
+                                    await DataStore.clearCustomNet(`${selectedMonth}_${emp.id}`);
+                                    showNotification('Net Salary override removed', 'info');
+                                  }
+                                }}
+                                placeholder={calculatedNet.toLocaleString()}
+                              />
+                            </div>
+                          ) : (
+                            <span className="font-mono text-sm font-semibold text-text-primary">
+                              LKR {net.toLocaleString()} {isManualNet && <span className="text-[10px] text-brand-primary ml-1">(Override)</span>}
+                            </span>
+                          )}
+                        </td>
                         <td>
                           <button 
                             onClick={() => printPayAdvice(

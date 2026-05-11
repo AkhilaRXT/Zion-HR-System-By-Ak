@@ -163,6 +163,20 @@
       },
       "required": ["empId", "subject", "message", "timestamp"]
     },
+    "CustomNet": {
+      "title": "Custom Net Salary",
+      "description": "Manual override for employee net salary",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "empId": { "type": "string" },
+        "month": { "type": "string" },
+        "amount": { "type": "number" },
+        "addedBy": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "empId", "month", "amount"]
+    },
     "Holiday": {
       "title": "Holiday",
       "description": "Company holiday or non-working day",
@@ -188,6 +202,7 @@
     "/credentials/{username}": { "schema": "Credential", "description": "User credentials" },
     "/systemReports/{id}": { "schema": "SystemReport", "description": "System reports and complaints" },
     "/branches/{id}": { "schema": "Branch", "description": "Company branches" },
-    "/holidays/{id}": { "schema": "Holiday", "description": "Company holidays" }
+    "/holidays/{id}": { "schema": "Holiday", "description": "Company holidays" },
+    "/customNets/{id}": { "schema": "CustomNet", "description": "Manual overrides for net salaries" }
   }
 }

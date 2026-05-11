@@ -1,4 +1,8 @@
 {
+  "firestore": {
+    "target": "zion-hr-database",
+    "rules": "firestore.rules"
+  },
   "hosting": {
     "public": "dist",
     "ignore": [

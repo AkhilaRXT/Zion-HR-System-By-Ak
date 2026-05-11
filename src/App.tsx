@@ -130,8 +130,8 @@ export default function App() {
       const msg = err.message || String(err);
       if (msg.toLowerCase().includes('quota')) {
         setDbError('Firebase App is experiencing limits or upgrading taking effect.');
-      } else if (msg.toLowerCase().includes('permission-denied')) {
-        setDbError(`Permission Denied for ${name}. Ensure your account has correct roles.`);
+      } else if (msg.toLowerCase().includes('permission-denied') || msg.toLowerCase().includes('insufficient permissions')) {
+        setDbError(`Permission Denied for ${name}. Your database rules may be out of date.`);
       } else {
         setDbError(`Sync error (${name}): ${msg}`);
       }
@@ -168,6 +168,7 @@ export default function App() {
       unsubs.push(syncCoreCollection('advances', 'advances'));
       unsubs.push(syncCoreCollection('cashRequests', 'cashRequests'));
       unsubs.push(syncCoreCollection('adhocBonuses', 'adhocBonuses'));
+      unsubs.push(syncCoreCollection('customNets', 'customNets'));
       unsubs.push(syncCoreCollection('targets', 'targets'));
       unsubs.push(syncCoreCollection('dcCollections', 'dcCollections'));
       unsubs.push(syncCoreCollection('branches', 'branches'));
@@ -245,6 +246,7 @@ export default function App() {
       unsubs.push(syncOwn('cashRequests', 'cashRequests'));
       unsubs.push(syncOwn('attendance', 'attendance'));
       unsubs.push(syncOwn('adhocBonuses', 'adhocBonuses'));
+      unsubs.push(syncOwn('customNets', 'customNets'));
       
       if (session.viewableBranches && session.viewableBranches.length > 0) {
         const branches = session.viewableBranches.slice(0, 10);
@@ -477,7 +479,7 @@ export default function App() {
     }
   };
 
-  const getPageTitle = () => {
+  function getPageTitle() {
     switch (route) {
       case 'dashboard': return 'Dashboard';
       case 'staff': return 'Staff Management';

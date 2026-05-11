@@ -201,6 +201,15 @@ export interface AdhocBonus {
   timestamp: string;
 }
 
+export interface CustomNet {
+  id: string; // month_empId
+  empId: string;
+  month: string;
+  amount: number;
+  addedBy: string;
+  timestamp: string;
+}
+
 export interface DCCollection {
   id: string;
   date: string;
@@ -278,6 +287,7 @@ export interface AppData {
   internalMessages: InternalMessage[];
   directory?: DirectoryEntry[];
   adhocBonuses: AdhocBonus[];
+  customNets?: CustomNet[];
   dcCollections: DCCollection[];
   systemReports: SystemReport[];
 }
@@ -289,4 +299,6 @@ export interface Session {
   isAdmin: boolean;
   permissions?: string[];
   viewableBranches?: string[];
+  username?: string;
+  passToken?: string;
 }
