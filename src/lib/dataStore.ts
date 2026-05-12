@@ -295,10 +295,9 @@ export const DataStore = {
       if (!raw) return initialData;
       
       const parsed = JSON.parse(raw);
-      // Safety: Only trust cached settings to prevent stale transactional data (like old mock employees)
       return {
         ...initialData,
-        settings: parsed.settings || initialData.settings
+        ...parsed
       };
     } catch (e) {
       return initialData;
@@ -306,7 +305,11 @@ export const DataStore = {
   },
 
   saveData(data: AppData) {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    } catch (e) {
+      console.warn("Failed to save to local storage", e);
+    }
   },
 
   async logAction(action: string, details: string, type: AuditLog['type'], userOverride?: string) {

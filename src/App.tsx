@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { DataStore, STORAGE_KEY, getLocalIsoDate } from './lib/dataStore';
 import { Session, AppData, Employee, Attendance, LeaveRequest, AdvanceRequest, Target, AuditLog, AppSettings, CashRequest, UserCredential, AdhocBonus } from './types';
@@ -35,12 +35,16 @@ export default function App() {
   const [session, setSession] = useState<Session | null>(DataStore.getSession());
   const [currentTime, setCurrentTime] = useState(new Date());
 
-  const [appData, setAppData] = useState<AppData>(DataStore.getData());
+  const [appData, setAppData] = useState<AppData>(() => DataStore.getData());
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isAuthReady, setIsAuthReady] = useState(false);
   const [isSettingsReady, setIsSettingsReady] = useState(false);
   const [dbError, setDbError] = useState<string | null>(null);
+
+  useEffect(() => {
+    DataStore.saveData(appData);
+  }, [appData]);
 
   // URL Sync Effects
   useEffect(() => {
@@ -64,8 +68,17 @@ export default function App() {
 
   // --- DATA SYNCHRONIZATION ---
 
+  const pendingUpdate = useRef<Partial<AppData>>({});
+  const flushTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const updatePart = (part: Partial<AppData>) => {
-    setAppData(prev => ({ ...prev, ...part }));
+    Object.assign(pendingUpdate.current, part);
+    if (flushTimer.current) clearTimeout(flushTimer.current);
+    flushTimer.current = setTimeout(() => {
+      const updates = pendingUpdate.current;
+      pendingUpdate.current = {};
+      setAppData(prev => ({ ...prev, ...updates }));
+    }, 30);
   };
 
   useEffect(() => {
@@ -164,13 +177,6 @@ export default function App() {
         }, (err) => handleErr(name, err));
       };
 
-      unsubs.push(syncCoreCollection('leaves', 'leaves'));
-      unsubs.push(syncCoreCollection('advances', 'advances'));
-      unsubs.push(syncCoreCollection('cashRequests', 'cashRequests'));
-      unsubs.push(syncCoreCollection('adhocBonuses', 'adhocBonuses'));
-      unsubs.push(syncCoreCollection('customNets', 'customNets'));
-      unsubs.push(syncCoreCollection('targets', 'targets'));
-      unsubs.push(syncCoreCollection('dcCollections', 'dcCollections'));
       unsubs.push(syncCoreCollection('branches', 'branches'));
       unsubs.push(syncCoreCollection('holidays', 'holidays'));
 
@@ -246,7 +252,6 @@ export default function App() {
       unsubs.push(syncOwn('cashRequests', 'cashRequests'));
       unsubs.push(syncOwn('attendance', 'attendance'));
       unsubs.push(syncOwn('adhocBonuses', 'adhocBonuses'));
-      unsubs.push(syncOwn('customNets', 'customNets'));
       
       if (session.viewableBranches && session.viewableBranches.length > 0) {
         const branches = session.viewableBranches.slice(0, 10);
@@ -332,6 +337,11 @@ export default function App() {
     // Expanded history for specific pages is disabled for leaves and advances to reduce DB reads.
     // They now fetch their own data using a manual search function.
 
+    if (route === 'leave') syncRouteCollection('leaves', 'leaves');
+    if (route === 'advances') syncRouteCollection('advances', 'advances');
+    if (route === 'payroll') syncRouteCollection('customNets', 'customNets');
+    if (route === 'targets') syncRouteCollection('targets', 'targets');
+    if (route === 'dc_collection') syncRouteCollection('dcCollections', 'dcCollections');
 
     if (route === 'cash_requests') {
       const q = query(collection(db, 'cashRequests'), orderBy('id', 'desc'), limit(500));
@@ -393,28 +403,31 @@ export default function App() {
 
   if (isLoading) {
     return (
-      <div className="fixed inset-0 bg-bg-primary flex flex-col items-center justify-center gap-8 z-[300] px-4 text-center">
-        <div className="relative w-24 h-24 animate-pulse shrink-0">
-          {appData.settings.logo ? (
-            <img src={appData.settings.logo} alt="Logo" className="w-full h-full object-contain rounded-xl" referrerPolicy="no-referrer" />
-          ) : (
-            <svg viewBox="0 0 100 100" className="w-full h-full drop-shadow-2xl">
-              <path d="M50 0 A50 50 0 0 0 50 100 L50 0" fill="#1B4384" />
-              <path d="M50 0 A50 50 0 0 1 50 100 L50 0" fill="#27A745" />
-              <path d="M30 30 L70 30 L30 70 L70 70" fill="none" stroke="white" strokeWidth="12" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          )}
-          <div className="absolute inset-0 border-4 border-brand-accent/30 rounded-full animate-ping" style={{ animationDuration: '2s' }} />
-        </div>
-        <div className="flex flex-col items-center gap-3">
-          <h2 className="text-text-primary font-serif text-2xl sm:text-3xl font-bold max-w-full truncate whitespace-normal">{appData.settings?.companyName || 'Zion HR'}</h2>
-          <div className="flex items-center gap-2">
-            <div className="w-2 h-2 bg-brand-accent rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-            <div className="w-2 h-2 bg-brand-accent rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-            <div className="w-2 h-2 bg-brand-accent rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
-          </div>
-          <p className="text-text-secondary text-sm font-medium mt-2">Synchronizing with Cloud...</p>
-        </div>
+      <div className="app-container bg-bg-primary relative overflow-hidden flex h-screen">
+        <aside className="w-[280px] bg-white/60 backdrop-blur-xl border-r border-border-accent p-8 hidden md:block h-full z-50">
+           <div className="w-10 h-10 bg-gray-200 animate-pulse rounded-lg mb-4" />
+           <div className="w-3/4 h-6 bg-gray-200 animate-pulse rounded mb-1" />
+           <div className="w-1/2 h-4 bg-gray-200 animate-pulse rounded mb-12" />
+           <div className="space-y-4">
+             {[1,2,3,4,5,6,7].map(i => (
+                <div key={i} className="w-full h-10 bg-gray-200 animate-pulse rounded-lg" />
+             ))}
+           </div>
+        </aside>
+        <main className="main-content flex-1 flex flex-col h-full w-full">
+           <header className="px-6 md:px-12 py-6 md:py-8 border-b border-border-accent bg-white/50 flex justify-between items-center">
+              <div className="w-48 h-8 bg-gray-200 animate-pulse rounded" />
+              <div className="w-32 h-8 bg-gray-200 animate-pulse rounded-full hidden md:block" />
+           </header>
+           <div className="p-6 md:p-12 flex-1">
+             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+               {[1,2,3,4].map(i => (
+                 <div key={i} className="h-32 bg-white/50 border border-border-accent animate-pulse rounded-2xl" />
+               ))}
+             </div>
+             <div className="h-96 w-full bg-white/50 border border-border-accent animate-pulse rounded-2xl" />
+           </div>
+        </main>
       </div>
     );
   }
