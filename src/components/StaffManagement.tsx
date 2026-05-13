@@ -10,8 +10,11 @@ import {
   X,
   Save,
   Search,
-  User
+  User,
+  FileDown,
+  Users
 } from 'lucide-react';
+import * as XLSX from 'xlsx';
 import { motion, AnimatePresence } from 'motion/react';
 import ConfirmModal from './ConfirmModal';
 import Notification, { NotificationType } from './Notification';
@@ -28,6 +31,8 @@ export default function StaffManagement({ session, data, onRefresh }: StaffManag
   const fuelPrice = data.settings?.fuelPrice || 398;
   const [activeTab, setActiveTab] = useState<'directory' | 'roster'>('directory');
   const [searchTerm, setSearchTerm] = useState('');
+  const [showAllRoster, setShowAllRoster] = useState(false);
+  const [rosterBranchFilter, setRosterBranchFilter] = useState('ALL');
   const [originalId, setOriginalId] = useState<string | null>(null);
   const [isEditing, setIsEditing] = useState<(Employee & { username?: string, password?: string, isSystemAdmin?: boolean, permissions?: string[], viewableBranches?: string[] }) | null>(null);
 
@@ -256,14 +261,47 @@ export default function StaffManagement({ session, data, onRefresh }: StaffManag
 
   const filteredEmployees = (data.employees || [])
     .filter(e => e.id !== 'EMP003' && canViewEmployee(e.id))
+    .filter(e => rosterBranchFilter === 'ALL' ? true : e.branch === rosterBranchFilter)
     .filter(e => 
       e.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
       e.id.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
-  const displayedEmployees = searchTerm.trim() 
+  const displayedEmployees = (searchTerm.trim() || showAllRoster)
     ? filteredEmployees 
     : filteredEmployees.slice(0, 10);
+
+  const exportStaffDataToExcel = () => {
+    const exportData = filteredEmployees.map(emp => {
+       const grossSalary = (emp.baseSalary || 0) + 
+          (emp.performanceAllowance || 0) + 
+          (emp.travelingAllowance || 0) + 
+          (emp.vehicleAllowance || 0) + 
+          (emp.attendanceBonus || 0) + 
+          (emp.overtime || 0) + 
+          ((emp.petrolLitres || 0) * (data.settings?.fuelPrice || 398));
+          
+       return {
+          "EMP NO": emp.id,
+          "Full Name": emp.name,
+          "Email": emp.email,
+          "Role": emp.role,
+          "Department": emp.department,
+          "Branch": emp.branch,
+          "Status": emp.status,
+          "Gross Salary (LKR)": grossSalary,
+          "Base Salary (LKR)": emp.baseSalary || 0,
+          "Bank Name": emp.bankName || '',
+          "Bank Branch": emp.bankBranch || '',
+          "Account No": emp.accountNo || ''
+       };
+    });
+
+    const worksheet = XLSX.utils.json_to_sheet(exportData);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Staff Details");
+    XLSX.writeFile(workbook, `Staff_Details_${new Date().toISOString().split('T')[0]}.xlsx`);
+  };
 
   const handlePermissionToggle = (perm: string) => {
     setNewEmp(prev => ({
@@ -717,17 +755,49 @@ export default function StaffManagement({ session, data, onRefresh }: StaffManag
 
       {activeTab === 'roster' && (
         <div className="bg-bg-secondary border border-border-accent p-10">
-          <div className="flex justify-between items-center mb-8">
-            <h3 className="text-[11px] uppercase tracking-[3px] text-brand-accent">Staff Roster</h3>
-            <div className="flex items-center gap-4 bg-white border border-border-accent px-4 py-2">
-              <Search className="w-4 h-4 text-text-secondary" />
-              <input 
-                type="text" 
-                placeholder="Search..." 
-                className="bg-transparent border-none outline-none text-[11px] uppercase tracking-[1px] w-[150px]"
-                value={searchTerm}
-                onChange={e => setSearchTerm(e.target.value)}
-              />
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
+            <div className="flex items-center gap-4">
+               <h3 className="text-[11px] uppercase tracking-[3px] text-brand-accent">Staff Roster</h3>
+               <span className="text-xs bg-bg-primary border border-border-accent px-2 py-1 flex items-center gap-1 text-text-secondary"><Users className="w-3 h-3" /> {filteredEmployees.length} Total</span>
+            </div>
+            <div className="flex flex-wrap items-center gap-4">
+              <div className="flex items-center gap-2">
+                 <select 
+                    className="bg-white border border-border-accent px-3 py-2 text-[11px] uppercase tracking-[1px] outline-none text-text-secondary"
+                    value={rosterBranchFilter}
+                    onChange={(e) => setRosterBranchFilter(e.target.value)}
+                 >
+                    <option value="ALL">All Branches</option>
+                    {Array.from(new Set((data.employees || []).filter(e => e.branch).map(e => e.branch))).map(b => (
+                       <option key={b} value={b}>{b}</option>
+                    ))}
+                 </select>
+              </div>
+              <div className="flex items-center gap-4 bg-white border border-border-accent px-4 py-2">
+                <Search className="w-4 h-4 text-text-secondary" />
+                <input 
+                  type="text" 
+                  placeholder="Search..." 
+                  className="bg-transparent border-none outline-none text-[11px] uppercase tracking-[1px] w-[150px]"
+                  value={searchTerm}
+                  onChange={e => setSearchTerm(e.target.value)}
+                />
+              </div>
+              <button 
+                onClick={() => setShowAllRoster(!showAllRoster)}
+                className={`px-4 py-2 border border-border-accent text-[11px] uppercase tracking-[1px] transition-colors ${showAllRoster ? 'bg-brand-accent text-white' : 'bg-white text-text-secondary hover:text-text-primary'}`}
+              >
+                {showAllRoster ? 'Show Less' : 'View All'}
+              </button>
+              {isAdmin && (
+                <button 
+                  onClick={exportStaffDataToExcel}
+                  className="flex items-center gap-2 px-4 py-2 bg-emerald-50 text-emerald-600 border border-emerald-200 hover:bg-emerald-100 transition-colors text-[11px] uppercase tracking-[1px]"
+                  title="Download Details (Excel)"
+                >
+                  <FileDown className="w-4 h-4" /> Export
+                </button>
+              )}
             </div>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">

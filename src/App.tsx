@@ -300,12 +300,11 @@ export default function App() {
   useEffect(() => {
     const isBranchManager = session?.viewableBranches && session.viewableBranches.length > 0;
     if ((!session?.isAdmin && !isBranchManager) || !isAuthReady) return;
-    if (route === 'dashboard' && !isBranchManager) return; // Admins handled by dashboard effect. Managers don't trigger dashboard effect, so we shouldn't skip for them if they need it. Actually, dashboard effect has its own isAdmin check!
+    if (route === 'dashboard' && !isBranchManager) return; // Admins handled by dashboard effect. Managers don't trigger dashboard effect, so we shouldn't skip for them if they need it.
 
     const unsubs: (() => void)[] = [];
     const handleErr = (name: string, err: any) => {
       console.warn(`Route sync failed for ${name}:`, err);
-      // setDbError(`Route Sync Error (${name}): ${err.message || String(err)}`);
     };
 
     const syncRouteCollection = (coll: string, key: string, qRef?: any) => {
@@ -334,9 +333,6 @@ export default function App() {
 
     if (!session?.isAdmin) return; // Following collections are STRICTLY for Admins
 
-    // Expanded history for specific pages is disabled for leaves and advances to reduce DB reads.
-    // They now fetch their own data using a manual search function.
-
     if (route === 'leave') syncRouteCollection('leaves', 'leaves');
     if (route === 'advances') syncRouteCollection('advances', 'advances');
     if (route === 'payroll') syncRouteCollection('customNets', 'customNets');
@@ -349,10 +345,9 @@ export default function App() {
     }
 
     if (route === 'payroll') {
-      const receiptQuery = query(collection(db, 'payrollReceipts'), orderBy('timestamp', 'desc'), limit(100));
+      const receiptQuery = query(collection(db, 'payrollReceipts'), orderBy('timestamp', 'desc'), limit(150));
       syncRouteCollection('payrollReceipts', 'payrollReceipts', receiptQuery);
       
-      // Also fetch deeper adhoc bonuses and advances for payroll view
       const bonusQuery = query(collection(db, 'adhocBonuses'), orderBy('timestamp', 'desc'), limit(500));
       syncRouteCollection('adhocBonuses', 'adhocBonuses', bonusQuery);
     }
@@ -364,10 +359,6 @@ export default function App() {
     if (route === 'audit') {
       const q = query(collection(db, 'auditLogs'), orderBy('timestamp', 'desc'), limit(150));
       syncRouteCollection('auditLogs', 'auditLogs', q);
-    }
-
-    if (route === 'mail') {
-      // Mail fetching is now handled manually inside the Mail component to reduce DB reads.
     }
 
     return () => unsubs.forEach(u => u());
@@ -391,9 +382,8 @@ export default function App() {
   };
 
   useEffect(() => {
-    if (session) {
-      DataStore.logAction('Page View', `User viewed ${getPageTitle()}`, 'Auth');
-    }
+    // Audit logging for mere page views has been removed to conserve Firebase Write quota
+    // DataStore.logAction('Page View', `User viewed ${getPageTitle()}`, 'Auth');
   }, [route]);
 
   const handleLogout = () => {

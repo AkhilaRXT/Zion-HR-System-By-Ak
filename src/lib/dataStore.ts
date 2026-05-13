@@ -1396,6 +1396,31 @@ export const DataStore = {
     }
   },
 
+  async updatePayrollReceiptTransactions(receiptId: string, updatedTransactions: any[]) {
+    try {
+      await this.ensureAuth();
+      const currentSession = this.getSession();
+      if (!currentSession?.isAdmin || currentSession.email !== "zioncommercialcreditampara@gmail.com") {
+        throw new Error("Master Admin privileges required");
+      }
+      
+      const receiptDoc = await getDoc(doc(db, 'payrollReceipts', receiptId));
+      if (!receiptDoc.exists()) throw new Error('Receipt not found');
+      
+      const totalPayout = updatedTransactions.reduce((sum, t) => sum + (Number(t.net) || 0), 0);
+      
+      await updateDoc(doc(db, 'payrollReceipts', receiptId), {
+         transactions: updatedTransactions,
+         totalPayout: totalPayout,
+         employeesPaid: updatedTransactions.length
+      });
+      
+      await this.logAction('Payroll Receipt Updated', `Master Admin edited receipt ${receiptId}. New Total: LKR ${totalPayout}`, 'Audit');
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, 'payrollReceipts');
+    }
+  },
+
   async deletePayrollReceipt(receiptId: string) {
     try {
       await this.ensureAuth();

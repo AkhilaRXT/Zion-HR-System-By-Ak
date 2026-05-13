@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { AppData, Session, AdvanceRequest } from '../types';
 import { DataStore } from '../lib/dataStore';
-import { Wallet, FileText, Check, X, Printer, FileDown, HandCoins, Paperclip, Trash2, ChevronDown, ChevronUp } from 'lucide-react';
+import { Wallet, FileText, Check, X, Printer, FileDown, HandCoins, Paperclip, Trash2, ChevronDown, ChevronUp, Edit2, Save } from 'lucide-react';
 import { printPayAdvice } from '../lib/payAdvice';
 import * as XLSX from 'xlsx';
 import { motion, AnimatePresence } from 'motion/react';
@@ -50,6 +50,9 @@ export default function Payroll({ session, data, onRefresh }: PayrollProps) {
     date: Date;
     data: { empId: string; net: number; notes: string; components: string[] }[];
   } | null>(null);
+
+  const [editingReceiptId, setEditingReceiptId] = useState<string | null>(null);
+  const [editedTransactions, setEditedTransactions] = useState<{ empId: string; net: number; notes: string; components: string[] }[]>([]);
 
   const [customBonuses, setCustomBonuses] = useState<Record<string, number>>({});
 
@@ -260,6 +263,21 @@ export default function Payroll({ session, data, onRefresh }: PayrollProps) {
         showNotification(e?.message || 'Failed to delete receipt.', 'error');
       }
     }
+  };
+
+  const handleSaveEditedReceipt = async () => {
+    if (!editingReceiptId) return;
+    setIsProcessing(true);
+    try {
+      await DataStore.updatePayrollReceiptTransactions(editingReceiptId, editedTransactions);
+      setEditingReceiptId(null);
+      setEditedTransactions([]);
+      showNotification('Receipt updated successfully.');
+    } catch (e: any) {
+       console.error(e);
+       showNotification(e?.message || 'Failed to update receipt.', 'error');
+    }
+    setIsProcessing(false);
   };
 
   return (
@@ -725,13 +743,26 @@ export default function Payroll({ session, data, onRefresh }: PayrollProps) {
                             {isExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
                          </button>
                          {isMasterAdmin && (
-                            <button 
-                              onClick={() => handleDeleteReceipt(receipt.id)}
-                              className="text-xs flex items-center gap-1 text-red-500 hover:text-red-700 transition-colors"
-                              title="Delete Transaction & Reverse Payouts"
-                            >
-                              <Trash2 className="w-3 h-3" /> Revert
-                            </button>
+                            <div className="flex gap-3 items-center">
+                              <button 
+                                onClick={() => {
+                                  setEditingReceiptId(receipt.id);
+                                  // make a deep copy
+                                  setEditedTransactions((receipt.transactions || []).map(t => ({...t})));
+                                }}
+                                className="text-xs flex items-center gap-1 text-blue-500 hover:text-blue-700 transition-colors"
+                                title="Edit Transaction"
+                              >
+                                <Edit2 className="w-3 h-3" /> Edit
+                              </button>
+                              <button 
+                                onClick={() => handleDeleteReceipt(receipt.id)}
+                                className="text-xs flex items-center gap-1 text-red-500 hover:text-red-700 transition-colors"
+                                title="Delete Transaction & Reverse Payouts"
+                              >
+                                <Trash2 className="w-3 h-3" /> Revert
+                              </button>
+                            </div>
                          )}
                        </div>
                        
@@ -744,7 +775,7 @@ export default function Payroll({ session, data, onRefresh }: PayrollProps) {
                              className="overflow-hidden"
                            >
                              <div className="mt-4 space-y-2 pt-2 border-t border-border-accent/50 max-h-48 overflow-y-auto custom-scrollbar">
-                               {receipt.transactions.map((t, idx) => {
+                               {(receipt.transactions || []).map((t, idx) => {
                                   const emp = data.employees.find(e => e.id === t.empId);
                                   return (
                                     <div key={idx} className="p-2 border border-border-accent rounded bg-gray-50 flex justify-between items-center">
@@ -862,6 +893,93 @@ export default function Payroll({ session, data, onRefresh }: PayrollProps) {
                 <button onClick={() => setShowReceipt(false)} className="btn btn-primary">
                   Close Receipt
                 </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {editingReceiptId && (
+          <motion.div 
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4"
+          >
+            <motion.div 
+              initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-white rounded-2xl w-full max-w-3xl max-h-[90vh] flex flex-col shadow-2xl relative overflow-hidden"
+            >
+              <div className="p-6 border-b border-border-accent flex justify-between items-center bg-gray-50/50">
+                <div>
+                  <h3 className="text-lg font-bold text-text-primary">Edit Transaction Receipt</h3>
+                  <p className="text-xs text-text-secondary mt-1">Receipt ID: {editingReceiptId}</p>
+                </div>
+                <button onClick={() => setEditingReceiptId(null)} className="text-text-secondary hover:text-text-primary">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              
+              <div className="p-6 overflow-y-auto flex-1 bg-gray-50 custom-scrollbar">
+                 <div className="space-y-4">
+                    {editedTransactions.map((t, idx) => {
+                       const emp = data.employees.find(e => e.id === t.empId);
+                       return (
+                         <div key={idx} className="bg-white p-4 border border-border-accent rounded-xl flex items-center gap-4">
+                            <div className="flex-1">
+                               <p className="text-sm font-semibold text-text-primary">{emp?.name || t.empId} <span className="font-mono text-xs text-text-secondary">({t.empId})</span></p>
+                               <input 
+                                  className="w-full mt-2 form-control text-xs" 
+                                  value={t.notes}
+                                  onChange={(e) => {
+                                     const newVal = [...editedTransactions];
+                                     newVal[idx].notes = e.target.value;
+                                     setEditedTransactions(newVal);
+                                  }}
+                                  placeholder="Notes..."
+                               />
+                            </div>
+                            <div className="w-1/3">
+                               <label className="text-xs text-text-secondary font-medium">Net Payout (LKR)</label>
+                               <input 
+                                  type="number"
+                                  className="w-full mt-1 form-control font-mono font-bold text-emerald-600" 
+                                  value={t.net}
+                                  onChange={(e) => {
+                                     const newVal = [...editedTransactions];
+                                     newVal[idx].net = Number(e.target.value) || 0;
+                                     setEditedTransactions(newVal);
+                                  }}
+                               />
+                            </div>
+                            <button
+                              onClick={() => {
+                                const newVal = editedTransactions.filter((_, i) => i !== idx);
+                                setEditedTransactions(newVal);
+                              }}
+                              className="p-2 text-text-tertiary hover:text-red-500 transition-colors self-end mb-1"
+                              title="Remove Transaction"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                         </div>
+                       )
+                    })}
+                 </div>
+              </div>
+              
+              <div className="p-6 border-t border-border-accent flex justify-between items-center bg-white">
+                 <div>
+                    <span className="text-xs text-text-secondary">New Total Payout:</span>
+                    <p className="text-lg font-bold text-emerald-600">LKR {editedTransactions.reduce((s, t) => s + (Number(t.net) || 0), 0).toLocaleString()}</p>
+                 </div>
+                 <div className="flex gap-3">
+                    <button onClick={() => setEditingReceiptId(null)} className="btn btn-secondary">
+                      Cancel
+                    </button>
+                    <button onClick={handleSaveEditedReceipt} className="btn btn-primary flex items-center gap-2">
+                       <Save className="w-4 h-4" /> Save Changes
+                    </button>
+                 </div>
               </div>
             </motion.div>
           </motion.div>
