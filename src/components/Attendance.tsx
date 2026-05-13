@@ -35,6 +35,8 @@ export default function Attendance({ session, data, onRefresh }: AttendanceProps
   
   const activeEmployees = (data.employees || []).filter(e => e.status !== 'Dormant' && e.id !== 'EMP003' && canViewEmployee(e.id));
 
+  const [branchFilter, setBranchFilter] = useState('ALL');
+
   const displayedAttendance = exportDate 
     ? activeEmployees.map(emp => {
         const rec = (data.attendance || []).find(a => a.date === exportDate && a.empId === emp.id);
@@ -49,8 +51,16 @@ export default function Attendance({ session, data, onRefresh }: AttendanceProps
           checkInLocation: undefined,
           checkOutLocation: undefined
         };
+      }).filter(a => {
+        if (branchFilter === 'ALL') return true;
+        const emp = activeEmployees.find(e => e.id === a.empId);
+        return emp?.branch === branchFilter;
       })
-    : sortedHistory.filter(a => a.empId !== 'EMP003' && activeEmployees.some(e => e.id === a.empId));
+    : sortedHistory.filter(a => a.empId !== 'EMP003' && activeEmployees.some(e => e.id === a.empId)).filter(a => {
+        if (branchFilter === 'ALL') return true;
+        const emp = activeEmployees.find(e => e.id === a.empId);
+        return emp?.branch === branchFilter;
+      });
 
   const showNotification = (message: string, type: NotificationType = 'success') => {
     setNotification({ message, type });
@@ -138,6 +148,18 @@ export default function Attendance({ session, data, onRefresh }: AttendanceProps
           <p className="text-sm text-text-secondary mt-1">Full attendance records history</p>
         </div>
         <div className="flex flex-col sm:flex-row gap-4 items-center w-full sm:w-auto">
+          {(isAdmin || viewableBranches.length > 0) && (
+            <select
+              className="form-control w-full sm:w-auto"
+              value={branchFilter}
+              onChange={(e) => setBranchFilter(e.target.value)}
+            >
+              <option value="ALL">All Branches</option>
+              {Array.from(new Set((data.employees || []).filter(e => e.branch).map(e => e.branch))).map(b => (
+                <option key={b as string} value={b as string}>{b as string}</option>
+              ))}
+            </select>
+          )}
           <input 
             type="date" 
             className="form-control w-full sm:w-auto" 

@@ -43,6 +43,7 @@ export default function CashRequests({ session, data }: CashRequestsProps) {
   });
 
   const [searchedRequests, setSearchedRequests] = useState<CashRequest[]>([]);
+  const [branchFilter, setBranchFilter] = useState('ALL');
   const [isSearching, setIsSearching] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
 
@@ -128,10 +129,17 @@ export default function CashRequests({ session, data }: CashRequestsProps) {
 
   const filteredRequests = searchedRequests
     .filter(r => {
-      const matchesPermission = canManageCash ? canViewEmployee(r.empId) : r.empId === currentEmpId;
-      const matchesDate = r.date >= dateRange.from && r.date <= dateRange.to;
+      const hasBranchMgrAccess = viewableBranches.length > 0;
+      const matchesPermission = (canManageCash || hasBranchMgrAccess) ? canViewEmployee(r.empId) : r.empId === currentEmpId;
+      const fromTime = new Date(`${dateRange.from}T00:00:00`).getTime();
+      const toTime = new Date(`${dateRange.to}T23:59:59`).getTime();
+      const matchesDate = r.id >= fromTime && r.id <= toTime;
       const matchesStatus = activeTab === 'All' || r.status === activeTab;
-      return matchesPermission && matchesDate && matchesStatus;
+      
+      const emp = (data.employees || []).find(e => e.id === r.empId);
+      const matchesBranch = branchFilter === 'ALL' || emp?.branch === branchFilter;
+
+      return matchesPermission && matchesDate && matchesStatus && matchesBranch;
     })
     .sort((a, b) => b.id - a.id);
 
@@ -235,6 +243,21 @@ export default function CashRequests({ session, data }: CashRequestsProps) {
                   value={dateRange.to} onChange={e => setDateRange({...dateRange, to: e.target.value})}
                 />
               </div>
+              {(canManageCash || viewableBranches.length > 0) && (
+                <div className="form-group flex-1 sm:flex-none">
+                  <label className="text-[10px] font-semibold text-text-secondary uppercase tracking-widest mb-2 block">Branch</label>
+                  <select
+                    className="form-control text-xs py-2.5 bg-background shadow-inner"
+                    value={branchFilter}
+                    onChange={(e) => setBranchFilter(e.target.value)}
+                  >
+                    <option value="ALL">All Branches</option>
+                    {Array.from(new Set((data.employees || []).filter(e => e.branch).map(e => e.branch))).map(b => (
+                      <option key={b as string} value={b as string}>{b as string}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
             </div>
             <div className="flex gap-4 w-full md:w-auto">
               <button 

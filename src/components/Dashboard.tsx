@@ -14,7 +14,8 @@ import {
   X,
   Trash2,
   MapPin,
-  Fingerprint
+  Fingerprint,
+  Wallet
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import ConfirmModal from './ConfirmModal';
@@ -37,6 +38,7 @@ export default function Dashboard({ session, data, onRefresh }: DashboardProps) 
   const canSeeAttendance = (isAdmin && (session.email === "zioncommercialcreditampara@gmail.com" || session.permissions?.includes('attendance'))) || isBranchManager;
   const canSeeLeaves = isAdmin && (session.email === "zioncommercialcreditampara@gmail.com" || session.permissions?.includes('leave'));
   const canSeeAdvances = isAdmin && (session.email === "zioncommercialcreditampara@gmail.com" || session.permissions?.includes('payroll'));
+  const canSeeCashRequests = isAdmin && (session.email === "zioncommercialcreditampara@gmail.com" || session.permissions?.includes('cash_requests'));
 
   const viewableBranches = session.viewableBranches || [];
   const canViewEmployee = (empId: string) => {
@@ -63,7 +65,9 @@ export default function Dashboard({ session, data, onRefresh }: DashboardProps) 
       .length;
 
   const pendingLeavesCount = (data.leaves || []).filter(l => l.status === 'Pending' && activeStaffIds.has(l.empId)).length;
+  const pendingAdvancesCount = (data.advances || []).filter(a => a.status === 'Pending' && activeStaffIds.has(a.empId)).length;
   const approvedAdvancesCount = (data.advances || []).filter(a => a.status === 'Approved' && activeStaffIds.has(a.empId)).length;
+  const pendingCashRequestsCount = (data.cashRequests || []).filter(c => c.status === 'Pending' && activeStaffIds.has(c.empId)).length;
 
   // Member Stats
   const myAttendance = (data.attendance || []).find(a => a.empId === currentEmpId && a.date === today);
@@ -355,9 +359,10 @@ export default function Dashboard({ session, data, onRefresh }: DashboardProps) 
           <>
             {(canSeeStaff || isBranchManager) && <StatCard icon={Users} title={isBranchManager && !isAdmin ? "Branch Staff" : "Total Active Staff"} value={totalStaff} />}
             {canSeeAttendance && <StatCard icon={CalendarDays} title="Present Today" value={`${presentToday} / ${totalStaff}`} />}
-            {(canSeeLeaves || isBranchManager) && <StatCard icon={MailWarning} title="Pending Leaves" value={pendingLeavesCount} color="text-brand-accent" />}
-            {(canSeeAdvances || isBranchManager) && <StatCard icon={HandCoins} title="Approved Advances" value={approvedAdvancesCount} />}
-            {!canSeeStaff && !canSeeAttendance && !canSeeLeaves && !canSeeAdvances && !isBranchManager && (
+            {canSeeLeaves && <StatCard icon={MailWarning} title="Pending Leaves" value={pendingLeavesCount} color={pendingLeavesCount > 0 ? "text-amber-500" : "text-brand-accent"} />}
+            {canSeeAdvances && <StatCard icon={HandCoins} title="Pending Advances" value={pendingAdvancesCount} color={pendingAdvancesCount > 0 ? "text-amber-500" : "text-brand-accent"} />}
+            {canSeeCashRequests && <StatCard icon={Wallet} title="Pending Cash Requests" value={pendingCashRequestsCount} color={pendingCashRequestsCount > 0 ? "text-amber-500" : "text-brand-accent"} />}
+            {!canSeeStaff && !canSeeAttendance && !canSeeLeaves && !canSeeAdvances && !canSeeCashRequests && !isBranchManager && (
               <div className="col-span-full p-12 bg-white border border-border-accent rounded-2xl text-center shadow-sm">
                 <p className="text-text-secondary font-medium text-sm">Welcome to the Admin Dashboard</p>
               </div>

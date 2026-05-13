@@ -45,6 +45,7 @@ export default function LeaveManagement({ session, data, onRefresh }: LeaveManag
   });
 
   const [searchedLeaves, setSearchedLeaves] = useState<LeaveRequest[]>([]);
+  const [branchFilter, setBranchFilter] = useState('ALL');
   const [isSearching, setIsSearching] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
 
@@ -174,10 +175,15 @@ export default function LeaveManagement({ session, data, onRefresh }: LeaveManag
   const handleExportLeaves = async () => {
     const leavesToExport = searchedLeaves
       .filter(l => {
-        const matchesPermission = canManageLeaves ? canViewEmployee(l.empId) : l.empId === currentEmpId;
-        const matchesDate = l.from >= dateRange.from && l.from <= dateRange.to;
+        const hasBranchMgrAccess = viewableBranches.length > 0;
+        const matchesPermission = (canManageLeaves || hasBranchMgrAccess) ? canViewEmployee(l.empId) : l.empId === currentEmpId;
+        const fromTime = new Date(`${dateRange.from}T00:00:00`).getTime();
+        const toTime = new Date(`${dateRange.to}T23:59:59`).getTime();
+        const matchesDate = l.id >= fromTime && l.id <= toTime;
         const matchesStatus = activeTab === 'All' || l.status === activeTab;
-        return matchesPermission && matchesDate && matchesStatus;
+        const emp = (data.employees || []).find(e => e.id === l.empId);
+        const matchesBranch = branchFilter === 'ALL' || emp?.branch === branchFilter;
+        return matchesPermission && matchesDate && matchesStatus && matchesBranch;
       })
       .sort((a, b) => b.id - a.id);
 
@@ -205,10 +211,15 @@ export default function LeaveManagement({ session, data, onRefresh }: LeaveManag
 
   const filteredLeaves = searchedLeaves
     .filter(l => {
-      const matchesPermission = canManageLeaves ? canViewEmployee(l.empId) : l.empId === currentEmpId;
-      const matchesDate = l.from >= dateRange.from && l.from <= dateRange.to;
+      const hasBranchMgrAccess = viewableBranches.length > 0;
+      const matchesPermission = (canManageLeaves || hasBranchMgrAccess) ? canViewEmployee(l.empId) : l.empId === currentEmpId;
+      const fromTime = new Date(`${dateRange.from}T00:00:00`).getTime();
+      const toTime = new Date(`${dateRange.to}T23:59:59`).getTime();
+      const matchesDate = l.id >= fromTime && l.id <= toTime;
       const matchesStatus = activeTab === 'All' || l.status === activeTab;
-      return matchesPermission && matchesDate && matchesStatus;
+      const emp = (data.employees || []).find(e => e.id === l.empId);
+      const matchesBranch = branchFilter === 'ALL' || emp?.branch === branchFilter;
+      return matchesPermission && matchesDate && matchesStatus && matchesBranch;
     })
     .sort((a, b) => Number(b.id) - Number(a.id));
 
@@ -290,21 +301,36 @@ export default function LeaveManagement({ session, data, onRefresh }: LeaveManag
 
         <div className="w-full lg:w-2/3 space-y-6">
           <div className="glass-panel p-6 flex flex-col md:flex-row gap-6 items-end">
-            <div className="flex-1 grid grid-cols-2 gap-4 w-full">
-              <div className="form-group">
+            <div className="flex-1 grid grid-cols-1 md:grid-cols-3 gap-4 w-full">
+              <div className="form-group md:col-span-1">
                 <label className="text-[10px] font-bold text-text-secondary uppercase tracking-widest mb-1 block">From Date</label>
                 <input 
                   type="date" className="form-control text-xs" 
                   value={dateRange.from} onChange={e => setDateRange({...dateRange, from: e.target.value})}
                 />
               </div>
-              <div className="form-group">
+              <div className="form-group md:col-span-1">
                 <label className="text-[10px] font-bold text-text-secondary uppercase tracking-widest mb-1 block">To Date</label>
                 <input 
                   type="date" className="form-control text-xs" 
                   value={dateRange.to} onChange={e => setDateRange({...dateRange, to: e.target.value})}
                 />
               </div>
+              {(canManageLeaves || viewableBranches.length > 0) && (
+                <div className="form-group md:col-span-1">
+                  <label className="text-[10px] font-bold text-text-secondary uppercase tracking-widest mb-1 block">Branch</label>
+                  <select
+                    className="form-control text-xs"
+                    value={branchFilter}
+                    onChange={(e) => setBranchFilter(e.target.value)}
+                  >
+                    <option value="ALL">All Branches</option>
+                    {Array.from(new Set((data.employees || []).filter(e => e.branch).map(e => e.branch))).map(b => (
+                      <option key={b as string} value={b as string}>{b as string}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
             </div>
             <div className="flex gap-4 w-full md:w-auto">
               <button 

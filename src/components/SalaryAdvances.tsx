@@ -49,6 +49,8 @@ export default function SalaryAdvances({ session, data }: SalaryAdvancesProps) {
   const [hasSearched, setHasSearched] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
 
+  const [branchFilter, setBranchFilter] = useState('ALL');
+
   const handleSearch = async () => {
     setIsSearching(true);
     try {
@@ -201,10 +203,13 @@ export default function SalaryAdvances({ session, data }: SalaryAdvancesProps) {
   const handleExportAdvances = async () => {
     const advancesToExport = searchedAdvances
       .filter(a => {
-        const matchesPermission = hasPayrollPermission ? canViewEmployee(a.empId) : a.empId === currentEmpId;
+        const hasBranchMgrAccess = viewableBranches.length > 0;
+        const matchesPermission = (hasPayrollPermission || hasBranchMgrAccess) ? canViewEmployee(a.empId) : a.empId === currentEmpId;
         const matchesDate = a.date >= dateRange.from && a.date <= dateRange.to;
         const matchesStatus = activeTab === 'All' || a.status === activeTab;
-        return matchesPermission && matchesDate && matchesStatus;
+        const emp = (data.employees || []).find(e => e.id === a.empId);
+        const matchesBranch = branchFilter === 'ALL' || emp?.branch === branchFilter;
+        return matchesPermission && matchesDate && matchesStatus && matchesBranch;
       })
       .sort((a, b) => b.id - a.id);
 
@@ -284,20 +289,23 @@ export default function SalaryAdvances({ session, data }: SalaryAdvancesProps) {
 
   const displayAdvances = searchedAdvances
     .filter(a => {
-        const matchesPermission = hasPayrollPermission ? canViewEmployee(a.empId) : a.empId === currentEmpId;
+        const hasBranchMgrAccess = viewableBranches.length > 0;
+        const matchesPermission = (hasPayrollPermission || hasBranchMgrAccess) ? canViewEmployee(a.empId) : a.empId === currentEmpId;
         const matchesDate = a.date >= dateRange.from && a.date <= dateRange.to;
         const matchesStatus = activeTab === 'All' || a.status === activeTab;
         
+        const emp = (data.employees || []).find(e => e.id === a.empId);
+        const matchesBranch = branchFilter === 'ALL' || emp?.branch === branchFilter;
+
         let matchesSearchTerm = true;
         if (searchTerm) {
-          const emp = (data.employees || []).find(e => e.id === a.empId);
           const empName = emp?.name?.toLowerCase() || '';
           const empIdStr = a.empId.toLowerCase();
           const q = searchTerm.toLowerCase();
           matchesSearchTerm = empName.includes(q) || empIdStr.includes(q);
         }
 
-        return matchesPermission && matchesDate && matchesStatus && matchesSearchTerm;
+        return matchesPermission && matchesDate && matchesStatus && matchesSearchTerm && matchesBranch;
     })
     .sort((a, b) => b.id - a.id);
 
@@ -379,6 +387,21 @@ export default function SalaryAdvances({ session, data }: SalaryAdvancesProps) {
                   value={dateRange.to} onChange={e => setDateRange({...dateRange, to: e.target.value})}
                 />
               </div>
+              {(hasPayrollPermission || viewableBranches.length > 0) && (
+                <div className="form-group md:col-span-1">
+                  <label className="text-[10px] font-bold text-text-secondary uppercase tracking-widest mb-1 block">Branch</label>
+                  <select
+                    className="form-control text-xs"
+                    value={branchFilter}
+                    onChange={(e) => setBranchFilter(e.target.value)}
+                  >
+                    <option value="ALL">All Branches</option>
+                    {Array.from(new Set((data.employees || []).filter(e => e.branch).map(e => e.branch))).map(b => (
+                      <option key={b as string} value={b as string}>{b as string}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
             </div>
             <div className="flex gap-4 w-full md:w-auto">
               <button 

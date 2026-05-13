@@ -1049,13 +1049,39 @@ export const DataStore = {
 
   async searchLeaves(fromDate: string, toDate: string): Promise<LeaveRequest[]> {
     try {
-      const q = query(
-        collection(db, 'leaves'),
-        where('from', '>=', fromDate),
-        where('from', '<=', toDate)
-      );
-      const snap = await getDocs(q);
-      const results = snap.docs.map(d => ({ ...d.data(), id: Number(d.id) } as LeaveRequest));
+      await this.ensureAuth();
+      const currentSession = this.getSession();
+      
+      let snap;
+      if (currentSession?.isAdmin || (currentSession?.viewableBranches && currentSession.viewableBranches.length > 0)) {
+        // Admin or Manager: fetch by date (Managers still need branch filtering after fetching)
+        const fromTime = new Date(`${fromDate}T00:00:00`).getTime();
+        const toTime = new Date(`${toDate}T23:59:59`).getTime();
+
+        const q = query(
+          collection(db, 'leaves'),
+          where('id', '>=', fromTime),
+          where('id', '<=', toTime)
+        );
+        snap = await getDocs(q);
+      } else {
+        // Regular user: fetch all their leaves, then filter by date locally
+        const empId = currentSession?.empId || "NO_EMP_ID";
+        const q = query(
+          collection(db, 'leaves'),
+          where('empId', '==', empId)
+        );
+        const allSnap = await getDocs(q);
+        const fromTime = new Date(`${fromDate}T00:00:00`).getTime();
+        const toTime = new Date(`${toDate}T23:59:59`).getTime();
+        snap = { docs: allSnap.docs.filter(d => {
+          const id = d.data().id;
+          return id >= fromTime && id <= toTime;
+        })};
+      }
+      
+      let results = snap.docs.map(d => ({ ...d.data(), id: Number(d.id) } as LeaveRequest));
+      
       return results.sort((a, b) => b.id - a.id);
     } catch (error) {
       handleFirestoreError(error, OperationType.GET, 'leaves');
@@ -1186,13 +1212,32 @@ export const DataStore = {
 
   async searchAdvances(fromDate: string, toDate: string): Promise<AdvanceRequest[]> {
     try {
-      const q = query(
-        collection(db, 'advances'),
-        where('date', '>=', fromDate),
-        where('date', '<=', toDate)
-      );
-      const snap = await getDocs(q);
-      const results = snap.docs.map(d => ({ ...d.data(), id: Number(d.id) } as AdvanceRequest));
+      await this.ensureAuth();
+      const currentSession = this.getSession();
+      
+      let snap;
+      if (currentSession?.isAdmin || (currentSession?.viewableBranches && currentSession.viewableBranches.length > 0)) {
+        const q = query(
+          collection(db, 'advances'),
+          where('date', '>=', fromDate),
+          where('date', '<=', toDate)
+        );
+        snap = await getDocs(q);
+      } else {
+        const empId = currentSession?.empId || "NO_EMP_ID";
+        const q = query(
+          collection(db, 'advances'),
+          where('empId', '==', empId)
+        );
+        const allSnap = await getDocs(q);
+        snap = { docs: allSnap.docs.filter(d => {
+          const date = d.data().date;
+          return date >= fromDate && date <= toDate;
+        })};
+      }
+      
+      let results = snap.docs.map(d => ({ ...d.data(), id: Number(d.id) } as AdvanceRequest));
+      
       return results.sort((a, b) => b.id - a.id);
     } catch (error) {
       handleFirestoreError(error, OperationType.GET, 'advances');
@@ -1202,13 +1247,36 @@ export const DataStore = {
 
   async searchCashRequests(fromDate: string, toDate: string): Promise<CashRequest[]> {
     try {
-      const q = query(
-        collection(db, 'cashRequests'),
-        where('date', '>=', fromDate),
-        where('date', '<=', toDate)
-      );
-      const snap = await getDocs(q);
-      const results = snap.docs.map(d => ({ ...d.data(), id: Number(d.id) } as CashRequest));
+      await this.ensureAuth();
+      const currentSession = this.getSession();
+      
+      let snap;
+      if (currentSession?.isAdmin || (currentSession?.viewableBranches && currentSession.viewableBranches.length > 0)) {
+        const fromTime = new Date(`${fromDate}T00:00:00`).getTime();
+        const toTime = new Date(`${toDate}T23:59:59`).getTime();
+        const q = query(
+          collection(db, 'cashRequests'),
+          where('id', '>=', fromTime),
+          where('id', '<=', toTime)
+        );
+        snap = await getDocs(q);
+      } else {
+        const empId = currentSession?.empId || "NO_EMP_ID";
+        const q = query(
+          collection(db, 'cashRequests'),
+          where('empId', '==', empId)
+        );
+        const allSnap = await getDocs(q);
+        const fromTime = new Date(`${fromDate}T00:00:00`).getTime();
+        const toTime = new Date(`${toDate}T23:59:59`).getTime();
+        snap = { docs: allSnap.docs.filter(d => {
+          const id = d.data().id;
+          return id >= fromTime && id <= toTime;
+        })};
+      }
+      
+      let results = snap.docs.map(d => ({ ...d.data(), id: Number(d.id) } as CashRequest));
+      
       return results.sort((a, b) => b.id - a.id);
     } catch (error) {
       handleFirestoreError(error, OperationType.GET, 'cashRequests');
