@@ -39,6 +39,7 @@ export default function DCCollection({ session, data }: DCCollectionProps) {
   const [notification, setNotification] = useState<{ message: string, type: NotificationType } | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [confirmUndo, setConfirmUndo] = useState<string | null>(null);
+  const [confirmReturn, setConfirmReturn] = useState<string | null>(null);
   const [editingReceipt, setEditingReceipt] = useState<DCCollectionType | null>(null);
   const [verifySearch, setVerifySearch] = useState('');
   const [verifyTab, setVerifyTab] = useState<'all' | 'pending' | 'verified'>('pending');
@@ -142,6 +143,20 @@ export default function DCCollection({ session, data }: DCCollectionProps) {
       setEditingReceipt(null);
     } catch (err) {
       showNotification('Failed to update receipt', 'error');
+    }
+  };
+
+  const handleReturnReceipt = async () => {
+    if (confirmReturn) {
+      try {
+        await DataStore.updateDCCollection(confirmReturn, {
+          status: 'Returned'
+        });
+        showNotification('Receipt marked as Returned');
+        setConfirmReturn(null);
+      } catch (err) {
+        showNotification('Failed to return receipt', 'error');
+      }
     }
   };
 
@@ -447,7 +462,27 @@ export default function DCCollection({ session, data }: DCCollectionProps) {
                         <p className="text-xs font-bold text-text-primary mb-1 truncate">{c.customerName}</p>
                         <div className="flex justify-between items-center">
                           <span className="text-[10px] text-text-secondary">{c.paymentMethod} • {c.collectionType}</span>
-                          <span className="font-bold text-brand-accent">Rs. {c.documentCharge.toLocaleString()}</span>
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-brand-accent">Rs. {c.documentCharge.toLocaleString()}</span>
+                            {(session.email === "zioncommercialcreditampara@gmail.com" || session.permissions?.includes('Dc Resipt Edit')) && c.status !== 'Returned' && (
+                              <button
+                                onClick={() => setEditingReceipt(c)}
+                                className="p-1 hover:bg-brand-accent/10 text-text-secondary hover:text-brand-accent rounded transition-all"
+                                title="Edit Receipt"
+                              >
+                                <Edit className="w-3 h-3" />
+                              </button>
+                            )}
+                            {session.email === "zioncommercialcreditampara@gmail.com" && c.status !== 'Returned' && (
+                              <button 
+                                onClick={() => setConfirmReturn(c.id)}
+                                className="p-1 hover:bg-orange-50 text-text-secondary hover:text-orange-500 rounded transition-all"
+                                title="Return Receipt"
+                              >
+                                 <RotateCcw className="w-3 h-3" />
+                              </button>
+                            )}
+                          </div>
                         </div>
                       </div>
                     ))}
@@ -637,11 +672,14 @@ export default function DCCollection({ session, data }: DCCollectionProps) {
                   </thead>
                   <tbody>
                     {filteredHistory.slice(0, 15).map(c => (
-                      <tr key={c.id}>
+                      <tr key={c.id} className={c.status === 'Returned' ? 'bg-red-50/50' : ''}>
                         <td className="text-[11px] font-bold text-text-secondary tracking-widest uppercase">{c.date}</td>
-                        <td className="font-mono text-[10px] text-brand-accent font-bold">{c.receiptNo}</td>
+                        <td className="font-mono text-[10px] text-brand-accent font-bold">
+                           {c.receiptNo}
+                           {c.status === 'Returned' && <span className="block text-red-500 text-[9px] mt-0.5">VOIDED</span>}
+                        </td>
                         <td>
-                          <span className="px-2 py-1 bg-gray-100 rounded text-[9px] font-bold tracking-tighter uppercase">{c.collectionType}</span>
+                          <span className={`px-2 py-1 rounded text-[9px] font-bold tracking-tighter uppercase ${c.status === 'Returned' ? 'bg-red-100 text-red-700' : 'bg-gray-100'}`}>{c.collectionType}</span>
                         </td>
                         <td className="font-bold text-text-primary text-xs">{c.customerName}</td>
                         <td className="text-[11px] font-medium text-text-secondary">{c.nic}</td>
@@ -650,7 +688,7 @@ export default function DCCollection({ session, data }: DCCollectionProps) {
                         <td className="text-[10px] font-bold text-text-secondary uppercase">{c.collectedBy}</td>
                         <td className="text-right">
                           <div className="flex justify-end gap-2">
-                              {(session.email === "zioncommercialcreditampara@gmail.com" || session.permissions?.includes('Dc Resipt Edit')) && (
+                              {(session.email === "zioncommercialcreditampara@gmail.com" || session.permissions?.includes('Dc Resipt Edit')) && c.status !== 'Returned' && (
                                <button 
                                  onClick={() => setEditingReceipt(c)}
                                  className="p-2 hover:bg-brand-accent/5 text-text-secondary hover:text-brand-accent rounded-lg transition-all"
@@ -666,6 +704,15 @@ export default function DCCollection({ session, data }: DCCollectionProps) {
                                  title="Delete Receipt"
                                >
                                   <Trash2 className="w-4 h-4" />
+                               </button>
+                             )}
+                             {session.email === "zioncommercialcreditampara@gmail.com" && c.status !== 'Returned' && (
+                               <button 
+                                 onClick={() => setConfirmReturn(c.id)}
+                                 className="p-2 hover:bg-orange-50 text-text-secondary hover:text-orange-500 rounded-lg transition-all"
+                                 title="Return Receipt"
+                               >
+                                  <RotateCcw className="w-4 h-4" />
                                </button>
                              )}
                              <button className="p-2 hover:bg-brand-accent/5 text-text-secondary hover:text-brand-accent rounded-lg transition-all" title="Print Receipt">
@@ -783,9 +830,12 @@ export default function DCCollection({ session, data }: DCCollectionProps) {
                         .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
                         .slice(0, 15)
                         .map(c => (
-                        <tr key={c.id}>
+                        <tr key={c.id} className={c.status === 'Returned' ? 'bg-red-50/50' : ''}>
                           <td className="text-[11px] font-bold text-text-secondary tracking-widest uppercase">{c.date}</td>
-                          <td className="font-mono text-[10px] text-text-secondary">{c.receiptNo}</td>
+                          <td className="font-mono text-[10px] text-text-secondary">
+                            {c.receiptNo}
+                            {c.status === 'Returned' && <span className="block text-red-500 text-[9px] mt-0.5 font-bold uppercase overflow-visible truncate whitespace-nowrap">VOIDED</span>}
+                          </td>
                           <td>
                             <div className="flex flex-col">
                               <span className="font-bold text-text-primary text-xs">{c.customerName}</span>
@@ -813,31 +863,52 @@ export default function DCCollection({ session, data }: DCCollectionProps) {
                             )}
                           </td>
                           <td className="text-right">
-                             {!c.isVerified ? (
-                               <button 
-                                 onClick={() => handleVerify(c.id)}
-                                 className="bg-brand-accent hover:bg-brand-accent/90 text-white px-3 py-1.5 rounded-lg text-xs font-bold uppercase transition-all shadow-sm flex items-center justify-center gap-2 ml-auto"
-                               >
-                                 <ShieldCheck className="w-3 h-3" />
-                                 Verify Loan
-                               </button>
-                             ) : (
-                               <div className="flex flex-col items-end gap-2">
-                                 <span className="text-[10px] font-bold text-text-secondary uppercase">
-                                   {new Date(c.verifiedAt || '').toLocaleDateString()}
-                                 </span>
-                                 {session.email === "zioncommercialcreditampara@gmail.com" && (
-                                   <button 
-                                     onClick={() => setConfirmUndo(c.id)}
-                                     className="flex items-center gap-1 text-[9px] font-bold text-amber-600 hover:text-amber-700 bg-amber-50 hover:bg-amber-100 px-2 py-1 rounded transition-colors uppercase tracking-wider"
-                                     title="Undo Verification"
-                                   >
-                                     <RotateCcw className="w-3 h-3" />
-                                     Undo
-                                   </button>
-                                 )}
-                               </div>
-                             )}
+                             <div className="flex justify-end items-center gap-2">
+                               {session.email === "zioncommercialcreditampara@gmail.com" && c.status !== 'Returned' && (
+                                 <button 
+                                   onClick={() => setConfirmReturn(c.id)}
+                                   className="p-1 hover:bg-orange-50 text-text-secondary hover:text-orange-500 rounded transition-all"
+                                   title="Return Receipt"
+                                 >
+                                    <RotateCcw className="w-4 h-4" />
+                                 </button>
+                               )}
+                               {(session.email === "zioncommercialcreditampara@gmail.com" || session.permissions?.includes('Dc Resipt Edit')) && c.status !== 'Returned' && (
+                                 <button 
+                                   onClick={() => setEditingReceipt(c)}
+                                   className="p-1 hover:bg-brand-accent/10 text-text-secondary hover:text-brand-accent rounded transition-all"
+                                   title="Edit Receipt"
+                                 >
+                                    <Edit className="w-4 h-4" />
+                                 </button>
+                               )}
+                               
+                               {!c.isVerified ? (
+                                 <button 
+                                   onClick={() => handleVerify(c.id)}
+                                   className="bg-brand-accent hover:bg-brand-accent/90 text-white px-3 py-1.5 rounded-lg text-xs font-bold uppercase transition-all shadow-sm flex items-center justify-center gap-2 ml-2"
+                                 >
+                                   <ShieldCheck className="w-3 h-3" />
+                                   Verify
+                                 </button>
+                               ) : (
+                                 <div className="flex flex-col items-end gap-1 ml-2 pl-2 border-l border-border-accent/30">
+                                   <span className="text-[10px] font-bold text-text-secondary uppercase">
+                                     {new Date(c.verifiedAt || '').toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: '2-digit' })}
+                                   </span>
+                                   {session.email === "zioncommercialcreditampara@gmail.com" && (
+                                     <button 
+                                       onClick={() => setConfirmUndo(c.id)}
+                                       className="flex items-center gap-1 text-[9px] font-bold text-amber-600 hover:text-amber-700 bg-amber-50 hover:bg-amber-100 px-2 py-0.5 rounded transition-colors uppercase tracking-wider"
+                                       title="Undo Verification"
+                                     >
+                                       <RotateCcw className="w-3 h-3" />
+                                       Undo
+                                     </button>
+                                   )}
+                                 </div>
+                               )}
+                             </div>
                           </td>
                         </tr>
                       ))}
@@ -878,6 +949,15 @@ export default function DCCollection({ session, data }: DCCollectionProps) {
         message="Are you sure you want to revert this loan verification? It will be moved back to the unverified list."
         onConfirm={handleUndoVerify}
         onCancel={() => setConfirmUndo(null)}
+        type="warning"
+      />
+
+      <ConfirmModal 
+        isOpen={!!confirmReturn}
+        title="Return Receipt"
+        message="Are you sure you want to mark this receipt as returned? This action will void the collected amount."
+        onConfirm={handleReturnReceipt}
+        onCancel={() => setConfirmReturn(null)}
         type="warning"
       />
 

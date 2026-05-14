@@ -227,6 +227,7 @@ export interface DCCollection {
   isVerified?: boolean;
   verifiedBy?: string;
   verifiedAt?: string;
+  status?: string;
 }
 
 export interface SystemReport {

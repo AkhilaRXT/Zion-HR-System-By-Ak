@@ -294,17 +294,17 @@ export default function App() {
 
         if (session.email === "zioncommercialcreditampara@gmail.com" || session.permissions?.includes('leave')) {
             const qLeaves = query(collection(db, 'leaves'), where('status', '==', 'Pending'));
-            unsubs.push(onSnapshot(qLeaves, (snap) => updatePart({ leaves: snap.docs.map(d => ({ ...d.data(), id: d.id }) as any) })));
+            unsubs.push(onSnapshot(qLeaves, (snap) => updatePart({ leaves: snap.docs.map(d => ({ ...d.data(), id: d.id }) as any) }), (err) => console.log('Stat sync skipped leaves:', err)));
         }
 
         if (session.email === "zioncommercialcreditampara@gmail.com" || session.permissions?.includes('payroll')) {
             const qAdvances = query(collection(db, 'advances'), where('status', '==', 'Pending'));
-            unsubs.push(onSnapshot(qAdvances, (snap) => updatePart({ advances: snap.docs.map(d => ({ ...d.data(), id: d.id }) as any) })));
+            unsubs.push(onSnapshot(qAdvances, (snap) => updatePart({ advances: snap.docs.map(d => ({ ...d.data(), id: d.id }) as any) }), (err) => console.log('Stat sync skipped advances:', err)));
         }
 
         if (session.email === "zioncommercialcreditampara@gmail.com" || session.permissions?.includes('cash_requests')) {
             const qCash = query(collection(db, 'cashRequests'), where('status', '==', 'Pending'));
-            unsubs.push(onSnapshot(qCash, (snap) => updatePart({ cashRequests: snap.docs.map(d => ({ ...d.data(), id: d.id }) as any) })));
+            unsubs.push(onSnapshot(qCash, (snap) => updatePart({ cashRequests: snap.docs.map(d => ({ ...d.data(), id: d.id }) as any) }), (err) => console.log('Stat sync skipped cash:', err)));
         }
      }
      
