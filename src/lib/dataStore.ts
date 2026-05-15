@@ -1,4 +1,4 @@
-import { AppData, Employee, Session, AppSettings, Attendance, LeaveRequest, AdvanceRequest, AuditLog, UserCredential, CashRequest, SystemReport, Branch, Holiday, Announcement, Asset } from '../types';
+import { AppData, Employee, Session, AppSettings, Attendance, LeaveRequest, AdvanceRequest, AuditLog, UserCredential, CashRequest, SystemReport, Branch, Holiday } from '../types';
 import { db, auth } from './firebase';
 import { 
   doc, 
@@ -132,9 +132,7 @@ const initialData: AppData = {
   internalMessages: [],
   adhocBonuses: [],
   dcCollections: [],
-  systemReports: [],
-  announcements: [],
-  assets: []
+  systemReports: []
 };
 
 export const DataStore = {
@@ -1695,80 +1693,6 @@ export const DataStore = {
       await deleteDoc(doc(db, 'holidays', id));
     } catch (error) {
       handleFirestoreError(error, OperationType.DELETE, `holidays/${id}`);
-    }
-  },
-
-  async addAnnouncement(announcement: Omit<Announcement, 'id' | 'timestamp'>) {
-    try {
-      const id = `ANN-${Date.now()}`;
-      const newAnnouncement: Announcement = {
-        ...announcement,
-        id,
-        timestamp: new Date().toISOString()
-      };
-      await setDoc(doc(db, 'announcements', id), newAnnouncement);
-      await this.logAction('Add Announcement', `Added announcement: ${announcement.title}`, 'Settings');
-      return { success: true, id };
-    } catch (error) {
-      handleFirestoreError(error, OperationType.CREATE, 'announcements');
-      return { success: false, error: String(error) };
-    }
-  },
-
-  async updateAnnouncement(id: string, updates: Partial<Announcement>) {
-    try {
-      await updateDoc(doc(db, 'announcements', id), updates);
-      await this.logAction('Update Announcement', `Updated announcement ${id}`, 'Settings');
-      return { success: true };
-    } catch (error) {
-      handleFirestoreError(error, OperationType.UPDATE, `announcements/${id}`);
-      return { success: false, error: String(error) };
-    }
-  },
-
-  async deleteAnnouncement(id: string) {
-    try {
-      await deleteDoc(doc(db, 'announcements', id));
-      await this.logAction('Delete Announcement', `Deleted announcement ${id}`, 'Settings');
-      return { success: true };
-    } catch (error) {
-      handleFirestoreError(error, OperationType.DELETE, `announcements/${id}`);
-      return { success: false, error: String(error) };
-    }
-  },
-
-  async addAsset(asset: Omit<Asset, 'id'>) {
-    try {
-      const id = `AST-${Date.now()}`;
-      const newAsset: Asset = { ...asset, id };
-      await setDoc(doc(db, 'assets', id), newAsset);
-      await this.logAction('Add Asset', `Added asset: ${asset.name} (${asset.type})`, 'Settings');
-      return { success: true, id };
-    } catch (error) {
-      handleFirestoreError(error, OperationType.CREATE, 'assets');
-      return { success: false, error: String(error) };
-    }
-  },
-
-  async updateAsset(id: string, updates: Partial<Asset>) {
-    try {
-      await updateDoc(doc(db, 'assets', id), updates);
-      await this.logAction('Update Asset', `Updated asset ${id}`, 'Settings');
-      return { success: true };
-    } catch (error) {
-      handleFirestoreError(error, OperationType.UPDATE, `assets/${id}`);
-      return { success: false, error: String(error) };
-    }
-  },
-
-  async deleteAsset(id: string) {
-    try {
-      await deleteDoc(doc(db, 'assets', id));
-      await this.logAction('Delete Asset', `Deleted asset ${id}`, 'Settings');
-      return { success: true };
-    } catch (error) {
-      handleFirestoreError(error, OperationType.DELETE, `assets/${id}`);
-      return { success: false, error: String(error) };
     }
   }
 };

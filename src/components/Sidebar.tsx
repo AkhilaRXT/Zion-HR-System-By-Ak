@@ -16,12 +16,10 @@ import {
   X,
   History,
   Mail,
-  Megaphone,
   AlertCircle,
   MapPin,
   Calendar,
-  Database,
-  Package
+  Database
 } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -76,7 +74,6 @@ export default function Sidebar({ session, data, activeRoute, onNavigate, onLogo
     { id: 'dashboard', label: 'Dashboard', icon: PieChart },
     { id: 'mail', label: 'Mail', icon: Mail },
     { id: 'staff', label: 'Staff Mgmt', icon: Users },
-    { id: 'targets', label: 'Performance', icon: Target },
     { id: 'attendance', label: 'Attendance', icon: CalendarCheck },
     { id: 'leave', label: hasLeavePerm ? 'Leave Mgmt' : 'My Leaves', icon: PlaneTakeoff },
     { id: 'holidays', label: 'Holidays', icon: Calendar },
@@ -84,8 +81,6 @@ export default function Sidebar({ session, data, activeRoute, onNavigate, onLogo
     { id: 'advances', label: hasPayrollPerm ? 'Advance Mgmt' : 'My Advances', icon: HandCoins },
     { id: 'dc_collection', label: 'DC Collection', icon: HandCoins },
     { id: 'cash_requests', label: hasCashPerm ? 'Cash Requests' : 'My Cash Requests', icon: FileText },
-    { id: 'announcements', label: 'Announcements', icon: Megaphone },
-    { id: 'assets', label: 'Asset Tracking', icon: Package },
     { id: 'reports', label: 'Report Center', icon: AlertCircle },
     ...(isMasterAdmin ? [{ id: 'branches', label: 'Branches', icon: MapPin }] : []),
     { id: 'audit', label: 'Audit Logs', icon: History },
@@ -101,7 +96,7 @@ export default function Sidebar({ session, data, activeRoute, onNavigate, onLogo
     }
 
     // Always accessible for everyone
-    if (id === 'dashboard' || id === 'mail' || id === 'announcements' || id === 'targets' || id === 'assets' || id === 'myprofile' || id === 'leave' || id === 'advances' || id === 'cash_requests' || id === 'dc_collection' || id === 'reports' || id === 'holidays') return true;
+    if (id === 'dashboard' || id === 'mail' || id === 'myprofile' || id === 'leave' || id === 'advances' || id === 'cash_requests' || id === 'dc_collection' || id === 'reports' || id === 'holidays') return true;
     
     // Payroll requires specific permission or Master
     if (id === 'payroll') return hasPayrollPerm;
