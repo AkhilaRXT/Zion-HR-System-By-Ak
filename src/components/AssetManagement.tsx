@@ -120,14 +120,11 @@ export default function AssetManagement({ session, data, onRefresh }: AssetManag
     }
   };
 
-  const filteredAssets = (data.assets || []).filter(a => {
-    // If not admin and not managing, only show assigned assets
-    if (!isAdmin && !canManage && a.assignedTo !== session.empId) return false;
-
-    return a.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+  const filteredAssets = (data.assets || []).filter(a =>
+    a.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     a.serialNumber?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (a.assignedTo && data.employees.find(e => e.id === a.assignedTo)?.name.toLowerCase().includes(searchQuery.toLowerCase()));
-  });
+    (a.assignedTo && data.employees.find(e => e.id === a.assignedTo)?.name.toLowerCase().includes(searchQuery.toLowerCase()))
+  );
 
   return (
     <div className="space-y-8">
