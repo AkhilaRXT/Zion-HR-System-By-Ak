@@ -15,9 +15,13 @@ import {
   Trash2,
   MapPin,
   Fingerprint,
-  Wallet
+  Wallet,
+  AlertTriangle,
+  Cake,
+  Gift
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { useNavigate } from 'react-router-dom';
 import ConfirmModal from './ConfirmModal';
 import Notification, { NotificationType } from './Notification';
 
@@ -28,6 +32,7 @@ interface DashboardProps {
 }
 
 export default function Dashboard({ session, data, onRefresh }: DashboardProps) {
+  const navigate = useNavigate();
   const isAdmin = session.isAdmin;
   const today = getLocalIsoDate();
   const currentEmpId = session.empId;
@@ -352,8 +357,142 @@ export default function Dashboard({ session, data, onRefresh }: DashboardProps) 
     ? activeStaff
     : (data.employees || []).filter(e => e.id === currentEmpId);
 
+  const activeAnnouncements = [...(data.announcements || [])]
+    .filter(a => !a.expiresAt || new Date(a.expiresAt) >= new Date())
+    .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+    .slice(0, 3);
+
+  const getUpcomingMilestones = () => {
+    const today = new Date();
+    const currentMonth = today.getMonth();
+    const currentDate = today.getDate();
+
+    return (data.employees || [])
+      .filter(e => e.status !== 'Dormant' && (e.dateOfBirth || e.joiningDate))
+      .map(e => {
+        const milestones = [];
+        if (e.dateOfBirth) {
+          const dob = new Date(e.dateOfBirth);
+          if (dob.getMonth() === currentMonth) {
+            milestones.push({
+              name: e.name,
+              type: 'Birthday',
+              date: dob.getDate(),
+              isToday: dob.getDate() === currentDate
+            });
+          }
+        }
+        if (e.joiningDate) {
+          const jd = new Date(e.joiningDate);
+          if (jd.getMonth() === currentMonth) {
+            const years = today.getFullYear() - jd.getFullYear();
+            if (years > 0) {
+              milestones.push({
+                name: e.name,
+                type: 'Anniversary',
+                date: jd.getDate(),
+                isToday: jd.getDate() === currentDate,
+                years
+              });
+            }
+          }
+        }
+        return milestones;
+      })
+      .flat()
+      .sort((a, b) => a.date - b.date);
+  };
+
+  const milestones = getUpcomingMilestones();
+
   return (
     <div className="space-y-8">
+      {/* Announcements & Milestones Section */}
+      {(activeAnnouncements.length > 0 || milestones.length > 0) && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {milestones.length > 0 && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="p-5 rounded-2xl border border-brand-accent/20 bg-brand-accent/5 shadow-sm flex flex-col gap-3 relative overflow-hidden"
+            >
+              <div className="flex items-center gap-2 mb-1">
+                <Gift className="w-4 h-4 text-brand-accent" />
+                <span className="text-[10px] font-bold uppercase tracking-wider text-brand-accent">
+                  Monthly Milestones
+                </span>
+              </div>
+              <div className="space-y-3 overflow-y-auto max-h-[120px] custom-scrollbar">
+                {milestones.map((m, idx) => (
+                  <div key={idx} className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      {m.type === 'Birthday' ? <Cake className="w-3.5 h-3.5 text-pink-500" /> : <TrendingUp className="w-3.5 h-3.5 text-emerald-500" />}
+                      <span className="text-xs font-bold text-text-primary truncate max-w-[120px]">{m.name}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded ${m.isToday ? 'bg-brand-accent text-white animate-pulse' : 'bg-white text-text-secondary border border-border-accent'}`}>
+                        {m.type === 'Anniversary' ? `${m.years}y Anniv` : 'Birthday'} — {m.date}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="absolute top-0 right-0 p-2 opacity-10">
+                <Gift className="w-12 h-12 text-brand-accent" />
+              </div>
+            </motion.div>
+          )}
+          {activeAnnouncements.slice(0, milestones.length > 0 ? 2 : 3).map((ann) => (
+            <motion.div
+              key={ann.id}
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className={`p-5 rounded-2xl border bg-white shadow-sm flex flex-col gap-3 relative overflow-hidden group hover:shadow-md transition-all ${
+                ann.priority === 'High' ? 'border-red-200 bg-red-50/30' : 'border-border-accent'
+              }`}
+            >
+              <div className="flex justify-between items-start">
+                <div className="flex items-center gap-2">
+                  <div className={`p-1.5 rounded-lg ${
+                    ann.priority === 'High' ? 'bg-red-100 text-red-600' :
+                    ann.priority === 'Medium' ? 'bg-amber-100 text-amber-600' : 'bg-blue-100 text-blue-600'
+                  }`}>
+                    <Fingerprint className="w-4 h-4" />
+                  </div>
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-text-secondary">
+                    {ann.priority} Priority
+                  </span>
+                </div>
+                <span className="text-[10px] font-medium text-text-secondary">
+                  {new Date(ann.timestamp).toLocaleDateString()}
+                </span>
+              </div>
+              <div>
+                <h4 className="text-sm font-bold text-text-primary line-clamp-1">{ann.title}</h4>
+                <p className="text-xs text-text-secondary line-clamp-2 mt-1 leading-relaxed">
+                  {ann.content}
+                </p>
+              </div>
+              <div className="mt-auto pt-3 border-t border-border-accent/50 flex justify-between items-center">
+                <span className="text-[10px] text-text-secondary font-medium">
+                  By {ann.authorName}
+                </span>
+                <button
+                  onClick={() => navigate('/announcements')}
+                  className="text-[10px] font-bold text-brand-accent hover:underline"
+                >
+                  Read More
+                </button>
+              </div>
+              {ann.priority === 'High' && (
+                 <div className="absolute top-0 right-0 p-2">
+                   <AlertTriangle className="w-3 h-3 text-red-400 animate-pulse" />
+                 </div>
+              )}
+            </motion.div>
+          ))}
+        </div>
+      )}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
         {(isAdmin || isBranchManager) ? (
           <>

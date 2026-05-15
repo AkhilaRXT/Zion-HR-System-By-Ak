@@ -22,6 +22,9 @@ import ReportCenter from './components/ReportCenter';
 import BranchManagement from './components/BranchManagement';
 import HolidayCalendar from './components/HolidayCalendar';
 import DataMigration from './components/DataMigration';
+import AnnouncementManagement from './components/AnnouncementManagement';
+import TargetManagement from './components/TargetManagement';
+import AssetManagement from './components/AssetManagement';
 import { Clock, Menu, Loader2 } from 'lucide-react';
 import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 
@@ -179,6 +182,9 @@ export default function App() {
 
       unsubs.push(syncCoreCollection('branches', 'branches'));
       unsubs.push(syncCoreCollection('holidays', 'holidays'));
+      unsubs.push(syncCoreCollection('announcements', 'announcements'));
+      unsubs.push(syncCoreCollection('targets', 'targets'));
+      unsubs.push(syncCoreCollection('assets', 'assets'));
 
       if (session.email === "zioncommercialcreditampara@gmail.com") {
         unsubs.push(syncCoreCollection('systemReports', 'systemReports'));
@@ -228,6 +234,9 @@ export default function App() {
       };
       unsubs.push(syncCoreCollectionForEmployee('branches', 'branches'));
       unsubs.push(syncCoreCollectionForEmployee('holidays', 'holidays'));
+      unsubs.push(syncCoreCollectionForEmployee('announcements', 'announcements'));
+      unsubs.push(syncCoreCollectionForEmployee('targets', 'targets'));
+      unsubs.push(syncCoreCollectionForEmployee('assets', 'assets'));
 
       // If they are a branch manager, fetch their staff
       if (session.viewableBranches && session.viewableBranches.length > 0) {
@@ -485,6 +494,9 @@ export default function App() {
       case 'advances': return <SalaryAdvances session={session} data={appData} onRefresh={refreshData} />;
       case 'cash_requests': return <CashRequests session={session} data={appData} />;
       case 'holidays': return <HolidayCalendar session={session} data={appData} onRefresh={refreshData} />;
+      case 'targets': return <TargetManagement session={session} data={appData} onRefresh={refreshData} />;
+      case 'announcements': return <AnnouncementManagement session={session} data={appData} onRefresh={refreshData} />;
+      case 'assets': return <AssetManagement session={session} data={appData} onRefresh={refreshData} />;
       case 'mail': return <InternalMail session={session} data={appData} />;
       case 'dc_collection': return <DCCollection session={session} data={appData} />;
       case 'reports': return <ReportCenter session={session} data={appData} />;
