@@ -46,7 +46,14 @@ export default function App() {
   const [dbError, setDbError] = useState<string | null>(null);
 
   useEffect(() => {
-    DataStore.saveData(appData);
+    // Only save to local storage if we actually have data (prevents wiping on accidental empty states)
+    const hasData = appData.employees.length > 0 ||
+                    (appData.announcements && appData.announcements.length > 0) ||
+                    (appData.settings && appData.settings.companyName !== 'Zion HR');
+
+    if (hasData) {
+      DataStore.saveData(appData);
+    }
   }, [appData]);
 
   // URL Sync Effects

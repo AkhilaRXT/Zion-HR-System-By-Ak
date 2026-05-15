@@ -18,8 +18,8 @@ import {
   deleteField
 } from 'firebase/firestore';
 
-export const STORAGE_KEY = 'zion_hr_v2_data';
-const AUTH_KEY = 'zion_hr_v2_session';
+export const STORAGE_KEY = 'zion_hr_v2_data_v4';
+const AUTH_KEY = 'zion_hr_v2_session_v4';
 
 export function getLocalIsoDate(date = new Date()) {
   const parts = date.toLocaleDateString('en-CA', { year: 'numeric', month: '2-digit', day: '2-digit' }).split('-');
@@ -541,29 +541,31 @@ export const DataStore = {
   },
 
   async ensureAuth() {
-    let freshContext = false;
     if (!auth.currentUser) {
       try {
         const { signInAnonymously } = await import('firebase/auth');
         await signInAnonymously(auth);
-        freshContext = true;
       } catch (e) {
         console.error('Failed to establish auth context', e);
         throw e;
       }
     }
     
-    // Attempt to remount roles on every init (or at least if fresh) to ensure rules don't break on reload
+    // Attempt to remount roles on every init to ensure rules don't break on reload
     const session = this.getSession();
-    if (session && session.username && session.passToken && auth.currentUser) {
+    if (session && auth.currentUser) {
       try {
-        await setDoc(doc(db, 'users', auth.currentUser.uid), {
+        const userUpdate: any = {
           empId: session.empId,
           role: session.isAdmin ? 'admin' : 'user',
-          username: session.username,
-          passToken: session.passToken,
           viewableBranches: session.viewableBranches || []
-        }, { merge: true });
+        };
+
+        if (session.username) userUpdate.username = session.username;
+        if (session.passToken) userUpdate.passToken = session.passToken;
+        if (session.email) userUpdate.email = session.email;
+
+        await setDoc(doc(db, 'users', auth.currentUser.uid), userUpdate, { merge: true });
       } catch (e) {
          console.warn('Could not restore users context', e);
       }
