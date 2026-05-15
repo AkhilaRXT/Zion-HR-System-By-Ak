@@ -20,6 +20,8 @@ export interface Employee {
   accountNo?: string;
   profilePic?: string;
   hasEPF?: boolean;
+  dateOfBirth?: string;
+  joiningDate?: string;
   status?: 'Active' | 'Dormant';
   salaryStatus?: 'Active' | 'Held_1' | 'Held_2' | 'Held_Forever' | 'Custom';
   heldFrom?: string;
@@ -267,9 +269,34 @@ export interface Holiday {
   type: 'National' | 'Regional' | 'Company';
 }
 
+export interface Announcement {
+  id: string;
+  title: string;
+  content: string;
+  timestamp: string;
+  authorId: string;
+  authorName: string;
+  priority: 'Low' | 'Medium' | 'High';
+  expiresAt?: string;
+}
+
+export interface Asset {
+  id: string;
+  name: string;
+  type: 'Laptop' | 'Phone' | 'Vehicle' | 'Other';
+  serialNumber?: string;
+  assignedTo?: string; // empId
+  assignedDate?: string;
+  status: 'Available' | 'Assigned' | 'Maintenance' | 'Retired';
+  condition: 'New' | 'Good' | 'Fair' | 'Poor';
+  notes?: string;
+}
+
 export interface AppData {
   branches?: Branch[];
   holidays?: Holiday[];
+  announcements?: Announcement[];
+  assets?: Asset[];
   employees: Employee[];
   credentials: UserCredential[];
   attendance: Attendance[];
