@@ -25,6 +25,8 @@ import DataMigration from './components/DataMigration';
 import AnnouncementManagement from './components/AnnouncementManagement';
 import TargetManagement from './components/TargetManagement';
 import AssetManagement from './components/AssetManagement';
+import DocumentManagement from './components/DocumentManagement';
+import PerformanceReviews from './components/PerformanceReviews';
 import { Clock, Menu, Loader2 } from 'lucide-react';
 import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 
@@ -185,6 +187,8 @@ export default function App() {
       unsubs.push(syncCoreCollection('announcements', 'announcements'));
       unsubs.push(syncCoreCollection('targets', 'targets'));
       unsubs.push(syncCoreCollection('assets', 'assets'));
+      unsubs.push(syncCoreCollection('documents', 'documents'));
+      unsubs.push(syncCoreCollection('performanceReviews', 'performanceReviews'));
 
       if (session.email === "zioncommercialcreditampara@gmail.com") {
         unsubs.push(syncCoreCollection('systemReports', 'systemReports'));
@@ -237,6 +241,8 @@ export default function App() {
       unsubs.push(syncCoreCollectionForEmployee('announcements', 'announcements'));
       unsubs.push(syncCoreCollectionForEmployee('targets', 'targets'));
       unsubs.push(syncCoreCollectionForEmployee('assets', 'assets'));
+      unsubs.push(syncCoreCollectionForEmployee('documents', 'documents'));
+      unsubs.push(syncCoreCollectionForEmployee('performanceReviews', 'performanceReviews'));
 
       // If they are a branch manager, fetch their staff
       if (session.viewableBranches && session.viewableBranches.length > 0) {
@@ -461,7 +467,7 @@ export default function App() {
       }
 
       // Always accessible for everyone
-      if (id === 'dashboard' || id === 'myprofile' || id === 'leave' || id === 'payroll' || id === 'advances' || id === 'cash_requests' || id === 'mail' || id === 'dc_collection' || id === 'reports' || id === 'holidays') return true;
+      if (id === 'dashboard' || id === 'myprofile' || id === 'leave' || id === 'payroll' || id === 'advances' || id === 'cash_requests' || id === 'mail' || id === 'dc_collection' || id === 'reports' || id === 'holidays' || id === 'documents' || id === 'performance_reviews' || id === 'assets' || id === 'announcements') return true;
       
       if (isMasterAdmin) return true;
 
@@ -497,6 +503,8 @@ export default function App() {
       case 'targets': return <TargetManagement session={session} data={appData} onRefresh={refreshData} />;
       case 'announcements': return <AnnouncementManagement session={session} data={appData} onRefresh={refreshData} />;
       case 'assets': return <AssetManagement session={session} data={appData} onRefresh={refreshData} />;
+      case 'documents': return <DocumentManagement session={session} data={appData} onRefresh={refreshData} />;
+      case 'performance_reviews': return <PerformanceReviews session={session} data={appData} onRefresh={refreshData} />;
       case 'mail': return <InternalMail session={session} data={appData} />;
       case 'dc_collection': return <DCCollection session={session} data={appData} />;
       case 'reports': return <ReportCenter session={session} data={appData} />;
@@ -522,6 +530,8 @@ export default function App() {
       case 'mail': return 'Internal Mail';
       case 'dc_collection': return 'DC Collection';
       case 'reports': return 'Report Center';
+      case 'documents': return 'Document Management';
+      case 'performance_reviews': return 'Performance Reviews';
       case 'myprofile': return 'My Profile';
       case 'settings': return 'Control Panel';
       case 'audit': return 'Audit Logs';

@@ -77,9 +77,11 @@ export default function Sidebar({ session, data, activeRoute, onNavigate, onLogo
     { id: 'mail', label: 'Mail', icon: Mail },
     { id: 'staff', label: 'Staff Mgmt', icon: Users },
     { id: 'targets', label: 'Performance', icon: Target },
+    { id: 'performance_reviews', label: 'Reviews', icon: FileText },
     { id: 'attendance', label: 'Attendance', icon: CalendarCheck },
     { id: 'leave', label: hasLeavePerm ? 'Leave Mgmt' : 'My Leaves', icon: PlaneTakeoff },
     { id: 'holidays', label: 'Holidays', icon: Calendar },
+    { id: 'documents', label: 'Documents', icon: FileText },
     { id: 'payroll', label: 'Payroll', icon: FileText },
     { id: 'advances', label: hasPayrollPerm ? 'Advance Mgmt' : 'My Advances', icon: HandCoins },
     { id: 'dc_collection', label: 'DC Collection', icon: HandCoins },
@@ -101,7 +103,7 @@ export default function Sidebar({ session, data, activeRoute, onNavigate, onLogo
     }
 
     // Always accessible for everyone
-    if (id === 'dashboard' || id === 'mail' || id === 'announcements' || id === 'targets' || id === 'assets' || id === 'myprofile' || id === 'leave' || id === 'advances' || id === 'cash_requests' || id === 'dc_collection' || id === 'reports' || id === 'holidays') return true;
+    if (id === 'dashboard' || id === 'mail' || id === 'announcements' || id === 'targets' || id === 'assets' || id === 'myprofile' || id === 'leave' || id === 'advances' || id === 'cash_requests' || id === 'dc_collection' || id === 'reports' || id === 'holidays' || id === 'documents' || id === 'performance_reviews') return true;
     
     // Payroll requires specific permission or Master
     if (id === 'payroll') return hasPayrollPerm;

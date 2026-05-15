@@ -1770,5 +1770,55 @@ export const DataStore = {
       handleFirestoreError(error, OperationType.DELETE, `assets/${id}`);
       return { success: false, error: String(error) };
     }
+  },
+
+  async addDocument(document: any) {
+    try {
+      await this.ensureAuth();
+      const id = `DOC-${Date.now()}`;
+      await setDoc(doc(db, 'documents', id), { ...document, id });
+      await this.logAction('Add Document', `Uploaded document: ${document.title}`, 'Employee');
+      return { success: true, id };
+    } catch (error) {
+      handleFirestoreError(error, OperationType.CREATE, 'documents');
+      throw error;
+    }
+  },
+
+  async deleteDocument(id: string) {
+    try {
+      await this.ensureAuth();
+      await deleteDoc(doc(db, 'documents', id));
+      await this.logAction('Delete Document', `Deleted document ${id}`, 'Employee');
+      return { success: true };
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, `documents/${id}`);
+      throw error;
+    }
+  },
+
+  async addPerformanceReview(review: any) {
+    try {
+      await this.ensureAuth();
+      const id = `REV-${Date.now()}`;
+      await setDoc(doc(db, 'performanceReviews', id), { ...review, id });
+      await this.logAction('Add Review', `Added performance review for ${review.empId}`, 'Employee');
+      return { success: true, id };
+    } catch (error) {
+      handleFirestoreError(error, OperationType.CREATE, 'performanceReviews');
+      throw error;
+    }
+  },
+
+  async updatePerformanceReview(id: string, updates: any) {
+    try {
+      await this.ensureAuth();
+      await updateDoc(doc(db, 'performanceReviews', id), updates);
+      await this.logAction('Update Review', `Updated performance review ${id}`, 'Employee');
+      return { success: true };
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `performanceReviews/${id}`);
+      throw error;
+    }
   }
 };

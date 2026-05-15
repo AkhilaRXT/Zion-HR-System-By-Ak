@@ -235,5 +235,25 @@ service cloud.firestore {
       allow create: if isAuthenticated();
       allow update, delete: if isMasterAdmin();
     }
+
+    match /documents/{id} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    match /performanceReviews/{id} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    match /announcements/{id} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    match /assets/{id} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
   }
 }

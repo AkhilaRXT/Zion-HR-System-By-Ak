@@ -292,11 +292,34 @@ export interface Asset {
   notes?: string;
 }
 
+export interface EmployeeDocument {
+  id: string;
+  empId: string;
+  title: string;
+  category: 'Contract' | 'ID' | 'Certificate' | 'Other';
+  fileUrl: string;
+  uploadDate: string;
+  expiryDate?: string;
+}
+
+export interface PerformanceReview {
+  id: string;
+  empId: string;
+  reviewerId: string;
+  reviewDate: string;
+  rating: number;
+  feedback: string;
+  goals?: string;
+  status: 'Scheduled' | 'Completed' | 'Cancelled';
+}
+
 export interface AppData {
   branches?: Branch[];
   holidays?: Holiday[];
   announcements?: Announcement[];
   assets?: Asset[];
+  documents?: EmployeeDocument[];
+  performanceReviews?: PerformanceReview[];
   employees: Employee[];
   credentials: UserCredential[];
   attendance: Attendance[];
