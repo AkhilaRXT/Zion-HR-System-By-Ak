@@ -127,7 +127,7 @@ service cloud.firestore {
     }
 
     match /targets/{id} {
-      allow read: if isAuthenticated();
+      allow read: if isAuthenticated() && (isAdmin() || isOwner(resource.data.empId));
       allow write: if isAdmin();
     }
 
@@ -228,6 +228,16 @@ service cloud.firestore {
       allow create: if isAuthenticated() && isOwner(request.resource.data.empId);
       allow update: if isAuthenticated() && (isAdmin() || isBranchManager());
       allow delete: if isMasterAdmin();
+    }
+
+    match /announcements/{id} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    match /assets/{id} {
+      allow read: if isAuthenticated() && (isAdmin() || isOwner(resource.data.assignedTo));
+      allow write: if isAdmin();
     }
 
     match /systemReports/{id} {
