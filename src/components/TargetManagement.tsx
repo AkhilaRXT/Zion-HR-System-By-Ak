@@ -74,9 +74,6 @@ export default function TargetManagement({ session, data, onRefresh }: TargetMan
   };
 
   const filteredTargets = (data.targets || []).filter(t => {
-    // If not admin and not managing, only show own targets
-    if (!isAdmin && !canManage && t.empId !== session.empId) return false;
-
     const emp = data.employees.find(e => e.id === t.empId);
     const matchesSearch = !searchQuery ||
       t.empId.toLowerCase().includes(searchQuery.toLowerCase()) ||

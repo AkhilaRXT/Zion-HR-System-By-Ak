@@ -461,7 +461,7 @@ export default function App() {
       }
 
       // Always accessible for everyone
-      if (id === 'dashboard' || id === 'myprofile' || id === 'leave' || id === 'payroll' || id === 'advances' || id === 'cash_requests' || id === 'mail' || id === 'dc_collection' || id === 'reports' || id === 'holidays' || id === 'announcements' || id === 'targets' || id === 'assets') return true;
+      if (id === 'dashboard' || id === 'myprofile' || id === 'leave' || id === 'payroll' || id === 'advances' || id === 'cash_requests' || id === 'mail' || id === 'dc_collection' || id === 'reports' || id === 'holidays') return true;
       
       if (isMasterAdmin) return true;
 
@@ -519,9 +519,6 @@ export default function App() {
       case 'advances': return session.isAdmin ? 'Advance Management' : 'Salary Advances';
       case 'cash_requests': return 'Cash Requests';
       case 'holidays': return 'Holiday Calendar';
-      case 'targets': return session.isAdmin ? 'Performance Targets' : 'My Performance';
-      case 'announcements': return 'Company Announcements';
-      case 'assets': return session.isAdmin ? 'Asset Tracking' : 'My Assets';
       case 'mail': return 'Internal Mail';
       case 'dc_collection': return 'DC Collection';
       case 'reports': return 'Report Center';
