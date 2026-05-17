@@ -21,6 +21,8 @@ export interface Employee {
   profilePic?: string;
   hasEPF?: boolean;
   status?: 'Active' | 'Dormant';
+  dateOfBirth?: string;
+  joinDate?: string;
   salaryStatus?: 'Active' | 'Held_1' | 'Held_2' | 'Held_Forever' | 'Custom';
   heldFrom?: string;
   heldTo?: string;
@@ -68,6 +70,16 @@ export interface Target {
   category: string;
   targetCount: number;
   achievedCount: number;
+}
+
+export interface Announcement {
+  id: string;
+  title: string;
+  content: string;
+  date: string;
+  authorId: string;
+  daysToStay?: number;
+  priority?: 'High' | 'Medium' | 'Low';
 }
 
 export interface AdvanceRequest {
@@ -275,6 +287,7 @@ export interface AppData {
   attendance: Attendance[];
   leaves: LeaveRequest[];
   targets: Target[];
+  announcements?: Announcement[];
   advances: AdvanceRequest[];
   cashRequests: CashRequest[];
   leaveBalances: LeaveBalances;

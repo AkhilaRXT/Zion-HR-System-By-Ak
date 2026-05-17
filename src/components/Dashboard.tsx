@@ -15,7 +15,10 @@ import {
   Trash2,
   MapPin,
   Fingerprint,
-  Wallet
+  Wallet,
+  Gift,
+  Megaphone,
+  Plus
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import ConfirmModal from './ConfirmModal';
@@ -90,6 +93,36 @@ export default function Dashboard({ session, data, onRefresh }: DashboardProps) 
   const [selectedEmpId, setSelectedEmpId] = useState((data.employees || [])[0]?.id || '');
   const [empSearch, setEmpSearch] = useState('');
 
+  const [notification, setNotification] = useState<{message: string, type: NotificationType} | null>(null);
+
+  const showNotification = (message: string, type: NotificationType = 'success') => {
+    setNotification({ message, type });
+  };
+
+  const currentMonth = new Date().getMonth();
+  const milestones = activeStaff.filter(e => {
+    if (!e.dateOfBirth && !e.joinDate) return false;
+    let bMonth = -1, jMonth = -1;
+    if (e.dateOfBirth) bMonth = new Date(e.dateOfBirth).getMonth();
+    if (e.joinDate) jMonth = new Date(e.joinDate).getMonth();
+    return bMonth === currentMonth || jMonth === currentMonth;
+  });
+
+  const recentAnnouncements = [...(data.announcements || [])]
+    .filter(a => {
+      const postDate = a.date ? new Date(a.date) : new Date();
+      if (isNaN(postDate.getTime())) return true; // Show if date is invalid just in case
+      const expirationDate = new Date(postDate);
+      expirationDate.setDate(expirationDate.getDate() + (a.daysToStay || 7));
+      return new Date() <= expirationDate;
+    })
+    .sort((a,b) => {
+      const dateA = a.date ? new Date(a.date).getTime() : 0;
+      const dateB = b.date ? new Date(b.date).getTime() : 0;
+      return dateB - dateA;
+    })
+    .slice(0, 5);
+
   // Sync selection with search results
   useEffect(() => {
     const validStaff = (data.employees || []).filter(e => e.status !== 'Dormant' && e.id !== 'EMP003');
@@ -106,13 +139,8 @@ export default function Dashboard({ session, data, onRefresh }: DashboardProps) 
   }, [empSearch, data.employees, selectedEmpId]);
 
   const [refreshKey, setRefreshKey] = useState(0);
-  const [notification, setNotification] = useState<{ message: string, type: NotificationType } | null>(null);
   const [editingAttendance, setEditingAttendance] = useState<Attendance | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null);
-
-  const showNotification = (message: string, type: NotificationType = 'success') => {
-    setNotification({ message, type });
-  };
 
   const handleUpdateAttendance = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -386,6 +414,80 @@ export default function Dashboard({ session, data, onRefresh }: DashboardProps) 
             <StatCard icon={TrendingUp} title="Leave Balance" value={myBalance} />
           </>
         )}
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="glass-panel p-6">
+          <div className="flex justify-between items-center mb-6">
+            <h3 className="text-sm font-semibold text-text-primary flex items-center gap-2">
+              <Megaphone className="w-4 h-4 text-brand-accent" />
+              Company Announcements
+            </h3>
+          </div>
+          {recentAnnouncements.length === 0 ? (
+            <p className="text-sm text-text-secondary">No recent announcements.</p>
+          ) : (
+            <div className="space-y-4">
+              {recentAnnouncements.map(ann => {
+                const priorityColors = {
+                  High: 'text-red-500 bg-red-50 border-red-100',
+                  Medium: 'text-brand-accent bg-brand-accent/5 border-brand-accent/20',
+                  Low: 'text-blue-500 bg-blue-50 border-blue-100'
+                };
+                return (
+                  <div key={ann.id} className={`p-4 rounded-lg border relative group ${priorityColors[ann.priority || 'Medium']}`}>
+                    <div className="flex justify-between items-start mb-1">
+                      <h4 className="font-bold text-sm text-text-primary">{ann.title}</h4>
+                      <span className="text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-white">
+                        {ann.priority || 'Medium'}
+                      </span>
+                    </div>
+                    <p className="text-xs text-text-secondary text-justify">{ann.content}</p>
+                    <span className="text-[9px] text-text-tertiary mt-2 block tracking-wider uppercase">
+                      {(data.employees || []).find(e => e.id === ann.authorId)?.name || 'Admin'} {ann.date && !isNaN(new Date(ann.date).getTime()) ? `• ${new Date(ann.date).toLocaleDateString()}` : ''}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </motion.div>
+
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="glass-panel p-6">
+          <h3 className="text-sm font-semibold text-text-primary mb-6 flex items-center gap-2">
+            <Gift className="w-4 h-4 text-brand-accent" />
+            Milestones This Month
+          </h3>
+          {milestones.length === 0 ? (
+            <p className="text-sm text-text-secondary">No milestones this month.</p>
+          ) : (
+            <div className="space-y-3">
+              {milestones.map(e => {
+                const isBday = e.dateOfBirth && new Date(e.dateOfBirth).getMonth() === currentMonth;
+                const isAnniv = e.joinDate && new Date(e.joinDate).getMonth() === currentMonth;
+                return (
+                  <div key={e.id} className="flex items-center gap-4 p-3 bg-white rounded-lg border border-border-accent shadow-sm">
+                    <div className={`p-2 rounded-full ${isBday ? 'bg-amber-100 text-amber-600' : 'bg-blue-100 text-blue-600'}`}>
+                      <Gift className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-bold text-text-primary">{e.name}</p>
+                      <p className="text-xs text-text-secondary">
+                        {isBday && isAnniv ? (
+                          `Birthday & ${new Date().getFullYear() - new Date(e.joinDate!).getFullYear()} Yr Anniversary`
+                        ) : isBday ? (
+                          `Birthday: ${new Date(e.dateOfBirth!).toLocaleDateString('en-US', { day: 'numeric', month: 'short' })}`
+                        ) : (
+                          `${new Date().getFullYear() - new Date(e.joinDate!).getFullYear()} Yr Anniversary`
+                        )}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </motion.div>
       </div>
 
       <motion.div 

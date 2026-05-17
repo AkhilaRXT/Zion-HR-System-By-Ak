@@ -64,6 +64,8 @@ export default function StaffManagement({ session, data, onRefresh }: StaffManag
     profilePic: '',
     hasEPF: true,
     status: 'Active' as const,
+    dateOfBirth: '',
+    joinDate: '',
     salaryStatus: 'Active' as const,
     heldFrom: '',
     heldTo: '',
@@ -128,6 +130,8 @@ export default function StaffManagement({ session, data, onRefresh }: StaffManag
       profilePic: newEmp.profilePic,
       hasEPF: newEmp.hasEPF,
       status: newEmp.status,
+      dateOfBirth: newEmp.dateOfBirth,
+      joinDate: newEmp.joinDate,
       salaryStatus: newEmp.salaryStatus,
       heldFrom: newEmp.heldFrom,
       heldTo: newEmp.heldTo,
@@ -374,6 +378,22 @@ export default function StaffManagement({ session, data, onRefresh }: StaffManag
                     type="email" className="form-control" placeholder="e.g. employee@gmail.com"
                     value={newEmp.email} onChange={e => setNewEmp({...newEmp, email: e.target.value})}
                   />
+                </div>
+                <div className="form-group grid grid-cols-2 gap-4 col-span-full">
+                  <div>
+                    <label className="text-[10px] uppercase tracking-[2px] text-text-secondary mb-2 block">Date of Birth</label>
+                    <input 
+                      type="date" className="form-control"
+                      value={newEmp.dateOfBirth || ''} onChange={e => setNewEmp({...newEmp, dateOfBirth: e.target.value})}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] uppercase tracking-[2px] text-text-secondary mb-2 block">Join Date</label>
+                    <input 
+                      type="date" className="form-control"
+                      value={newEmp.joinDate || ''} onChange={e => setNewEmp({...newEmp, joinDate: e.target.value})}
+                    />
+                  </div>
                 </div>
                 <div className="form-group">
                   <label className="text-[10px] uppercase tracking-[2px] text-text-secondary mb-2 block">Department</label>
@@ -919,6 +939,22 @@ export default function StaffManagement({ session, data, onRefresh }: StaffManag
                       type="email" className="form-control"
                       value={isEditing.email || ''} onChange={e => setIsEditing({...isEditing, email: e.target.value})}
                     />
+                  </div>
+                  <div className="form-group grid grid-cols-2 gap-4 col-span-full">
+                    <div>
+                      <label className="text-[10px] uppercase tracking-[2px] text-text-secondary mb-2 block">Date of Birth</label>
+                      <input 
+                        type="date" className="form-control"
+                        value={isEditing.dateOfBirth || ''} onChange={e => setIsEditing({...isEditing, dateOfBirth: e.target.value})}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] uppercase tracking-[2px] text-text-secondary mb-2 block">Join Date</label>
+                      <input 
+                        type="date" className="form-control"
+                        value={isEditing.joinDate || ''} onChange={e => setIsEditing({...isEditing, joinDate: e.target.value})}
+                      />
+                    </div>
                   </div>
                   <div className="form-group">
                     <label className="text-[10px] uppercase tracking-[2px] text-text-secondary mb-2 block">Role</label>

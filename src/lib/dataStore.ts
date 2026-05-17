@@ -1325,6 +1325,24 @@ export const DataStore = {
     }
   },
 
+  async addAnnouncement(announcement: any) {
+    try {
+      await setDoc(doc(db, 'announcements', announcement.id), announcement);
+      await this.logAction('Add Announcement', `Added announcement: ${announcement.title}`, 'Settings');
+    } catch (error) {
+      handleFirestoreError(error, OperationType.CREATE, `announcements/${announcement.id}`);
+    }
+  },
+
+  async deleteAnnouncement(id: string) {
+    try {
+      await deleteDoc(doc(db, 'announcements', id));
+      await this.logAction('Delete Announcement', `Deleted announcement ${id}`, 'Settings');
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, `announcements/${id}`);
+    }
+  },
+
   async saveAdhocBonus(bonus: any) {
     try {
       await setDoc(doc(db, 'adhocBonuses', bonus.id), bonus);

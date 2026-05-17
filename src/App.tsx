@@ -8,6 +8,8 @@ import Login from './components/Login';
 import Sidebar from './components/Sidebar';
 import Dashboard from './components/Dashboard';
 import StaffManagement from './components/StaffManagement';
+import TargetManagement from './components/TargetManagement';
+import AnnouncementManagement from './components/AnnouncementManagement';
 import AttendanceView from './components/Attendance';
 import LeaveManagement from './components/LeaveManagement';
 import Payroll from './components/Payroll';
@@ -179,6 +181,8 @@ export default function App() {
 
       unsubs.push(syncCoreCollection('branches', 'branches'));
       unsubs.push(syncCoreCollection('holidays', 'holidays'));
+      unsubs.push(syncCoreCollection('targets', 'targets'));
+      unsubs.push(syncCoreCollection('announcements', 'announcements'));
 
       if (session.email === "zioncommercialcreditampara@gmail.com") {
         unsubs.push(syncCoreCollection('systemReports', 'systemReports'));
@@ -228,6 +232,7 @@ export default function App() {
       };
       unsubs.push(syncCoreCollectionForEmployee('branches', 'branches'));
       unsubs.push(syncCoreCollectionForEmployee('holidays', 'holidays'));
+      unsubs.push(syncCoreCollectionForEmployee('announcements', 'announcements'));
 
       // If they are a branch manager, fetch their staff
       if (session.viewableBranches && session.viewableBranches.length > 0) {
@@ -252,6 +257,7 @@ export default function App() {
       unsubs.push(syncOwn('cashRequests', 'cashRequests'));
       unsubs.push(syncOwn('attendance', 'attendance'));
       unsubs.push(syncOwn('adhocBonuses', 'adhocBonuses'));
+      unsubs.push(syncOwn('targets', 'targets'));
       
       if (session.viewableBranches && session.viewableBranches.length > 0) {
         const branches = session.viewableBranches.slice(0, 10);
@@ -484,6 +490,8 @@ export default function App() {
       case 'payroll': return <Payroll session={session} data={appData} onRefresh={refreshData} />;
       case 'advances': return <SalaryAdvances session={session} data={appData} onRefresh={refreshData} />;
       case 'cash_requests': return <CashRequests session={session} data={appData} />;
+      case 'performance': return <TargetManagement session={session} data={appData} />;
+      case 'announcements': return <AnnouncementManagement session={session} data={appData} />;
       case 'holidays': return <HolidayCalendar session={session} data={appData} onRefresh={refreshData} />;
       case 'mail': return <InternalMail session={session} data={appData} />;
       case 'dc_collection': return <DCCollection session={session} data={appData} />;
@@ -506,6 +514,8 @@ export default function App() {
       case 'payroll': return 'Payroll Management';
       case 'advances': return session.isAdmin ? 'Advance Management' : 'Salary Advances';
       case 'cash_requests': return 'Cash Requests';
+      case 'performance': return 'Performance & Targets';
+      case 'announcements': return 'Announcement Management';
       case 'holidays': return 'Holiday Calendar';
       case 'mail': return 'Internal Mail';
       case 'dc_collection': return 'DC Collection';
