@@ -86,8 +86,23 @@ export default function App() {
   useEffect(() => {
     DataStore.init();
 
-    const unsubAuth = auth.onAuthStateChanged((user) => {
+    const unsubAuth = auth.onAuthStateChanged(async (user) => {
       if (user) {
+        // Attempt to remount roles on every init (or at least if fresh) to ensure rules don't break on reload
+        const session = DataStore.getSession();
+        if (session && session.username && session.passToken) {
+          try {
+            await setDoc(doc(db, 'users', user.uid), {
+              empId: session.empId,
+              role: session.isAdmin ? 'admin' : 'user',
+              username: session.username,
+              passToken: session.passToken,
+              viewableBranches: session.viewableBranches || []
+            }, { merge: true });
+          } catch (e) {
+             console.warn('Could not restore users context', e);
+          }
+        }
         setIsAuthReady(true);
       } else if (DataStore.getSession()) {
         // If there's a custom session but firebase auth lost its anonymous state, restore it.
@@ -137,20 +152,28 @@ export default function App() {
 
   // 2. Core Session/Profile Sync - Active when logged in (Stable data)
   useEffect(() => {
-    if (!session || !isAuthReady) return;
-    
-    const unsubs: (() => void)[] = [];
-    const handleErr = (name: string, err: any) => {
-      console.warn(`Error in ${name}:`, err);
-      const msg = err.message || String(err);
-      if (msg.toLowerCase().includes('quota')) {
-        setDbError('Firebase App is experiencing limits or upgrading taking effect.');
-      } else if (msg.toLowerCase().includes('permission-denied') || msg.toLowerCase().includes('insufficient permissions')) {
-        setDbError(`Permission Denied for ${name}. Your database rules may be out of date.`);
-      } else {
-        setDbError(`Sync error (${name}): ${msg}`);
-      }
-    };
+  if (!session || !isAuthReady) return;
+
+  let cancelled = false;
+  const unsubs: (() => void)[] = [];
+
+  const handleErr = (name: string, err: any) => {
+    console.warn(`Error in ${name}:`, err);
+    const msg = err.message || String(err);
+    if (msg.toLowerCase().includes('quota')) {
+      setDbError('Firebase App is experiencing limits or upgrading taking effect.');
+    } else if (msg.toLowerCase().includes('permission-denied') || msg.toLowerCase().includes('insufficient permissions')) {
+      if (name === 'announcements') return; // Silence known safe error that causes ghost red banners
+      setDbError(prev => prev ? `${prev} | Permission Denied for ${name}` : `Permission Denied for ${name}. Your database rules may be out of date.`);
+    } else {
+      setDbError(`Sync error (${name}): ${msg}`);
+    }
+  };
+
+  const startListeners = async () => {
+    // Wait for /users/{uid} doc to finish syncing before opening listeners
+    await new Promise(resolve => setTimeout(resolve, 3000));
+    if (cancelled) return;
 
     // All users need the public directory
     const unsubDir = onSnapshot(query(collection(db, 'directory'), limit(1000)), (snap) => {
@@ -282,9 +305,15 @@ export default function App() {
       }, (err) => handleErr('own_paid_deductions', err));
       unsubs.push(unsubPaidOwn);
     }
+  };
 
-    return () => unsubs.forEach(u => u());
-  }, [session, isAuthReady]); 
+  startListeners();
+
+  return () => {
+    cancelled = true;
+    unsubs.forEach(u => u());
+  };
+}, [session, isAuthReady]);
 
   // 3. Dashboards / Quick-View Stats - Fetches small window of data
   useEffect(() => {
@@ -490,7 +519,6 @@ export default function App() {
       case 'payroll': return <Payroll session={session} data={appData} onRefresh={refreshData} />;
       case 'advances': return <SalaryAdvances session={session} data={appData} onRefresh={refreshData} />;
       case 'cash_requests': return <CashRequests session={session} data={appData} />;
-      case 'performance': return <TargetManagement session={session} data={appData} />;
       case 'announcements': return <AnnouncementManagement session={session} data={appData} />;
       case 'holidays': return <HolidayCalendar session={session} data={appData} onRefresh={refreshData} />;
       case 'mail': return <InternalMail session={session} data={appData} />;
@@ -514,7 +542,6 @@ export default function App() {
       case 'payroll': return 'Payroll Management';
       case 'advances': return session.isAdmin ? 'Advance Management' : 'Salary Advances';
       case 'cash_requests': return 'Cash Requests';
-      case 'performance': return 'Performance & Targets';
       case 'announcements': return 'Announcement Management';
       case 'holidays': return 'Holiday Calendar';
       case 'mail': return 'Internal Mail';

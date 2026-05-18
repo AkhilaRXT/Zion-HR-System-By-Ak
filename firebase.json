@@ -1,6 +1,6 @@
 {
   "firestore": {
-    "target": "zion-hr-database",
+    "database": "zion-hr-database",
     "rules": "firestore.rules"
   },
   "hosting": {
