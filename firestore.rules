@@ -136,6 +136,32 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    function isAdminWithAllBranches() {
+      return isAdmin() && 
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+        'viewableBranches' in get(/databases/$(database)/documents/users/$(request.auth.uid)).data &&
+        (
+          'ALL' in get(/databases/$(database)/documents/users/$(request.auth.uid)).data.viewableBranches ||
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.viewableBranches.size() == 0
+        );
+    }
+
+    function validAsset(data) {
+      return data.name is string && data.name.size() > 0 && data.name.size() <= 200
+        && data.category in ['Laptop', 'Desktop', 'Phone', 'Vehicle', 'Tablet', 'Printer', 'Other']
+        && data.status in ['New', 'Good', 'Used', 'Bad', 'Broke']
+        && data.branch is string && data.branch.size() > 0
+        && data.addedBy is string
+        && data.createdAt is string
+        && data.updatedAt is string;
+    }
+
+    match /assets/{id} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAdmin() && validAsset(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
     match /auditLogs/{id} {
       allow read: if isAdmin();
       allow create: if isAuthenticated();

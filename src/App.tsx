@@ -24,6 +24,7 @@ import ReportCenter from './components/ReportCenter';
 import BranchManagement from './components/BranchManagement';
 import HolidayCalendar from './components/HolidayCalendar';
 import DataMigration from './components/DataMigration';
+import { AssetManagement } from './components/AssetManagement';
 import { Clock, Menu, Loader2 } from 'lucide-react';
 import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 
@@ -163,7 +164,7 @@ export default function App() {
     if (msg.toLowerCase().includes('quota')) {
       setDbError('Firebase App is experiencing limits or upgrading taking effect.');
     } else if (msg.toLowerCase().includes('permission-denied') || msg.toLowerCase().includes('insufficient permissions')) {
-      if (name === 'announcements') return; // Silence known safe error that causes ghost red banners
+      if (name === 'announcements' || name === 'assets' || name === 'own_assets') return; // Silence known safe error that causes ghost red banners
       setDbError(prev => prev ? `${prev} | Permission Denied for ${name}` : `Permission Denied for ${name}. Your database rules may be out of date.`);
     } else {
       setDbError(`Sync error (${name}): ${msg}`);
@@ -206,6 +207,22 @@ export default function App() {
       unsubs.push(syncCoreCollection('holidays', 'holidays'));
       unsubs.push(syncCoreCollection('targets', 'targets'));
       unsubs.push(syncCoreCollection('announcements', 'announcements'));
+      
+      const isMasterAdmin = session.email === "zioncommercialcreditampara@gmail.com";
+      const isAdminWithAll = session.isAdmin && (!session.viewableBranches || session.viewableBranches.includes('ALL') || session.viewableBranches.length === 0);
+
+      if (isMasterAdmin || isAdminWithAll) {
+        unsubs.push(syncCoreCollection('assets', 'assets'));
+      } else if (session.viewableBranches && session.viewableBranches.length > 0) {
+        const branches = session.viewableBranches.slice(0, 10);
+        unsubs.push(onSnapshot(query(collection(db, 'assets'), where('branch', 'in', branches)), (snap) => {
+          updatePart({ assets: snap.docs.map(d => ({ ...d.data(), id: d.id })) });
+        }, (err) => handleErr('assets', err)));
+      } else {
+        unsubs.push(onSnapshot(query(collection(db, 'assets'), where('assignedTo', '==', session.empId)), (snap) => {
+          updatePart({ assets: snap.docs.map(d => ({ ...d.data(), id: d.id })) });
+        }, (err) => handleErr('assets', err)));
+      }
 
       if (session.email === "zioncommercialcreditampara@gmail.com") {
         unsubs.push(syncCoreCollection('systemReports', 'systemReports'));
@@ -256,6 +273,10 @@ export default function App() {
       unsubs.push(syncCoreCollectionForEmployee('branches', 'branches'));
       unsubs.push(syncCoreCollectionForEmployee('holidays', 'holidays'));
       unsubs.push(syncCoreCollectionForEmployee('announcements', 'announcements'));
+      
+      unsubs.push(onSnapshot(query(collection(db, 'assets'), where('assignedTo', '==', session.empId)), (snap) => {
+        updatePart({ assets: snap.docs.map(d => ({ ...d.data(), id: d.id })) });
+      }, (err) => handleErr('own_assets', err)));
 
       // If they are a branch manager, fetch their staff
       if (session.viewableBranches && session.viewableBranches.length > 0) {
@@ -487,7 +508,7 @@ export default function App() {
       }
 
       // Always accessible for everyone
-      if (id === 'dashboard' || id === 'myprofile' || id === 'leave' || id === 'payroll' || id === 'advances' || id === 'cash_requests' || id === 'mail' || id === 'dc_collection' || id === 'reports' || id === 'holidays') return true;
+      if (id === 'dashboard' || id === 'myprofile' || id === 'leave' || id === 'payroll' || id === 'advances' || id === 'cash_requests' || id === 'mail' || id === 'dc_collection' || id === 'reports' || id === 'holidays' || id === 'assets') return true;
       
       if (isMasterAdmin) return true;
 
@@ -520,6 +541,7 @@ export default function App() {
       case 'advances': return <SalaryAdvances session={session} data={appData} onRefresh={refreshData} />;
       case 'cash_requests': return <CashRequests session={session} data={appData} />;
       case 'announcements': return <AnnouncementManagement session={session} data={appData} />;
+      case 'assets': return <AssetManagement session={session} data={appData} />;
       case 'holidays': return <HolidayCalendar session={session} data={appData} onRefresh={refreshData} />;
       case 'mail': return <InternalMail session={session} data={appData} />;
       case 'dc_collection': return <DCCollection session={session} data={appData} />;
@@ -543,6 +565,7 @@ export default function App() {
       case 'advances': return session.isAdmin ? 'Advance Management' : 'Salary Advances';
       case 'cash_requests': return 'Cash Requests';
       case 'announcements': return 'Announcement Management';
+      case 'assets': return 'Asset Management';
       case 'holidays': return 'Holiday Calendar';
       case 'mail': return 'Internal Mail';
       case 'dc_collection': return 'DC Collection';

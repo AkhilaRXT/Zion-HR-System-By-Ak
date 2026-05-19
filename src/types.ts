@@ -167,7 +167,7 @@ export interface AuditLog {
   user: string;
   action: string;
   details: string;
-  type: 'Employee' | 'Attendance' | 'Leave' | 'Advance' | 'Target' | 'Settings' | 'Auth' | 'Cash' | 'Payroll';
+  type: 'Employee' | 'Attendance' | 'Leave' | 'Advance' | 'Target' | 'Settings' | 'Auth' | 'Cash' | 'Payroll' | 'Asset';
 }
 
 export interface InternalMessage {
@@ -279,6 +279,21 @@ export interface Holiday {
   type: 'National' | 'Regional' | 'Company';
 }
 
+export interface Asset {
+  id: string;
+  name: string;
+  category: 'Laptop' | 'Desktop' | 'Phone' | 'Vehicle' | 'Tablet' | 'Printer' | 'Other';
+  serialNo?: string;
+  branch: string;
+  assignedTo: string | null;
+  status: 'New' | 'Good' | 'Used' | 'Bad' | 'Broke';
+  notes?: string;
+  purchaseDate?: string;
+  createdAt: string;
+  updatedAt: string;
+  addedBy: string;
+}
+
 export interface AppData {
   branches?: Branch[];
   holidays?: Holiday[];
@@ -288,6 +303,7 @@ export interface AppData {
   leaves: LeaveRequest[];
   targets: Target[];
   announcements?: Announcement[];
+  assets?: Asset[];
   advances: AdvanceRequest[];
   cashRequests: CashRequest[];
   leaveBalances: LeaveBalances;

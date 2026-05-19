@@ -1,4 +1,4 @@
-import { AppData, Employee, Session, AppSettings, Attendance, LeaveRequest, AdvanceRequest, AuditLog, UserCredential, CashRequest, SystemReport, Branch, Holiday } from '../types';
+import { AppData, Employee, Session, AppSettings, Attendance, LeaveRequest, AdvanceRequest, AuditLog, UserCredential, CashRequest, SystemReport, Branch, Holiday, Asset } from '../types';
 import { db, auth } from './firebase';
 import { 
   doc, 
@@ -1286,6 +1286,7 @@ export const DataStore = {
 
   async addCashRequest(request: CashRequest) {
     try {
+      await this.ensureAuth();
       await setDoc(doc(db, 'cashRequests', request.id.toString()), request);
       await this.logAction('Cash Request', `New cash request by ${request.empId} for LKR ${request.amount.toLocaleString()}. Category: ${request.category}`, 'Cash');
     } catch (error) {
@@ -1295,6 +1296,7 @@ export const DataStore = {
 
   async updateCashRequestStatus(id: number, status: 'Approved' | 'Rejected', actionedBy?: string) {
     try {
+      await this.ensureAuth();
       const cashRef = doc(db, 'cashRequests', id.toString());
       const cashDoc = await getDoc(cashRef);
       const cashData = cashDoc.data() as CashRequest;
@@ -1309,6 +1311,7 @@ export const DataStore = {
 
   async addTarget(target: any) {
     try {
+      await this.ensureAuth();
       await setDoc(doc(db, 'targets', target.id.toString()), target);
       await this.logAction('Add Target', `Set target for ${target.empId}: ${target.category} - ${target.targetCount} units for ${target.month}`, 'Settings');
     } catch (error) {
@@ -1318,6 +1321,7 @@ export const DataStore = {
 
   async deleteTarget(id: number) {
     try {
+      await this.ensureAuth();
       await deleteDoc(doc(db, 'targets', id.toString()));
       await this.logAction('Delete Target', `Deleted target record ${id}`, 'Settings');
     } catch (error) {
@@ -1327,6 +1331,7 @@ export const DataStore = {
 
   async addAnnouncement(announcement: any) {
     try {
+      await this.ensureAuth();
       await setDoc(doc(db, 'announcements', announcement.id), announcement);
       await this.logAction('Add Announcement', `Added announcement: ${announcement.title}`, 'Settings');
     } catch (error) {
@@ -1336,6 +1341,7 @@ export const DataStore = {
 
   async deleteAnnouncement(id: string) {
     try {
+      await this.ensureAuth();
       await deleteDoc(doc(db, 'announcements', id));
       await this.logAction('Delete Announcement', `Deleted announcement ${id}`, 'Settings');
     } catch (error) {
@@ -1343,8 +1349,59 @@ export const DataStore = {
     }
   },
 
+  async saveAsset(asset: Asset) {
+    if (!asset.name?.trim()) throw new Error('Asset name is required');
+    if (!asset.branch?.trim()) throw new Error('Branch is required');
+    if (!asset.category) throw new Error('Category is required');
+    if (!asset.status) throw new Error('Status is required');
+    
+    if (asset.assignedTo) {
+      const empDoc = await getDoc(doc(db, 'employees', asset.assignedTo));
+      if (!empDoc.exists()) throw new Error('Assigned employee does not exist');
+      if (empDoc.data()?.status === 'Dormant') throw new Error('Cannot assign asset to a dormant employee');
+    }
+
+    const safeAsset: Asset = {
+      ...asset,
+      addedBy: asset.addedBy,
+      updatedAt: new Date().toISOString(),
+    };
+
+    try {
+      await this.ensureAuth();
+      if (asset.createdAt === safeAsset.updatedAt) {
+        // If they are exactly the same, it means this was freshly created right now.
+        // Though actually, the prompt wants us to use addDoc if we don't have id but we'll use setDoc as the component may generate id or we let standard pass. Let's stick strictly to setDoc to collection with existing ID here, or handle add if id missing. Actually the prompt says "Option B - crypto UUID" which can be handled in component.
+        await setDoc(doc(db, 'assets', safeAsset.id), safeAsset);
+      } else {
+        await setDoc(doc(db, 'assets', safeAsset.id), safeAsset);
+      }
+      
+      await this.logAction(
+        asset.createdAt === safeAsset.updatedAt ? 'Add Asset' : 'Update Asset',
+        `Asset: ${asset.name} (${asset.category}) at ${asset.branch}. Status: ${asset.status}`,
+        'Asset'
+      );
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, `assets/${safeAsset.id}`);
+      throw error;
+    }
+  },
+
+  async deleteAsset(id: string) {
+    try {
+      await this.ensureAuth();
+      await deleteDoc(doc(db, 'assets', id));
+      await this.logAction('Delete Asset', `Deleted asset ${id}`, 'Asset');
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, `assets/${id}`);
+      throw error;
+    }
+  },
+
   async saveAdhocBonus(bonus: any) {
     try {
+      await this.ensureAuth();
       await setDoc(doc(db, 'adhocBonuses', bonus.id), bonus);
     } catch (error) {
       handleFirestoreError(error, OperationType.CREATE, `adhocBonuses/${bonus.id}`);
@@ -1353,6 +1410,7 @@ export const DataStore = {
 
   async clearAdhocBonus(id: string) {
     try {
+      await this.ensureAuth();
       await deleteDoc(doc(db, 'adhocBonuses', id));
     } catch (error) {
       handleFirestoreError(error, OperationType.DELETE, `adhocBonuses/${id}`);
@@ -1361,6 +1419,7 @@ export const DataStore = {
 
   async saveCustomNet(customNet: any) {
     try {
+      await this.ensureAuth();
       await setDoc(doc(db, 'customNets', customNet.id), customNet);
     } catch (error) {
       handleFirestoreError(error, OperationType.CREATE, `customNets/${customNet.id}`);
@@ -1369,6 +1428,7 @@ export const DataStore = {
 
   async clearCustomNet(id: string) {
     try {
+      await this.ensureAuth();
       await deleteDoc(doc(db, 'customNets', id));
     } catch (error) {
       handleFirestoreError(error, OperationType.DELETE, `customNets/${id}`);
