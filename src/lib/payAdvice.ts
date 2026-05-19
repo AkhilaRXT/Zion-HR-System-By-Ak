@@ -44,13 +44,13 @@ export function printPayAdvice(
 
   const deductions = {
     advances: payComponents.deductions ? advancesTotal : 0,
-    bike: payComponents.loans ? (employee.bikeInstallment || 0) : 0,
-    loan: payComponents.loans ? (employee.staffLoan || 0) : 0,
+    bike: payComponents.loans ? Number(employee.bikeInstallment || 0) : 0,
+    loan: payComponents.loans ? Number(employee.staffLoan || 0) : 0,
     epf: epf,
     late: payComponents.deductions ? lateMark : 0
   };
 
-  const totalDeductions = Object.values(deductions).reduce((s, v) => s + v, 0);
+  const totalDeductions = Object.values(deductions).reduce((s, v) => s + Number(v), 0);
   const netSalary = Math.max(0, totalEarnings - totalDeductions);
 
   const printWindow = window.open('', '_blank');

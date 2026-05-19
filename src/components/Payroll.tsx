@@ -157,12 +157,12 @@ export default function Payroll({ session, data, onRefresh }: PayrollProps) {
 
       const deductions = {
         'Salary Advances': payComponents.deductions ? advTotal : 0,
-        'Bike Installment': (payComponents.loans && !isAlreadyFinalized) ? (emp.bikeInstallment || 0) : 0,
-        'Staff Loan': (payComponents.loans && !isAlreadyFinalized) ? (emp.staffLoan || 0) : 0,
-        [`EPF (${epfPercentage}%)`]: (!isAlreadyFinalized) ? epf : 0,
+        'Bike Installment': (payComponents.loans && !alreadyPaidCmps.includes('Loans')) ? (Number(emp.bikeInstallment) || 0) : 0,
+        'Staff Loan': (payComponents.loans && !alreadyPaidCmps.includes('Loans')) ? (Number(emp.staffLoan) || 0) : 0,
+        [`EPF (${epfPercentage}%)`]: (!alreadyPaidCmps.includes('EPF')) ? epf : 0,
       };
 
-      const totalDeductions = Object.values(deductions).reduce((s, v) => s + v, 0);
+      const totalDeductions = Object.values(deductions).reduce((s, v) => s + Number(v), 0);
       
       let net = Math.max(0, totalEarnings - totalDeductions);
       let isManualNet = false;
@@ -171,8 +171,8 @@ export default function Payroll({ session, data, onRefresh }: PayrollProps) {
          isManualNet = true;
       }
       
-      // If we are paying something OR if it is the first time we are locking deductions for this month
-      if (net > 0 || !isAlreadyFinalized || isManualNet) {
+      // If we are paying something OR if we are locking new components this run
+      if (net > 0 || actuallyPayingCmps.length > 0 || isManualNet) {
         if (earnings['Ad-Hoc Bonus'] > 0) actuallyPayingCmps.push('CustomBonus');
         const finalNote = notesStr ? `${notesStr} (LKR ${net.toLocaleString()})` : `Payout (LKR ${net.toLocaleString()})`;
         nets.push({ empId: emp.id, net, notes: finalNote, components: actuallyPayingCmps });
@@ -545,8 +545,8 @@ export default function Payroll({ session, data, onRefresh }: PayrollProps) {
                     // Deductions are usually not held unless the entire salary is held and net is 0.
                     // We'll allow deductions as long as there are earnings to cover them.
                     const advDeduction = payComponents.deductions ? advTotal : 0;
-                    const loanDeduction = payComponents.loans && !isAlreadyFinalized ? ((emp.bikeInstallment || 0) + (emp.staffLoan || 0)) : 0;
-                    const epfDeduction = !isAlreadyFinalized ? epf : 0;
+                    const loanDeduction = payComponents.loans && !alreadyPaidCmps.includes('Loans') ? (Number(emp.bikeInstallment || 0) + Number(emp.staffLoan || 0)) : 0;
+                    const epfDeduction = !alreadyPaidCmps.includes('EPF') ? epf : 0;
                     
                     const totalDeductions = advDeduction + loanDeduction + epfDeduction;
                                             
@@ -559,10 +559,15 @@ export default function Payroll({ session, data, onRefresh }: PayrollProps) {
                     }
 
                     return (
-                      <tr key={emp.id}>
+                      <tr key={emp.id} className={isAlreadyFinalized ? "bg-bg-tertiary/30" : ""}>
                         <td className="font-mono text-sm text-brand-accent">{emp.id}</td>
                         <td className="font-medium text-text-primary">
                           {emp.name}
+                          {isAlreadyFinalized && (
+                            <span className="ml-2 text-[10px] uppercase tracking-wider text-amber-500 font-semibold border border-amber-500/30 bg-amber-500/10 px-1.5 py-0.5 rounded" title="Deductions already processed this month">
+                              Deductions Locked
+                            </span>
+                          )}
                           {isHeld && (
                             <span 
                               title={held.length > 0 ? `Holding: ${held.join(', ')}` : "All components held"}
@@ -613,7 +618,7 @@ export default function Payroll({ session, data, onRefresh }: PayrollProps) {
                           )}
                         </td>
                         <td>
-                          {(!alreadyPaidCmps.includes('CustomBonus') && !isAlreadyFinalized) ? (
+                          {((!alreadyPaidCmps.includes('CustomBonus') && !isAlreadyFinalized) || isMasterAdmin) ? (
                             <div className="flex items-center gap-1 max-w-[120px]">
                               <span className="text-xs text-text-secondary">LKR</span>
                               <input 
@@ -668,14 +673,25 @@ export default function Payroll({ session, data, onRefresh }: PayrollProps) {
                             onClick={() => printPayAdvice(
                               emp, 
                               selectedMonth, 
-                              advTotal, 
+                              payComponents.deductions ? advTotal : 0, 
                               fuelPrice, 
-                              payComponents.epf, 
+                              payComponents.epf && !alreadyPaidCmps.includes('EPF'), 
                               epfPercentage,
                               data.settings.companyName,
                               data.settings.companySubtitle,
-                              payComponents,
-                              manualBonus
+                              {
+                                baseSalary: payComponents.baseSalary && !alreadyPaidCmps.includes('Basic'),
+                                performanceAllowance: payComponents.performanceAllowance && !alreadyPaidCmps.includes('Bonus'),
+                                travelingAllowance: payComponents.travelingAllowance && !alreadyPaidCmps.includes('Travel'),
+                                vehicleAllowance: payComponents.vehicleAllowance && !alreadyPaidCmps.includes('Vehicle'),
+                                petrolAllowance: payComponents.petrolAllowance && !alreadyPaidCmps.includes('Petrol'),
+                                attendanceBonus: payComponents.attendanceBonus && !alreadyPaidCmps.includes('Attendance'),
+                                overtime: payComponents.overtime && !alreadyPaidCmps.includes('Overtime'),
+                                deductions: payComponents.deductions,
+                                loans: payComponents.loans && !alreadyPaidCmps.includes('Loans'),
+                                epf: payComponents.epf && !alreadyPaidCmps.includes('EPF'),
+                              },
+                              !alreadyPaidCmps.includes('CustomBonus') ? manualBonus : 0
                             )}
                             className="text-text-secondary hover:text-brand-accent transition-colors"
                             title="Print Advice"

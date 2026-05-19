@@ -349,6 +349,44 @@ export default function Dashboard({ session, data, onRefresh }: DashboardProps) 
     }
   };
 
+  const handleAdminCheckIn = async () => {
+    const empIdToUse = canSeeAttendance ? selectedEmpId : currentEmpId;
+    const now = new Date();
+    const compareTime = now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+    const displayTime = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+    const schedule = data.settings.workSchedule;
+    const isSaturday = now.getDay() === 6;
+    const startTime = isSaturday ? schedule.saturdays.start : schedule.weekdays.start;
+    const status = compareTime > startTime ? 'Late' : 'Present';
+
+    try {
+      await DataStore.checkIn(empIdToUse, status, displayTime, "Manual Override");
+      const emp = data.employees.find(e => e.id === empIdToUse);
+      showNotification(`${emp?.name} checked in manually!`);
+    } catch (err: any) {
+      showNotification(err.message || 'Failed to check in.', 'error');
+    }
+  };
+
+  const handleAdminCheckOut = async () => {
+    const empIdToUse = canSeeAttendance ? selectedEmpId : currentEmpId;
+    const rec = (data.attendance || []).find(a => a.empId === empIdToUse && a.date === today);
+    if (!rec) {
+      showNotification(`Employee hasn't checked in yet!`, 'warning');
+      return;
+    }
+
+    const now = new Date();
+    const displayTime = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+    try {
+      await DataStore.checkOut(rec.id, displayTime, "Manual Override");
+      const emp = (data.employees || []).find(e => e.id === empIdToUse);
+      showNotification(`${emp?.name} checked out manually!`, 'info');
+    } catch (err: any) {
+      showNotification(err.message || 'Failed to check out.', 'error');
+    }
+  };
+
   const handleCheckOut = async () => {
     const empIdToUse = canSeeAttendance ? selectedEmpId : currentEmpId;
     const rec = (data.attendance || []).find(a => a.empId === empIdToUse && a.date === today);
@@ -543,6 +581,16 @@ export default function Dashboard({ session, data, onRefresh }: DashboardProps) 
                 Check Out
               </button>
             </div>
+            {canSeeAttendance && (
+              <div className="flex gap-4 border-l border-border-accent pl-4">
+                <button onClick={handleAdminCheckIn} className="btn btn-outline text-amber-600 border-amber-200 hover:bg-amber-50">
+                  Manual In
+                </button>
+                <button onClick={handleAdminCheckOut} className="btn btn-outline text-amber-600 border-amber-200 hover:bg-amber-50">
+                  Manual Out
+                </button>
+              </div>
+            )}
             {!hasBiometricRegistered(canSeeAttendance ? selectedEmpId : currentEmpId) && (
               <button onClick={handleRegisterBiometrics} className="btn btn-outline border-dashed gap-2">
                 <Fingerprint className="w-4 h-4" />
