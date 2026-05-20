@@ -62,11 +62,41 @@ export default function TargetManagement({ session, data }: TargetManagementProp
   };
 
   const existingRecord = useMemo(() => {
-    if (!selectedEmpId || !selectedMonth) return null;
+    const activeEmpId = isAdmin ? selectedEmpId : (session.empId || '');
+    if (!activeEmpId || !selectedMonth) return null;
     return (data.performanceAllowances || []).find(
-      pa => pa.empId === selectedEmpId && pa.month === selectedMonth
+      pa => pa.empId === activeEmpId && pa.month === selectedMonth
     );
-  }, [data.performanceAllowances, selectedEmpId, selectedMonth]);
+  }, [data.performanceAllowances, selectedEmpId, selectedMonth, isAdmin, session.empId]);
+
+  const myPerfData = useMemo(() => {
+    const activeEmpId = isAdmin ? selectedEmpId : (session.empId || '');
+    if (!activeEmpId) return null;
+    
+    // Calculate score for active month
+    const empTargets = (data.targets || []).filter(t => t.empId === activeEmpId && t.month === selectedMonth);
+    const totalTarget = empTargets.reduce((s, t) => s + t.targetCount, 0);
+    const totalAchieved = empTargets.reduce((s, t) => s + t.achievedCount, 0);
+    const overallScore = totalTarget > 0 ? Math.round((totalAchieved / totalTarget) * 100) : 0;
+    
+    const empDetails = (data.employees || []).find(e => e.id === activeEmpId);
+    const baseAllowance = empDetails?.performanceAllowance || 0;
+    
+    let calculatedAllowance = baseAllowance;
+    if (empTargets.length > 0) {
+      calculatedAllowance = Math.round(baseAllowance * Math.min(1.0, overallScore / 100));
+    }
+    
+    return {
+      targets: empTargets,
+      totalTarget,
+      totalAchieved,
+      overallScore,
+      baseAllowance,
+      calculatedAllowance,
+      empDetails
+    };
+  }, [data.targets, data.employees, selectedEmpId, selectedMonth, session.empId, isAdmin]);
 
   useEffect(() => {
     if (existingRecord) {
@@ -465,6 +495,131 @@ export default function TargetManagement({ session, data }: TargetManagementProp
                         </div>
                       </div>
                     )}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {!isAdmin && (
+            <div className="mb-8 border-b border-border-accent pb-8">
+              <div className="glass-panel p-6 space-y-6 bg-gray-50/50 rounded-xl border border-border-accent">
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-border-accent pb-4">
+                  <div>
+                    <h3 className="text-base font-bold text-text-primary flex items-center gap-2">
+                      <Award className="w-5 h-5 text-brand-accent animate-pulse" />
+                      My Performance & Allowance Breakdown
+                    </h3>
+                    <p className="text-xs text-text-secondary mt-1">
+                      Choose any month below to view your targets, performance rating, and calculated payout estimates.
+                    </p>
+                  </div>
+                  
+                  <div className="flex items-center gap-2 w-full md:w-auto">
+                    <span className="text-xs font-semibold text-text-secondary select-none whitespace-nowrap">Select Month:</span>
+                    <input 
+                      type="month" 
+                      className="form-control h-[36px]" 
+                      value={selectedMonth} 
+                      onChange={e => setSelectedMonth(e.target.value)} 
+                    />
+                  </div>
+                </div>
+
+                {myPerfData && (
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    {/* Achievement stat card */}
+                    <div className="bg-white p-5 rounded-xl border border-border-accent shadow-sm flex flex-col justify-between">
+                      <div>
+                        <span className="text-[10px] text-text-secondary font-bold uppercase tracking-wider block mb-1">Target Achievement</span>
+                        <h4 className="text-3xl font-extrabold text-brand-primary">
+                          {myPerfData.targets.length > 0 ? `${myPerfData.overallScore}%` : '100%'}
+                        </h4>
+                        <p className="text-xs text-text-secondary mt-2">
+                          {myPerfData.targets.length > 0 
+                            ? `Achieved ${myPerfData.totalAchieved} of ${myPerfData.totalTarget} assigned units across all active categories.`
+                            : 'No targets assigned for this month. Defaulting to 100% base allowance matching.'
+                          }
+                        </p>
+                      </div>
+                      <div className="mt-4">
+                        <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
+                          <div 
+                            className={`h-full transition-all duration-500 ${
+                              myPerfData.overallScore >= 80 ? 'bg-emerald-500' : myPerfData.overallScore >= 50 ? 'bg-amber-500' : 'bg-red-500'
+                            }`} 
+                            style={{ width: `${myPerfData.targets.length > 0 ? myPerfData.overallScore : 100}%` }} 
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Allowance stat card */}
+                    <div className="bg-white p-5 rounded-xl border border-border-accent shadow-sm flex flex-col justify-between col-span-1 lg:col-span-2">
+                      <div>
+                        <span className="text-[10px] text-text-secondary font-bold uppercase tracking-wider block mb-1">Estimated Performance Allowance</span>
+                        <div className="flex flex-col sm:flex-row sm:items-baseline gap-2">
+                          <span className="text-3xl font-extrabold text-emerald-600">
+                            LKR {(existingRecord ? existingRecord.amount : myPerfData.calculatedAllowance).toLocaleString()}
+                          </span>
+                          <span className="text-xs text-text-secondary">
+                            / LKR {myPerfData.baseAllowance.toLocaleString()} base allowance
+                          </span>
+                        </div>
+                        
+                        <div className="mt-3 p-3 bg-gray-50 rounded-lg border border-border-accent/40 text-xs text-text-secondary space-y-1.5 leading-relaxed">
+                          <p className="font-semibold text-text-primary">How your allowance is calculated:</p>
+                          {existingRecord ? (
+                            <p>
+                              Your supervisor has officially confirmed and locked this month's performance allowance as{' '}
+                              <strong className="text-emerald-600">LKR {existingRecord.amount.toLocaleString()}</strong> ({existingRecord.amountType === 'percentage' ? `${existingRecord.percentageOfBase}% of base` : 'Fixed amount'}).
+                              {existingRecord.notes && (
+                                <span className="block mt-1"><strong>Reason/Notes:</strong> {existingRecord.notes}</span>
+                              )}
+                            </p>
+                          ) : (
+                            <p>
+                              If your target is {myPerfData.targets.length > 0 ? 'assigned' : 'not assigned yet'}, your performance allowance is calculated proportionally. E.g., achievement of{' '}
+                              <strong>{myPerfData.targets.length > 0 ? myPerfData.overallScore : 100}%</strong> scales your{' '}
+                              <strong>LKR {myPerfData.baseAllowance.toLocaleString()}</strong> base allowance to{' '}
+                              <strong className="text-emerald-600 text-base">LKR {myPerfData.calculatedAllowance.toLocaleString()}</strong>.
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="mt-4 flex items-center justify-between border-t border-border-accent/30 pt-3 text-[10px] text-text-secondary font-mono">
+                        <span className="flex items-center gap-1">
+                          <CheckCircle className={`w-3.5 h-3.5 ${existingRecord?.paid ? 'text-emerald-500' : 'text-amber-500 animate-pulse'}`} />
+                          Status: {existingRecord?.paid ? 'Confirmed & Locked' : 'Live Calculation (Pending Finalization)'}
+                        </span>
+                        <span>As of: {existingRecord?.setAt ? new Date(existingRecord.setAt).toLocaleDateString() : 'Active Month'}</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Sub-Target List for this month */}
+                {myPerfData && myPerfData.targets.length > 0 && (
+                  <div className="space-y-3 pt-2">
+                    <h4 className="text-xs font-bold text-text-secondary uppercase tracking-wider">Targets breakdown for {selectedMonth}</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {myPerfData.targets.map(t => {
+                        const pct = t.targetCount > 0 ? Math.min(100, Math.round((t.achievedCount / t.targetCount) * 100)) : 0;
+                        const barColor = pct >= 80 ? 'bg-emerald-500' : pct >= 50 ? 'bg-amber-500' : 'bg-red-500';
+                        return (
+                          <div key={t.id} className="bg-white p-4 rounded-lg border border-border-accent shadow-sm">
+                            <div className="flex justify-between items-center mb-1.5">
+                              <span className="text-sm font-semibold text-text-primary">{t.category}</span>
+                              <span className="text-xs font-bold text-text-secondary">{t.achievedCount} / {t.targetCount} ({pct}% Completed)</span>
+                            </div>
+                            <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
+                              <div className={`h-full ${barColor} transition-all duration-500`} style={{ width: `${pct}%` }} />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 )}
               </div>

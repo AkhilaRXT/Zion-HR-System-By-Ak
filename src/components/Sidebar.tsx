@@ -102,7 +102,7 @@ export default function Sidebar({ session, data, activeRoute, onNavigate, onLogo
     }
 
     // Always accessible for everyone
-    if (id === 'dashboard' || id === 'mail' || id === 'myprofile' || id === 'leave' || id === 'advances' || id === 'cash_requests' || id === 'dc_collection' || id === 'reports' || id === 'holidays' || id === 'assets') return true;
+    if (id === 'dashboard' || id === 'mail' || id === 'myprofile' || id === 'leave' || id === 'advances' || id === 'cash_requests' || id === 'dc_collection' || id === 'reports' || id === 'holidays' || id === 'assets' || id === 'targets') return true;
     
     // Payroll requires specific permission or Master
     if (id === 'payroll') return hasPayrollPerm;

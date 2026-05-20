@@ -43,7 +43,22 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(true);
   const [isAuthReady, setIsAuthReady] = useState(false);
   const [isSettingsReady, setIsSettingsReady] = useState(false);
-  const [dbError, setDbError] = useState<string | null>(null);
+  const [dbErrors, setDbErrors] = useState<Record<string, string>>({});
+  const dbError = Object.values(dbErrors).filter(Boolean).sort().join(' | ') || null;
+  const setDbError = (err: string | null | ((prev: string | null) => string | null)) => {
+    if (err === null) {
+      setDbErrors({});
+    } else if (typeof err === 'function') {
+      setDbErrors(prev => {
+        const currentStr = Object.values(prev).filter(Boolean).join(' | ') || null;
+        const res = err(currentStr);
+        if (res === null) return {};
+        return { manual: res };
+      });
+    } else {
+      setDbErrors({ manual: err });
+    }
+  };
 
   useEffect(() => {
     DataStore.saveData(appData);
@@ -155,6 +170,12 @@ export default function App() {
         const newSettings = snap.data() as AppSettings;
         setAppData(prev => ({ ...prev, settings: newSettings }));
         setIsSettingsReady(true);
+        setDbErrors(prev => {
+          if (!prev.settings) return prev;
+          const next = { ...prev };
+          delete next.settings;
+          return next;
+        });
         try {
           const raw = localStorage.getItem(STORAGE_KEY);
           const localData = raw ? JSON.parse(raw) : DataStore.getData();
@@ -166,8 +187,11 @@ export default function App() {
       }
     }, (err) => {
       console.warn('Permission denied or error fetching settings:', err);
-      if (err.message.toLocaleLowerCase().includes('quota')) setDbError('Firebase Daily Quota Exceeded. Some data may not load until tomorrow (or maybe Firebase takes time to update after Blaze upgrade).');
-      else setDbError('Database Connection Error (' + err.message + ')');
+      if (err.message.toLocaleLowerCase().includes('quota')) {
+        setDbErrors(prev => ({ ...prev, settings: 'Firebase Daily Quota Exceeded. Some data may not load until tomorrow (or maybe Firebase takes time to update after Blaze upgrade).' }));
+      } else {
+        setDbErrors(prev => ({ ...prev, settings: 'Database Connection Error (' + err.message + ')' }));
+      }
       setIsSettingsReady(true);
     });
     return () => unsubSettings();
@@ -184,13 +208,31 @@ export default function App() {
     console.warn(`Error in ${name}:`, err);
     const msg = err.message || String(err);
     if (msg.toLowerCase().includes('quota')) {
-      setDbError('Firebase App is experiencing limits or upgrading taking effect.');
+      setDbErrors(prev => ({ ...prev, [name]: 'Firebase App is experiencing limits or upgrading taking effect.' }));
     } else if (msg.toLowerCase().includes('permission-denied') || msg.toLowerCase().includes('insufficient permissions')) {
-      if (name === 'announcements' || name === 'assets' || name === 'own_assets') return; // Silence known safe error that causes ghost red banners
-      setDbError(prev => prev ? `${prev} | Permission Denied for ${name}` : `Permission Denied for ${name}. Your database rules may be out of date.`);
+      if (
+        name === 'announcements' || 
+        name === 'assets' || 
+        name === 'own_assets' || 
+        name === 'employees' || 
+        name === 'targets' || 
+        name === 'own_targets' || 
+        name === 'performanceAllowances' || 
+        name === 'own_performanceAllowances'
+      ) return; // Silence non-admin or role-specific security rule denials
+      setDbErrors(prev => ({ ...prev, [name]: `Permission Denied for ${name}` }));
     } else {
-      setDbError(`Sync error (${name}): ${msg}`);
+      setDbErrors(prev => ({ ...prev, [name]: `Sync error (${name}): ${msg}` }));
     }
+  };
+
+  const handleSuccess = (name: string) => {
+    setDbErrors(prev => {
+      if (!prev[name]) return prev;
+      const next = { ...prev };
+      delete next[name];
+      return next;
+    });
   };
 
   const startListeners = async () => {
@@ -200,6 +242,7 @@ export default function App() {
 
     // All users need the public directory
     const unsubDir = onSnapshot(query(collection(db, 'directory'), limit(1000)), (snap) => {
+      handleSuccess('directory');
       updatePart({ directory: snap.docs.map(d => d.data() as any) });
     }, (err) => handleErr('directory', err));
     unsubs.push(unsubDir);
@@ -207,6 +250,7 @@ export default function App() {
     if (session.isAdmin) {
       // ADMIN: Core data (Employees & Paid Deductions logic)
       const unsubEmployees = onSnapshot(query(collection(db, 'employees'), limit(1000)), (snap) => {
+        handleSuccess('employees');
         updatePart({ employees: snap.docs.map(d => ({ ...d.data(), id: d.id }) as Employee) });
       }, (err) => handleErr('employees', err));
       unsubs.push(unsubEmployees);
@@ -221,6 +265,7 @@ export default function App() {
           qRef = query(collection(db, name), orderBy('timestamp', 'desc'), limit(150));
         }
         return onSnapshot(qRef, (snap) => {
+          handleSuccess(name);
           updatePart({ [key]: snap.docs.map(d => ({ ...d.data(), id: d.id })) });
         }, (err) => handleErr(name, err));
       };
@@ -235,14 +280,19 @@ export default function App() {
       const isAdminWithAll = session.isAdmin && (!session.viewableBranches || session.viewableBranches.includes('ALL') || session.viewableBranches.length === 0);
 
       if (isMasterAdmin || isAdminWithAll) {
-        unsubs.push(syncCoreCollection('assets', 'assets'));
+        unsubs.push(onSnapshot(query(collection(db, 'assets'), limit(1000)), (snap) => {
+          handleSuccess('assets');
+          updatePart({ assets: snap.docs.map(d => ({ ...d.data(), id: d.id }) as any) });
+        }, (err) => handleErr('assets', err)));
       } else if (session.viewableBranches && session.viewableBranches.length > 0) {
         const branches = session.viewableBranches.slice(0, 10);
         unsubs.push(onSnapshot(query(collection(db, 'assets'), where('branch', 'in', branches)), (snap) => {
+          handleSuccess('assets');
           updatePart({ assets: snap.docs.map(d => ({ ...d.data(), id: d.id }) as any) });
         }, (err) => handleErr('assets', err)));
       } else {
         unsubs.push(onSnapshot(query(collection(db, 'assets'), where('assignedTo', '==', session.empId)), (snap) => {
+          handleSuccess('assets');
           updatePart({ assets: snap.docs.map(d => ({ ...d.data(), id: d.id }) as any) });
         }, (err) => handleErr('assets', err)));
       }
@@ -252,6 +302,7 @@ export default function App() {
       }
 
       const unsubPaid = onSnapshot(query(collection(db, 'paidDeductions'), limit(2000)), (snap) => {
+        handleSuccess('paidDeductions');
         const paid: { [key: string]: string[] } = {};
         const paidAmts: { [empId: string]: { [month: string]: number } } = {};
         const paidNts: { [empId: string]: { [month: string]: string } } = {};
@@ -268,9 +319,14 @@ export default function App() {
       unsubs.push(unsubPaid);
 
     } else {
-      // Sync all employees so regular employees can see Milestones, Announcements authors, etc.
-      const unsubEmployees = onSnapshot(query(collection(db, 'employees'), limit(1000)), (snap) => {
-        updatePart({ employees: snap.docs.map(d => ({ ...d.data(), id: d.id }) as Employee) });
+      // Regular employees can only subscribe to their own employee document to comply with privacy rules
+      const unsubEmployees = onSnapshot(doc(db, 'employees', session.empId), (snap) => {
+        handleSuccess('employees');
+        if (snap.exists()) {
+          updatePart({ employees: [({ ...snap.data(), id: snap.id }) as Employee] });
+        } else {
+          updatePart({ employees: [] });
+        }
       }, (err) => handleErr('employees', err));
       unsubs.push(unsubEmployees);
 
@@ -278,6 +334,7 @@ export default function App() {
       const syncCoreCollectionForEmployee = (name: string, key: string) => {
         const q = query(collection(db, name), limit(1000));
         return onSnapshot(q, (snap) => {
+          handleSuccess(name);
           updatePart({ [key]: snap.docs.map(d => ({ ...d.data(), id: d.id })) });
         }, (err) => handleErr(name, err));
       };
@@ -286,6 +343,7 @@ export default function App() {
       unsubs.push(syncCoreCollectionForEmployee('announcements', 'announcements'));
       
       unsubs.push(onSnapshot(query(collection(db, 'assets'), where('assignedTo', '==', session.empId)), (snap) => {
+        handleSuccess('own_assets');
         updatePart({ assets: snap.docs.map(d => ({ ...d.data(), id: d.id }) as any) });
       }, (err) => handleErr('own_assets', err)));
 
@@ -293,6 +351,7 @@ export default function App() {
       const syncOwn = (coll: string, key: string) => {
         let q = query(collection(db, coll), where('empId', '==', session.empId));
         return onSnapshot(q, (snap) => {
+          handleSuccess(`own_${coll}`);
           updatePart({ [key]: snap.docs.map(d => ({ ...d.data(), id: d.id })) });
         }, (err) => handleErr(`own_${coll}`, err));
       };
@@ -303,11 +362,13 @@ export default function App() {
       unsubs.push(syncOwn('attendance', 'attendance'));
       unsubs.push(syncOwn('adhocBonuses', 'adhocBonuses'));
       unsubs.push(syncOwn('targets', 'targets'));
+      unsubs.push(syncOwn('performanceAllowances', 'performanceAllowances'));
       
       if (session.viewableBranches && session.viewableBranches.length > 0) {
         const branches = session.viewableBranches.slice(0, 10);
         const qDcC = query(collection(db, 'dcCollections'), where('branch', 'in', branches), limit(1000));
         unsubs.push(onSnapshot(qDcC, (snap) => {
+          handleSuccess('dcCollections_bm');
           updatePart({ dcCollections: snap.docs.map(d => ({ ...d.data(), id: d.id } as any)) });
         }, (err) => handleErr('dcCollections_bm', err)));
       } else {
@@ -315,6 +376,7 @@ export default function App() {
       }
       
       const unsubPaidOwn = onSnapshot(doc(db, 'paidDeductions', session.empId), (snap) => {
+        handleSuccess('own_paid_deductions');
         if (snap.exists()) {
           const d = snap;
           const data = d.data();

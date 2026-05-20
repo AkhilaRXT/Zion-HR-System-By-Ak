@@ -1,8 +1,10 @@
 {
-  "firestore": {
-    "database": "zion-hr-database",
-    "rules": "firestore.rules"
-  },
+  "firestore": [
+    {
+      "database": "zion-hr-database",
+      "rules": "firestore.rules"
+    }
+  ],
   "hosting": {
     "public": "dist",
     "ignore": [

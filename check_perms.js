@@ -1,6 +1,6 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously } from 'firebase/auth';
-import { getFirestore, collection, getDocs, doc, setDoc } from 'firebase/firestore';
+import { getFirestore, doc, getDoc } from 'firebase/firestore';
 import fs from 'fs';
 
 const config = JSON.parse(fs.readFileSync('./firebase-applet-config.json', 'utf8'));
@@ -8,33 +8,41 @@ const app = initializeApp(config);
 const db = getFirestore(app, config.firestoreDatabaseId);
 const auth = getAuth(app);
 
+async function checkCollection(name, id = 'TEST001') {
+  try {
+    const res = await getDoc(doc(db, name, id));
+    console.log(`[SUCCESS] Read from '${name}/${id}'. Exists:`, res.exists());
+  } catch (e) {
+    console.error(`[DENIED] Read from '${name}/${id}'. Error:`, e.message);
+  }
+}
+
 async function check() {
   try {
     await signInAnonymously(auth);
     console.log("Logged in anonymously. UID:", auth.currentUser.uid);
     
-    // Check employees
-    try {
-      const emps = await getDocs(collection(db, 'employees'));
-      console.log("Employees success! Count:", emps.docs.length);
-    } catch(e) {
-      console.error("Employees error:", e.message);
-    }
-    
-    // Check customNets
-    try {
-      const nets = await getDocs(collection(db, 'customNets'));
-      console.log("CustomNets success! Count:", nets.docs.length);
-    } catch(e) {
-      console.error("CustomNets error:", e.message);
-    }
-    
-    // Check targets
-    try {
-      const tgts = await getDocs(collection(db, 'targets'));
-      console.log("Targets success! Count:", tgts.docs.length);
-    } catch(e) {
-      console.error("Targets error:", e.message);
+    const collections = [
+      ['employees', 'EMP001'],
+      ['attendance', 'ATT001'],
+      ['leaves', 'LV001'],
+      ['advances', 'ADV001'],
+      ['cashRequests', 'CASH001'],
+      ['targets', 'TGT001'],
+      ['announcements', 'ANN001'],
+      ['settings', 'global'],
+      ['auditLogs', 'LOG001'],
+      ['payrollReceipts', 'PAY001'],
+      ['paidDeductions', 'EMP001'],
+      ['branches', 'BR001'],
+      ['holidays', 'HOL001'],
+      ['customNets', 'NET001'],
+      ['performanceAllowances', 'PERF001'],
+      ['own_performanceAllowances', 'PERF001']
+    ];
+
+    for (const [name, id] of collections) {
+      await checkCollection(name, id);
     }
 
   } catch (e) {
