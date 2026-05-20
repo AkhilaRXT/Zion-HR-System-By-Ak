@@ -54,6 +54,7 @@ export default function Dashboard({ session, data, onRefresh }: DashboardProps) 
 
   const activeStaff = (data.employees || []).filter(e => {
     if (e.status === 'Dormant' || e.id === 'EMP003') return false;
+    if (!isAdmin) return true; // Standard employees see company-wide active staff for Milestones etc.
     if (session.email === "zioncommercialcreditampara@gmail.com") return true;
     if (isAdmin && (viewableBranches.length === 0 || viewableBranches.includes('ALL'))) return true;
     if (viewableBranches.includes('ALL')) return true;
@@ -512,7 +513,7 @@ export default function Dashboard({ session, data, onRefresh }: DashboardProps) 
                       <p className="text-sm font-bold text-text-primary">{e.name}</p>
                       <p className="text-xs text-text-secondary">
                         {isBday && isAnniv ? (
-                          `Birthday & ${new Date().getFullYear() - new Date(e.joinDate!).getFullYear()} Yr Anniversary`
+                          `Birthday: ${new Date(e.dateOfBirth!).toLocaleDateString('en-US', { day: 'numeric', month: 'short' })} & ${new Date().getFullYear() - new Date(e.joinDate!).getFullYear()} Yr Anniversary`
                         ) : isBday ? (
                           `Birthday: ${new Date(e.dateOfBirth!).toLocaleDateString('en-US', { day: 'numeric', month: 'short' })}`
                         ) : (

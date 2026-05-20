@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { DataStore, STORAGE_KEY, getLocalIsoDate } from './lib/dataStore';
 import { Session, AppData, Employee, Attendance, LeaveRequest, AdvanceRequest, Target, AuditLog, AppSettings, CashRequest, UserCredential, AdhocBonus } from './types';
 import { db, auth } from './lib/firebase';
-import { collection, onSnapshot, doc, query, limit, orderBy, where, QuerySnapshot, DocumentData } from 'firebase/firestore';
+import { collection, onSnapshot, doc, query, limit, orderBy, where, QuerySnapshot, DocumentData, setDoc } from 'firebase/firestore';
 import Login from './components/Login';
 import Sidebar from './components/Sidebar';
 import Dashboard from './components/Dashboard';
@@ -87,7 +87,14 @@ export default function App() {
   useEffect(() => {
     DataStore.init();
 
+    let googleAuthRestoreTimer: NodeJS.Timeout | null = null;
+
     const unsubAuth = auth.onAuthStateChanged(async (user) => {
+      if (googleAuthRestoreTimer) {
+        clearTimeout(googleAuthRestoreTimer);
+        googleAuthRestoreTimer = null;
+      }
+
       if (user) {
         // Attempt to remount roles on every init (or at least if fresh) to ensure rules don't break on reload
         const session = DataStore.getSession();
@@ -106,13 +113,25 @@ export default function App() {
         }
         setIsAuthReady(true);
       } else if (DataStore.getSession()) {
-        // If there's a custom session but firebase auth lost its anonymous state, restore it.
-        DataStore.ensureAuth()
-          .then(() => setIsAuthReady(true))
-          .catch(() => {
-            DataStore.logout();
-            window.location.reload();
-          });
+        const session = DataStore.getSession();
+        if (session && session.email && !session.username) {
+          // Google user session exists - wait for Firebase Auth SDK to restore Google auth state
+          googleAuthRestoreTimer = setTimeout(() => {
+            if (!auth.currentUser) {
+              console.warn('Google session restoration timed out in App.tsx');
+              DataStore.logout();
+              window.location.reload();
+            }
+          }, 3500);
+        } else {
+          // If there's a custom session but firebase auth lost its anonymous state, restore it.
+          DataStore.ensureAuth()
+            .then(() => setIsAuthReady(true))
+            .catch(() => {
+              DataStore.logout();
+              window.location.reload();
+            });
+        }
       } else {
         setIsAuthReady(true);
       }
@@ -123,6 +142,9 @@ export default function App() {
     return () => {
       clearInterval(timer);
       unsubAuth();
+      if (googleAuthRestoreTimer) {
+        clearTimeout(googleAuthRestoreTimer);
+      }
     };
   }, []);
 
@@ -206,6 +228,7 @@ export default function App() {
       unsubs.push(syncCoreCollection('branches', 'branches'));
       unsubs.push(syncCoreCollection('holidays', 'holidays'));
       unsubs.push(syncCoreCollection('targets', 'targets'));
+      unsubs.push(syncCoreCollection('performanceAllowances', 'performanceAllowances'));
       unsubs.push(syncCoreCollection('announcements', 'announcements'));
       
       const isMasterAdmin = session.email === "zioncommercialcreditampara@gmail.com";
@@ -216,11 +239,11 @@ export default function App() {
       } else if (session.viewableBranches && session.viewableBranches.length > 0) {
         const branches = session.viewableBranches.slice(0, 10);
         unsubs.push(onSnapshot(query(collection(db, 'assets'), where('branch', 'in', branches)), (snap) => {
-          updatePart({ assets: snap.docs.map(d => ({ ...d.data(), id: d.id })) });
+          updatePart({ assets: snap.docs.map(d => ({ ...d.data(), id: d.id }) as any) });
         }, (err) => handleErr('assets', err)));
       } else {
         unsubs.push(onSnapshot(query(collection(db, 'assets'), where('assignedTo', '==', session.empId)), (snap) => {
-          updatePart({ assets: snap.docs.map(d => ({ ...d.data(), id: d.id })) });
+          updatePart({ assets: snap.docs.map(d => ({ ...d.data(), id: d.id }) as any) });
         }, (err) => handleErr('assets', err)));
       }
 
@@ -245,23 +268,11 @@ export default function App() {
       unsubs.push(unsubPaid);
 
     } else {
-      let myProfile: Employee | null = null;
-      let branchStaff: Employee[] = [];
-      const updateCombinedEmployees = () => {
-        const combined = new Map<string, Employee>();
-        if (myProfile) combined.set(myProfile.id, myProfile);
-        branchStaff.forEach(emp => combined.set(emp.id, emp));
-        updatePart({ employees: Array.from(combined.values()) });
-      };
-
-      // EMPLOYEE: Their own record & related data
-      const unsubMe = onSnapshot(doc(db, 'employees', session.empId), (snap) => {
-        if (snap.exists()) {
-          myProfile = { ...snap.data(), id: snap.id } as Employee;
-          updateCombinedEmployees();
-        }
-      }, (err) => handleErr('my_profile', err));
-      unsubs.push(unsubMe);
+      // Sync all employees so regular employees can see Milestones, Announcements authors, etc.
+      const unsubEmployees = onSnapshot(query(collection(db, 'employees'), limit(1000)), (snap) => {
+        updatePart({ employees: snap.docs.map(d => ({ ...d.data(), id: d.id }) as Employee) });
+      }, (err) => handleErr('employees', err));
+      unsubs.push(unsubEmployees);
 
       // Branch Manager check dependencies - non-admins need branches
       const syncCoreCollectionForEmployee = (name: string, key: string) => {
@@ -275,18 +286,8 @@ export default function App() {
       unsubs.push(syncCoreCollectionForEmployee('announcements', 'announcements'));
       
       unsubs.push(onSnapshot(query(collection(db, 'assets'), where('assignedTo', '==', session.empId)), (snap) => {
-        updatePart({ assets: snap.docs.map(d => ({ ...d.data(), id: d.id })) });
+        updatePart({ assets: snap.docs.map(d => ({ ...d.data(), id: d.id }) as any) });
       }, (err) => handleErr('own_assets', err)));
-
-      // If they are a branch manager, fetch their staff
-      if (session.viewableBranches && session.viewableBranches.length > 0) {
-        const branches = session.viewableBranches.slice(0, 10);
-        const qEmp = query(collection(db, 'employees'), where('branch', 'in', branches));
-        unsubs.push(onSnapshot(qEmp, (snap) => {
-          branchStaff = snap.docs.map(d => ({ ...d.data(), id: d.id }) as Employee);
-          updateCombinedEmployees();
-        }, (err) => handleErr('managed_employees', err)));
-      }
 
       // Employee's own collections
       const syncOwn = (coll: string, key: string) => {
@@ -421,6 +422,9 @@ export default function App() {
       
       const bonusQuery = query(collection(db, 'adhocBonuses'), orderBy('timestamp', 'desc'), limit(500));
       syncRouteCollection('adhocBonuses', 'adhocBonuses', bonusQuery);
+
+      // Sychronize advances for payroll calculation
+      syncRouteCollection('advances', 'advances');
     }
 
     if (route === 'staff') {
@@ -508,7 +512,7 @@ export default function App() {
       }
 
       // Always accessible for everyone
-      if (id === 'dashboard' || id === 'myprofile' || id === 'leave' || id === 'payroll' || id === 'advances' || id === 'cash_requests' || id === 'mail' || id === 'dc_collection' || id === 'reports' || id === 'holidays' || id === 'assets') return true;
+      if (id === 'dashboard' || id === 'myprofile' || id === 'leave' || id === 'payroll' || id === 'advances' || id === 'cash_requests' || id === 'mail' || id === 'dc_collection' || id === 'reports' || id === 'holidays' || id === 'assets' || id === 'targets') return true;
       
       if (isMasterAdmin) return true;
 
@@ -546,6 +550,7 @@ export default function App() {
       case 'mail': return <InternalMail session={session} data={appData} />;
       case 'dc_collection': return <DCCollection session={session} data={appData} />;
       case 'reports': return <ReportCenter session={session} data={appData} />;
+      case 'targets': return <TargetManagement session={session} data={appData} />;
       case 'branches': return <BranchManagement data={appData} onRefresh={refreshData} />;
       case 'migration': return <DataMigration session={session} />;
       case 'myprofile': return <MyProfile session={session} data={appData} onRefresh={refreshData} />;
@@ -570,6 +575,7 @@ export default function App() {
       case 'mail': return 'Internal Mail';
       case 'dc_collection': return 'DC Collection';
       case 'reports': return 'Report Center';
+      case 'targets': return 'Targets & Performance';
       case 'myprofile': return 'My Profile';
       case 'settings': return 'Control Panel';
       case 'audit': return 'Audit Logs';

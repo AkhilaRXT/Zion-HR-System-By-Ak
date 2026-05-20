@@ -167,7 +167,7 @@ export interface AuditLog {
   user: string;
   action: string;
   details: string;
-  type: 'Employee' | 'Attendance' | 'Leave' | 'Advance' | 'Target' | 'Settings' | 'Auth' | 'Cash' | 'Payroll' | 'Asset';
+  type: 'Employee' | 'Attendance' | 'Leave' | 'Advance' | 'Target' | 'Settings' | 'Auth' | 'Cash' | 'Payroll' | 'Asset' | 'PerformanceAllowance';
 }
 
 export interface InternalMessage {
@@ -294,6 +294,20 @@ export interface Asset {
   addedBy: string;
 }
 
+export interface PerformanceAllowance {
+  id: string;            // format: "${empId}_${month}"  e.g. "EMP001_2026-05"
+  empId: string;
+  month: string;         // "YYYY-MM"
+  score: number;         // overall % score (0–100) calculated at time of setting
+  amount: number;        // Rs. amount approved to pay
+  amountType: 'fixed' | 'percentage';  // how it was calculated
+  percentageOfBase?: number;           // if amountType is 'percentage', store the % used
+  paid: boolean;         // true once payroll marks it as paid
+  setBy: string;         // empId of admin who set it
+  setAt: string;         // ISO timestamp
+  notes?: string;
+}
+
 export interface AppData {
   branches?: Branch[];
   holidays?: Holiday[];
@@ -320,6 +334,7 @@ export interface AppData {
   customNets?: CustomNet[];
   dcCollections: DCCollection[];
   systemReports: SystemReport[];
+  performanceAllowances?: PerformanceAllowance[];
 }
 
 export interface Session {

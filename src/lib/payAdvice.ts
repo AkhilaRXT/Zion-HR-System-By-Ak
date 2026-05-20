@@ -20,14 +20,15 @@ export function printPayAdvice(
     deductions: true,
     loans: true
   },
-  customBonus: number = 0
+  customBonus: number = 0,
+  customPerformanceAllowance?: number
 ) {
   const petrolLKR = payComponents.petrolAllowance ? (employee.petrolLitres || 0) * fuelPrice : 0;
   const epf = (deductEPF && payComponents.epf) ? (employee.baseSalary || 0) * (epfPercentage / 100) : 0;
   
   const earnings = {
     baseSalary: payComponents.baseSalary ? (employee.baseSalary || 0) : 0,
-    performance: payComponents.performanceAllowance ? (employee.performanceAllowance || 0) : 0,
+    performance: payComponents.performanceAllowance ? (customPerformanceAllowance !== undefined ? customPerformanceAllowance : (employee.performanceAllowance || 0)) : 0,
     traveling: payComponents.travelingAllowance ? (employee.travelingAllowance || 0) : 0,
     vehicle: payComponents.vehicleAllowance ? (employee.vehicleAllowance || 0) : 0,
     petrol: petrolLKR,

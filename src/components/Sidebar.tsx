@@ -79,6 +79,7 @@ export default function Sidebar({ session, data, activeRoute, onNavigate, onLogo
     { id: 'staff', label: 'Staff Mgmt', icon: Users },
     { id: 'attendance', label: 'Attendance', icon: CalendarCheck },
     { id: 'leave', label: hasLeavePerm ? 'Leave Mgmt' : 'My Leaves', icon: PlaneTakeoff },
+    { id: 'targets', label: isAdmin ? 'Targets & Allowances' : 'My Performance', icon: Target },
     { id: 'holidays', label: 'Holidays', icon: Calendar },
     { id: 'payroll', label: 'Payroll', icon: FileText },
     { id: 'advances', label: hasPayrollPerm ? 'Advance Mgmt' : 'My Advances', icon: HandCoins },

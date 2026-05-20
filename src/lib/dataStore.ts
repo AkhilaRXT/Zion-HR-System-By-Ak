@@ -1,4 +1,4 @@
-import { AppData, Employee, Session, AppSettings, Attendance, LeaveRequest, AdvanceRequest, AuditLog, UserCredential, CashRequest, SystemReport, Branch, Holiday, Asset } from '../types';
+import { AppData, Employee, Session, AppSettings, Attendance, LeaveRequest, AdvanceRequest, AuditLog, UserCredential, CashRequest, SystemReport, Branch, Holiday, Asset, PerformanceAllowance } from '../types';
 import { db, auth } from './firebase';
 import { 
   doc, 
@@ -541,13 +541,35 @@ export const DataStore = {
   async ensureAuth() {
     let freshContext = false;
     if (!auth.currentUser) {
-      try {
-        const { signInAnonymously } = await import('firebase/auth');
-        await signInAnonymously(auth);
-        freshContext = true;
-      } catch (e) {
-        console.error('Failed to establish auth context', e);
-        throw e;
+      const session = this.getSession();
+      if (session && session.email && !session.username) {
+        // Wait for Firebase Auth to restore the Google Session
+        await new Promise<void>((resolve, reject) => {
+          const unsubscribe = auth.onAuthStateChanged((user) => {
+            if (user) {
+              unsubscribe();
+              resolve();
+            }
+          });
+          // Timeout after 3 seconds
+          setTimeout(() => {
+            unsubscribe();
+            if (auth.currentUser) {
+              resolve();
+            } else {
+              reject(new Error('Google Auth session restoration timed out. Please login again.'));
+            }
+          }, 3000);
+        });
+      } else {
+        try {
+          const { signInAnonymously } = await import('firebase/auth');
+          await signInAnonymously(auth);
+          freshContext = true;
+        } catch (e) {
+          console.error('Failed to establish auth context', e);
+          throw e;
+        }
       }
     }
     
@@ -1395,6 +1417,32 @@ export const DataStore = {
       await this.logAction('Delete Asset', `Deleted asset ${id}`, 'Asset');
     } catch (error) {
       handleFirestoreError(error, OperationType.DELETE, `assets/${id}`);
+      throw error;
+    }
+  },
+
+  async savePerformanceAllowance(record: PerformanceAllowance) {
+    try {
+      await this.ensureAuth();
+      await setDoc(doc(db, 'performanceAllowances', record.id), record);
+      await this.logAction(
+        'Set Performance Allowance',
+        `Set Rs.${record.amount} allowance for empId ${record.empId} for ${record.month}. Score: ${record.score}%. Type: ${record.amountType}`,
+        'PerformanceAllowance'
+      );
+    } catch (error) {
+      handleFirestoreError(error, OperationType.CREATE, `performanceAllowances/${record.id}`);
+      throw error;
+    }
+  },
+
+  async deletePerformanceAllowance(id: string) {
+    try {
+      await this.ensureAuth();
+      await deleteDoc(doc(db, 'performanceAllowances', id));
+      await this.logAction('Delete Performance Allowance', `Deleted performance allowance record ${id}`, 'PerformanceAllowance');
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, `performanceAllowances/${id}`);
       throw error;
     }
   },

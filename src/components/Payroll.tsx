@@ -42,6 +42,41 @@ export default function Payroll({ session, data, onRefresh }: PayrollProps) {
     return emp ? viewableBranches.includes(emp.branch) : false;
   };
 
+  const getDynamicPerformanceAllowance = (emp: any, currentMonthISO: string) => {
+    const monthlyPerfRecord = (data.performanceAllowances || []).find(
+      p => p.empId === emp.id && p.month === currentMonthISO
+    );
+    const basePerformanceVal = monthlyPerfRecord !== undefined ? monthlyPerfRecord.amount : (emp.performanceAllowance || 0);
+    
+    const empTargetsForMonth = (data.targets || []).filter(
+      t => t.empId === emp.id && t.month === currentMonthISO
+    );
+
+    let achievementRate = 1.0;
+    let details = "";
+
+    if (empTargetsForMonth.length > 0) {
+      const totalTarget = empTargetsForMonth.reduce((sum, t) => sum + (t.targetCount || 0), 0);
+      const totalAchieved = empTargetsForMonth.reduce((sum, t) => sum + (t.achievedCount || 0), 0);
+      if (totalTarget > 0) {
+        achievementRate = Math.min(1.0, totalAchieved / totalTarget);
+        details = `${totalAchieved}/${totalTarget} targets`;
+      }
+    } else if (monthlyPerfRecord && monthlyPerfRecord.score !== undefined && monthlyPerfRecord.score > 0) {
+      achievementRate = Math.min(1.0, monthlyPerfRecord.score / 100);
+      details = `${monthlyPerfRecord.score}% overall score`;
+    }
+
+    const calculated = Math.round(basePerformanceVal * achievementRate);
+    return {
+      amount: calculated,
+      rate: achievementRate * 100,
+      hasTargets: empTargetsForMonth.length > 0 || (monthlyPerfRecord !== undefined && monthlyPerfRecord.score !== undefined && monthlyPerfRecord.score > 0),
+      details,
+      baseAmount: basePerformanceVal
+    };
+  };
+
   const [activeTab, setActiveTab] = useState<'processing' | 'receipts'>('processing');
   const [showReceipt, setShowReceipt] = useState(false);
   const [expandedReceipt, setExpandedReceipt] = useState<string | null>(null);
@@ -142,9 +177,21 @@ export default function Payroll({ session, data, onRefresh }: PayrollProps) {
       
       const isAlreadyFinalized = (data.paidDeductions?.[emp.id] || []).includes(selectedMonth);
 
+      const currentMonthISO = (() => {
+        if (!selectedMonth || !selectedMonth.includes(' ')) return '';
+        const [mStr, yStr] = selectedMonth.split(' ');
+        const mNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+        const mIdx = mNames.indexOf(mStr);
+        if (mIdx === -1) return '';
+        return `${yStr}-${String(mIdx + 1).padStart(2, '0')}`;
+      })();
+
+      const perfCalculated = getDynamicPerformanceAllowance(emp, currentMonthISO);
+      const computedPerfAllowance = perfCalculated.amount;
+
       const earnings = {
         'Basic Salary': (payComponents.baseSalary && !alreadyPaidCmps.includes('Basic')) ? (emp.baseSalary || 0) : 0,
-        'Performance Allowance': (payComponents.performanceAllowance && !alreadyPaidCmps.includes('Bonus')) ? (emp.performanceAllowance || 0) : 0,
+        'Performance Allowance': (payComponents.performanceAllowance && !alreadyPaidCmps.includes('Bonus')) ? computedPerfAllowance : 0,
         'Traveling Allowance': (payComponents.travelingAllowance && !alreadyPaidCmps.includes('Travel')) ? (emp.travelingAllowance || 0) : 0,
         'Vehicle Allowance': (payComponents.vehicleAllowance && !alreadyPaidCmps.includes('Vehicle')) ? (emp.vehicleAllowance || 0) : 0,
         'Petrol Allowance': (payComponents.petrolAllowance && !alreadyPaidCmps.includes('Petrol')) ? petrolLKR : 0,
@@ -217,8 +264,29 @@ export default function Payroll({ session, data, onRefresh }: PayrollProps) {
     setIsProcessing(true);
     setResetConfirmData(null);
     try {
+      const currentMonthISO = (() => {
+        if (!selectedMonth || !selectedMonth.includes(' ')) return '';
+        const [mStr, yStr] = selectedMonth.split(' ');
+        const mNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+        const mIdx = mNames.indexOf(mStr);
+        if (mIdx === -1) return '';
+        return `${yStr}-${String(mIdx + 1).padStart(2, '0')}`;
+      })();
+
+      if (currentMonthISO) {
+        const promises = (data.performanceAllowances || [])
+          .filter(pa => pa.month === currentMonthISO && pa.paid)
+          .map(pa => {
+            return DataStore.savePerformanceAllowance({
+              ...pa,
+              paid: false
+            });
+          });
+        await Promise.all(promises);
+      }
+
       await DataStore.resetPayrollMonth(selectedMonth);
-      showNotification(`Successfully unlocked/reset payroll data for ${selectedMonth}`);
+      showNotification(`Successfully unlocked/reset payroll data and performance allowances for ${selectedMonth}`);
     } catch(err) {
       console.error(err);
       showNotification('Failed to reset month.', 'error');
@@ -230,10 +298,31 @@ export default function Payroll({ session, data, onRefresh }: PayrollProps) {
     setIsProcessing(true);
     try {
       if (finalizeData && finalizeData.length > 0) {
+        const currentMonthISO = (() => {
+          if (!selectedMonth || !selectedMonth.includes(' ')) return '';
+          const [mStr, yStr] = selectedMonth.split(' ');
+          const mNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+          const mIdx = mNames.indexOf(mStr);
+          if (mIdx === -1) return '';
+          return `${yStr}-${String(mIdx + 1).padStart(2, '0')}`;
+        })();
+
+        if (currentMonthISO) {
+          const promises = (data.performanceAllowances || [])
+            .filter(pa => pa.month === currentMonthISO && !pa.paid)
+            .map(pa => {
+              return DataStore.savePerformanceAllowance({
+                ...pa,
+                paid: true
+              });
+            });
+          await Promise.all(promises);
+        }
+
         await DataStore.finalizePayroll(selectedMonth, finalizeData);
         setLastTransaction({ month: selectedMonth, date: new Date(), data: finalizeData });
         setShowReceipt(true);
-        showNotification(`Payroll finalized and marked as paid for ${selectedMonth}`);
+        showNotification(`Payroll finalized and performance allowances locked for ${selectedMonth}`);
       }
       setShowFinalizeConfirm(false);
       setFinalizeData([]);
@@ -301,7 +390,7 @@ export default function Payroll({ session, data, onRefresh }: PayrollProps) {
 
       {activeTab === 'processing' && (
         <div className="flex flex-col lg:flex-row gap-12 items-start mt-6">
-          <div className="w-full lg:w-1/3 space-y-8">
+          <div className="w-full lg:w-[28%] space-y-8">
           {hasPayrollPermission && (
             <div className="glass-panel p-8 space-y-6">
               <div>
@@ -391,7 +480,7 @@ export default function Payroll({ session, data, onRefresh }: PayrollProps) {
           )}
         </div>
 
-        <div className="w-full lg:w-2/3 space-y-12">
+        <div className="w-full lg:w-[72%] space-y-12">
           {isAdmin && showPaysheet && (
             <div className="table-container animate-in fade-in slide-in-from-bottom-4 duration-500">
               <div className="p-6 border-b border-border-accent flex flex-col gap-4 md:flex-row md:items-center justify-between bg-gray-50/50">
@@ -453,12 +542,12 @@ export default function Payroll({ session, data, onRefresh }: PayrollProps) {
               <table>
                 <thead>
                   <tr>
-                    <th>EMP ID</th>
-                    <th>Name</th>
-                    <th>Gross</th>
-                    <th>Ad-Hoc Bonus</th>
-                    <th>Net Salary</th>
-                    <th></th>
+                    <th className="w-24 min-w-[95px]">EMP ID</th>
+                    <th className="min-w-[150px]">Name</th>
+                    <th className="w-32 min-w-[120px]">Gross</th>
+                    <th className="w-48 min-w-[170px]">Ad-Hoc Bonus</th>
+                    <th className="w-52 min-w-[190px]">Net Salary</th>
+                    <th className="w-16"></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -531,8 +620,20 @@ export default function Payroll({ session, data, onRefresh }: PayrollProps) {
 
                     const held = isHeld ? (emp.heldComponents || []) : [];
 
+                    const currentMonthISO = (() => {
+                      if (!selectedMonth || !selectedMonth.includes(' ')) return '';
+                      const [mStr, yStr] = selectedMonth.split(' ');
+                      const mNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+                      const mIdx = mNames.indexOf(mStr);
+                      if (mIdx === -1) return '';
+                      return `${yStr}-${String(mIdx + 1).padStart(2, '0')}`;
+                    })();
+
+                    const perfResult = getDynamicPerformanceAllowance(emp, currentMonthISO);
+                    const computedPerfAllowance = perfResult.amount;
+
                     const basicVal = (payComponents.baseSalary && !alreadyPaidCmps.includes('Basic') && !held.includes('Basic')) ? (emp.baseSalary || 0) : 0;
-                    const performanceVal = (payComponents.performanceAllowance && !alreadyPaidCmps.includes('Bonus') && !held.includes('Performance')) ? (emp.performanceAllowance || 0) : 0;
+                    const performanceVal = (payComponents.performanceAllowance && !alreadyPaidCmps.includes('Bonus') && !held.includes('Performance')) ? computedPerfAllowance : 0;
                     const travelVal = (payComponents.travelingAllowance && !alreadyPaidCmps.includes('Travel') && !held.includes('Travel')) ? (emp.travelingAllowance || 0) : 0;
                     const vehicleVal = (payComponents.vehicleAllowance && !alreadyPaidCmps.includes('Vehicle') && !held.includes('Vehicle')) ? (emp.vehicleAllowance || 0) : 0;
                     const petrolVal = (payComponents.petrolAllowance && !alreadyPaidCmps.includes('Petrol') && !held.includes('Petrol')) ? petrolLKR : 0;
@@ -561,35 +662,54 @@ export default function Payroll({ session, data, onRefresh }: PayrollProps) {
                     return (
                       <tr key={emp.id} className={isAlreadyFinalized ? "bg-bg-tertiary/30" : ""}>
                         <td className="font-mono text-sm text-brand-accent">{emp.id}</td>
-                        <td className="font-medium text-text-primary">
-                          {emp.name}
-                          {isAlreadyFinalized && (
-                            <span className="ml-2 text-[10px] uppercase tracking-wider text-amber-500 font-semibold border border-amber-500/30 bg-amber-500/10 px-1.5 py-0.5 rounded" title="Deductions already processed this month">
-                              Deductions Locked
-                            </span>
-                          )}
-                          {isHeld && (
-                            <span 
-                              title={held.length > 0 ? `Holding: ${held.join(', ')}` : "All components held"}
-                              className="ml-2 text-[10px] font-bold px-2 py-0.5 bg-red-50 text-red-600 rounded border border-red-100 uppercase cursor-help"
-                            >
-                              {held.length > 0 ? 'Partial Hold' : 'Full Hold'} ({
-                                emp.salaryStatus === 'Custom' 
-                                  ? `${new Date(emp.heldFrom!).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })} - ${new Date(emp.heldTo!).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}`
-                                  : emp.salaryStatus?.replace('Held_', '').replace('Forever', '∞') + 'M'
-                              })
-                            </span>
-                          )}
+                        <td className="font-medium text-text-primary py-3">
+                          <div className="flex items-center flex-wrap gap-1.5">
+                            <span className="font-semibold text-text-primary">{emp.name}</span>
+                            {isAlreadyFinalized && (
+                              <span className="text-[10px] uppercase tracking-wider text-amber-500 font-semibold border border-amber-500/30 bg-amber-500/10 px-1.5 py-0.5 rounded animate-pulse" title="Deductions already processed this month">
+                                Deductions Locked
+                              </span>
+                            )}
+                            {isHeld && (
+                              <span 
+                                title={held.length > 0 ? `Holding: ${held.join(', ')}` : "All components held"}
+                                className="text-[10px] font-bold px-2 py-0.5 bg-red-50 text-red-600 rounded border border-red-100 uppercase cursor-help"
+                              >
+                                {held.length > 0 ? 'Partial Hold' : 'Full Hold'} ({
+                                  emp.salaryStatus === 'Custom' 
+                                    ? `${new Date(emp.heldFrom!).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })} - ${new Date(emp.heldTo!).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}`
+                                    : emp.salaryStatus?.replace('Held_', '').replace('Forever', '∞') + 'M'
+                                })
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-[10px] text-text-secondary mt-1 flex items-center gap-1.5 flex-wrap">
+                            <span>{emp.role} • {emp.branch}</span>
+                            {perfResult.hasTargets && (
+                              <span 
+                                className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider ${
+                                  perfResult.rate >= 100 
+                                    ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' 
+                                    : perfResult.rate > 0 
+                                      ? 'bg-amber-50 text-amber-600 border border-amber-100 animate-pulse' 
+                                      : 'bg-red-50 text-red-600 border border-red-100 font-extrabold'
+                                }`}
+                                title={`Base allowance: LKR ${perfResult.baseAmount.toLocaleString()}${perfResult.details ? ` (${perfResult.details})` : ''}`}
+                              >
+                                Perf: {Math.round(perfResult.rate)}% (LKR {perfResult.amount.toLocaleString()})
+                              </span>
+                            )}
+                          </div>
                         </td>
                         <td className="text-xs text-text-secondary">LKR {(totalEarnings - manualBonus).toLocaleString()}</td>
                         <td>
                           {(!alreadyPaidCmps.includes('CustomBonus')) ? (
-                            <div className="flex items-center gap-1 max-w-[120px]">
-                              <span className="text-xs text-text-secondary">LKR</span>
+                            <div className="flex items-center gap-1.5 min-w-[130px] w-full">
+                              <span className="text-xs text-text-secondary font-medium">LKR</span>
                               <input 
                                 type="number" 
                                 min="0"
-                                className="w-full text-sm font-bold text-emerald-600 bg-emerald-50/50 border border-emerald-100 rounded px-2 py-1 outline-none focus:border-emerald-300 focus:bg-emerald-50 transition-colors"
+                                className="w-full text-sm font-bold text-emerald-600 bg-emerald-50/50 border border-emerald-100 rounded px-2.5 py-1.5 outline-none focus:border-emerald-300 focus:bg-emerald-50 transition-colors"
                                 value={customBonuses[emp.id] || ''}
                                 onChange={e => {
                                   const val = Number(e.target.value);
@@ -619,48 +739,68 @@ export default function Payroll({ session, data, onRefresh }: PayrollProps) {
                         </td>
                         <td>
                           {((!alreadyPaidCmps.includes('CustomBonus') && !isAlreadyFinalized) || isMasterAdmin) ? (
-                            <div className="flex items-center gap-1 max-w-[120px]">
-                              <span className="text-xs text-text-secondary">LKR</span>
-                              <input 
-                                type="number" 
-                                min="0"
-                                className={`w-full text-sm font-bold border rounded px-2 py-1 outline-none transition-colors ${
-                                  isManualNet 
-                                    ? 'text-brand-primary bg-brand-primary/5 hover:bg-brand-primary/10 border-brand-accent/30 focus:border-brand-accent' 
-                                    : 'text-text-primary bg-bg-secondary border-bg-tertiary focus:border-brand-primary'
-                                }`}
-                                value={customNetsState[emp.id] ?? ''}
-                                onChange={e => {
-                                  const val = e.target.value;
-                                  if (val === '') {
-                                    setCustomNetsState(prev => {
-                                      const next = { ...prev };
-                                      delete next[emp.id];
-                                      return next;
-                                    });
-                                  } else {
-                                    setCustomNetsState(prev => ({ ...prev, [emp.id]: Number(val) }));
-                                  }
-                                }}
-                                onBlur={async (e) => {
-                                  const val = e.target.value;
-                                  if (val !== '') {
-                                    await DataStore.saveCustomNet({
-                                      id: `${selectedMonth}_${emp.id}`,
-                                      empId: emp.id,
-                                      month: selectedMonth,
-                                      amount: Number(val),
-                                      addedBy: session.name,
-                                      timestamp: new Date().toISOString()
-                                    });
-                                    showNotification('Net Salary manually overridden', 'success');
-                                  } else {
-                                    await DataStore.clearCustomNet(`${selectedMonth}_${emp.id}`);
-                                    showNotification('Net Salary override removed', 'info');
-                                  }
-                                }}
-                                placeholder={calculatedNet.toLocaleString()}
-                              />
+                            <div className="flex items-center gap-1.5 min-w-[150px] w-full">
+                              <span className="text-xs text-text-secondary font-medium">LKR</span>
+                              <div className="relative flex-1">
+                                <input 
+                                  type="number" 
+                                  min="0"
+                                  className={`w-full text-sm font-bold border rounded pl-2.5 pr-8 py-1.5 outline-none transition-colors ${
+                                    isManualNet 
+                                      ? 'text-brand-accent bg-blue-50/30 hover:bg-blue-50 border-blue-200 focus:border-brand-accent focus:ring-1 focus:ring-blue-100' 
+                                      : 'text-text-primary bg-bg-secondary border-border-accent hover:border-text-secondary focus:border-brand-primary'
+                                  }`}
+                                  value={customNetsState[emp.id] ?? ''}
+                                  onChange={e => {
+                                    const val = e.target.value;
+                                    if (val === '') {
+                                      setCustomNetsState(prev => {
+                                        const next = { ...prev };
+                                        delete next[emp.id];
+                                        return next;
+                                      });
+                                    } else {
+                                      setCustomNetsState(prev => ({ ...prev, [emp.id]: Number(val) }));
+                                    }
+                                  }}
+                                  onBlur={async (e) => {
+                                    const val = e.target.value;
+                                    if (val !== '') {
+                                      await DataStore.saveCustomNet({
+                                        id: `${selectedMonth}_${emp.id}`,
+                                        empId: emp.id,
+                                        month: selectedMonth,
+                                        amount: Number(val),
+                                        addedBy: session.name,
+                                        timestamp: new Date().toISOString()
+                                      });
+                                      showNotification('Net Salary manually overridden', 'success');
+                                    } else {
+                                      await DataStore.clearCustomNet(`${selectedMonth}_${emp.id}`);
+                                      showNotification('Net Salary override removed', 'info');
+                                    }
+                                  }}
+                                  placeholder={calculatedNet.toLocaleString()}
+                                />
+                                {isManualNet && (
+                                  <button
+                                    type="button"
+                                    onClick={async () => {
+                                      setCustomNetsState(prev => {
+                                        const next = { ...prev };
+                                        delete next[emp.id];
+                                        return next;
+                                      });
+                                      await DataStore.clearCustomNet(`${selectedMonth}_${emp.id}`);
+                                      showNotification('Net Salary override removed', 'info');
+                                    }}
+                                    className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded-full text-text-secondary hover:text-red-500 hover:bg-red-50 transition-colors cursor-pointer animate-in fade-in zoom-in duration-150"
+                                    title="Remove manual override"
+                                  >
+                                    <X className="w-3.5 h-3.5" />
+                                  </button>
+                                )}
+                              </div>
                             </div>
                           ) : (
                             <span className="font-mono text-sm font-semibold text-text-primary">
@@ -691,7 +831,8 @@ export default function Payroll({ session, data, onRefresh }: PayrollProps) {
                                 loans: payComponents.loans && !alreadyPaidCmps.includes('Loans'),
                                 epf: payComponents.epf && !alreadyPaidCmps.includes('EPF'),
                               },
-                              !alreadyPaidCmps.includes('CustomBonus') ? manualBonus : 0
+                              !alreadyPaidCmps.includes('CustomBonus') ? manualBonus : 0,
+                              computedPerfAllowance
                             )}
                             className="text-text-secondary hover:text-brand-accent transition-colors"
                             title="Print Advice"

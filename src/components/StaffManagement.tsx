@@ -158,6 +158,7 @@ export default function StaffManagement({ session, data, onRefresh }: StaffManag
         status: 'Active', salaryStatus: 'Active',
         heldFrom: '', heldTo: '',
         heldComponents: [],
+        dateOfBirth: '', joinDate: '',
         username: '', password: '', isSystemAdmin: false, permissions: [], viewableBranches: []
       });
     } catch (err: any) {
@@ -880,6 +881,18 @@ export default function StaffManagement({ session, data, onRefresh }: StaffManag
                     <span className="text-text-secondary uppercase tracking-[1px]">Gross Salary</span>
                     <span className="font-mono text-emerald-600 font-semibold">LKR {grossSalary.toLocaleString()}</span>
                   </div>
+                  {emp.dateOfBirth && (
+                    <div className="flex justify-between items-center text-[11px]">
+                      <span className="text-text-secondary uppercase tracking-[1px]">Birth Date</span>
+                      <span className="text-text-primary font-medium">{new Date(emp.dateOfBirth).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+                    </div>
+                  )}
+                  {emp.joinDate && (
+                    <div className="flex justify-between items-center text-[11px]">
+                      <span className="text-text-secondary uppercase tracking-[1px]">Join Date</span>
+                      <span className="text-text-primary font-medium">{new Date(emp.joinDate).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+                    </div>
+                  )}
                 </div>
               </div>
             )})}
