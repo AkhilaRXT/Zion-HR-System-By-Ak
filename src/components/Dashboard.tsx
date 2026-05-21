@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { AppData, Session, Attendance } from '../types';
 import { DataStore, getLocalIsoDate } from '../lib/dataStore';
 import { 
@@ -31,6 +32,7 @@ interface DashboardProps {
 }
 
 export default function Dashboard({ session, data, onRefresh }: DashboardProps) {
+  const navigate = useNavigate();
   const isAdmin = session.isAdmin;
   const today = getLocalIsoDate();
   const currentEmpId = session.empId;
@@ -464,7 +466,18 @@ export default function Dashboard({ session, data, onRefresh }: DashboardProps) 
             </h3>
           </div>
           {recentAnnouncements.length === 0 ? (
-            <p className="text-sm text-text-secondary">No recent announcements.</p>
+            <div className="space-y-4">
+              <p className="text-sm text-text-secondary">No active announcements within the last 7 days.</p>
+              <div className="pt-2 text-right border-t border-gray-100">
+                <button 
+                  onClick={() => navigate('/announcements')}
+                  className="text-xs font-bold text-brand-primary hover:text-brand-accent transition-colors inline-flex items-center gap-1"
+                >
+                  View Archive & History
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
+                </button>
+              </div>
+            </div>
           ) : (
             <div className="space-y-4">
               {recentAnnouncements.map(ann => {
@@ -488,6 +501,16 @@ export default function Dashboard({ session, data, onRefresh }: DashboardProps) 
                   </div>
                 );
               })}
+              
+              <div className="pt-2 text-right border-t border-gray-100 flex justify-end">
+                <button 
+                  onClick={() => navigate('/announcements')}
+                  className="text-xs font-bold text-brand-primary hover:text-brand-accent transition-colors inline-flex items-center gap-1"
+                >
+                  View All Announcements
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
+                </button>
+              </div>
             </div>
           )}
         </motion.div>

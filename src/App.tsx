@@ -574,7 +574,7 @@ export default function App() {
       }
 
       // Always accessible for everyone
-      if (id === 'dashboard' || id === 'myprofile' || id === 'leave' || id === 'payroll' || id === 'advances' || id === 'cash_requests' || id === 'mail' || id === 'dc_collection' || id === 'reports' || id === 'holidays' || id === 'assets' || id === 'targets') return true;
+      if (id === 'dashboard' || id === 'myprofile' || id === 'leave' || id === 'payroll' || id === 'advances' || id === 'cash_requests' || id === 'mail' || id === 'dc_collection' || id === 'reports' || id === 'holidays' || id === 'assets' || id === 'targets' || id === 'announcements') return true;
       
       if (isMasterAdmin) return true;
 
