@@ -210,7 +210,7 @@ export default function CashRequests({ session, data }: CashRequestsProps) {
               />
             </div>
             <div className="form-group">
-              <label className="text-xs font-medium text-text-secondary mb-2 block">Attachment (PDF/Image, max 3MB)</label>
+              <label className="text-xs font-medium text-text-secondary mb-2 block">Attachment (PDF max 1MB, Images auto-compressed)</label>
               <input 
                 type="file" 
                 accept=".pdf,image/*"
