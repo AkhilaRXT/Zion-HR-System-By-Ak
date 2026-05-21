@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { DataStore, STORAGE_KEY, getLocalIsoDate } from './lib/dataStore';
 import { Session, AppData, Employee, Attendance, LeaveRequest, AdvanceRequest, Target, AuditLog, AppSettings, CashRequest, UserCredential, AdhocBonus } from './types';
 import { db, auth } from './lib/firebase';
-import { collection, onSnapshot, doc, query, limit, orderBy, where, QuerySnapshot, DocumentData, setDoc } from 'firebase/firestore';
+import { collection, onSnapshot, doc, query, limit, orderBy, where, QuerySnapshot, DocumentData, setDoc, getDocs } from 'firebase/firestore';
 import Login from './components/Login';
 import Sidebar from './components/Sidebar';
 import Dashboard from './components/Dashboard';
@@ -237,15 +237,18 @@ export default function App() {
 
   const startListeners = async () => {
     // Wait for /users/{uid} doc to finish syncing before opening listeners
-    await new Promise(resolve => setTimeout(resolve, 3000));
+    await new Promise(resolve => setTimeout(resolve, 100));
     if (cancelled) return;
 
-    // All users need the public directory
-    const unsubDir = onSnapshot(query(collection(db, 'directory'), limit(1000)), (snap) => {
+    // All users need the public directory. Do a one-time getDocs fetch instead of a continuous real-time listener to save Firestore reads.
+    getDocs(query(collection(db, 'directory'), limit(1000))).then((snap) => {
+      if (cancelled) return;
       handleSuccess('directory');
       updatePart({ directory: snap.docs.map(d => d.data() as any) });
-    }, (err) => handleErr('directory', err));
-    unsubs.push(unsubDir);
+    }).catch((err) => {
+      if (cancelled) return;
+      handleErr('directory', err);
+    });
 
     if (session.isAdmin) {
       // ADMIN: Core data (Employees & Paid Deductions logic)
@@ -263,6 +266,8 @@ export default function App() {
           qRef = query(collection(db, name), orderBy('id', 'desc'), limit(150));
         } else if (['adhocBonuses', 'dcCollections', 'systemReports'].includes(name)) {
           qRef = query(collection(db, name), orderBy('timestamp', 'desc'), limit(150));
+        } else if (name === 'announcements') {
+          qRef = query(collection(db, 'announcements'), orderBy('id', 'desc'), limit(30));
         }
         return onSnapshot(qRef, (snap) => {
           handleSuccess(name);
@@ -332,7 +337,10 @@ export default function App() {
 
       // Branch Manager check dependencies - non-admins need branches
       const syncCoreCollectionForEmployee = (name: string, key: string) => {
-        const q = query(collection(db, name), limit(1000));
+        let q = query(collection(db, name), limit(100));
+        if (name === 'announcements') {
+          q = query(collection(db, 'announcements'), orderBy('id', 'desc'), limit(30));
+        }
         return onSnapshot(q, (snap) => {
           handleSuccess(name);
           updatePart({ [key]: snap.docs.map(d => ({ ...d.data(), id: d.id })) });

@@ -93,7 +93,7 @@ export default function AnnouncementManagement({ session, data }: AnnouncementMa
   });
 
   return (
-    <div className="p-8 space-y-8">
+    <div className="p-4 sm:p-8 space-y-6 sm:space-y-8">
       {notification && (
         <Notification 
           message={notification.message}
@@ -111,15 +111,15 @@ export default function AnnouncementManagement({ session, data }: AnnouncementMa
       />
       
       <div className="bg-white rounded-xl shadow-lg border border-border-accent overflow-hidden">
-        <div className="p-6 border-b border-border-accent bg-gray-50 flex justify-between items-center">
-          <h2 className="text-xl font-bold text-text-primary flex items-center gap-2">
-            <Megaphone className="w-6 h-6 text-brand-accent" />
+        <div className="p-4 sm:p-6 border-b border-border-accent bg-gray-50 flex justify-between items-center">
+          <h2 className="text-lg sm:text-xl font-bold text-text-primary flex items-center gap-2">
+            <Megaphone className="w-5 h-5 sm:w-6 sm:h-6 text-brand-accent" />
             {isMasterAdmin ? 'Announcement Management' : 'Company Announcements'}
           </h2>
         </div>
         
         {isMasterAdmin ? (
-          <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-8">
+          <div className="p-4 sm:p-6 grid grid-cols-1 lg:grid-cols-2 gap-6 sm:gap-8">
             <div>
               <div className="flex justify-between items-center mb-4">
                 <h3 className="text-sm font-semibold text-text-primary">
@@ -200,7 +200,7 @@ export default function AnnouncementManagement({ session, data }: AnnouncementMa
                     };
                     return (
                       <div key={ann.id} className={`p-4 rounded-lg border border-border-accent relative group ${isExpired ? 'opacity-50' : 'bg-gray-50'}`}>
-                        <div className="flex justify-between items-start mb-2">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2">
                           <h4 className="font-bold text-sm text-text-primary">{ann.title}</h4>
                           <div className="flex items-center gap-2">
                             <span className={`text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded ${priorityColors[ann.priority || 'Medium']}`}>
@@ -234,7 +234,7 @@ export default function AnnouncementManagement({ session, data }: AnnouncementMa
             </div>
           </div>
         ) : (
-          <div className="p-8 max-w-4xl mx-auto">
+          <div className="p-4 sm:p-8 max-w-4xl mx-auto">
             {announcements.length === 0 ? (
               <div className="text-center py-12">
                 <Megaphone className="w-12 h-12 text-text-tertiary mx-auto mb-4 opacity-40 animate-pulse" />
@@ -256,16 +256,18 @@ export default function AnnouncementManagement({ session, data }: AnnouncementMa
                   return (
                     <div 
                       key={ann.id} 
-                      className={`p-6 rounded-xl border border-border-accent bg-white shadow-sm transition-all hover:shadow-md relative group ${isExpired ? 'opacity-60 bg-gray-50/50' : 'bg-white'}`}
+                      className={`p-4 sm:p-6 rounded-xl border border-border-accent bg-white shadow-sm transition-all hover:shadow-md relative group ${isExpired ? 'opacity-60 bg-gray-50/50' : 'bg-white'}`}
                     >
-                      <div className="flex justify-between items-start mb-3 gap-4">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
                         <h4 className="font-extrabold text-base text-text-primary tracking-tight">{ann.title}</h4>
-                        <span className={`text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-full border ${priorityColors[ann.priority || 'Medium']}`}>
-                          {ann.priority || 'Medium'} {isExpired ? '(Expired)' : ''}
-                        </span>
+                        <div className="flex items-center">
+                          <span className={`text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-full border ${priorityColors[ann.priority || 'Medium']}`}>
+                            {ann.priority || 'Medium'} {isExpired ? '(Expired)' : ''}
+                          </span>
+                        </div>
                       </div>
                       <p className="text-sm text-text-secondary whitespace-pre-wrap leading-relaxed mb-4 text-justify">{ann.content}</p>
-                      <div className="flex items-center justify-between pt-3 border-t border-gray-100 text-[10px] text-text-tertiary uppercase tracking-wider font-semibold">
+                      <div className="flex flex-col sm:flex-row gap-2 sm:gap-0 sm:items-center justify-between pt-3 border-t border-gray-100 text-[10px] text-text-tertiary uppercase tracking-wider font-semibold font-sans">
                         <span>Posted on: {isNaN(postDate.getTime()) ? 'N/A' : postDate.toLocaleDateString()}</span>
                         {!isExpired && (
                           <span className="text-emerald-600">Active until: {isNaN(expirationDate.getTime()) ? 'N/A' : expirationDate.toLocaleDateString()}</span>

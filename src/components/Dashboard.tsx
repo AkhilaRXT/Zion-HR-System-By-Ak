@@ -19,7 +19,8 @@ import {
   Wallet,
   Gift,
   Megaphone,
-  Plus
+  Plus,
+  Loader2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import ConfirmModal from './ConfirmModal';
@@ -465,7 +466,12 @@ export default function Dashboard({ session, data, onRefresh }: DashboardProps) 
               Company Announcements
             </h3>
           </div>
-          {recentAnnouncements.length === 0 ? (
+          {!data.announcements ? (
+            <div className="py-8 text-center flex flex-col items-center justify-center">
+              <Loader2 className="w-6 h-6 animate-spin text-brand-primary mb-2" />
+              <p className="text-xs text-text-secondary">Loading announcements...</p>
+            </div>
+          ) : recentAnnouncements.length === 0 ? (
             <div className="space-y-4">
               <p className="text-sm text-text-secondary">No active announcements within the last 7 days.</p>
               <div className="pt-2 text-right border-t border-gray-100">
