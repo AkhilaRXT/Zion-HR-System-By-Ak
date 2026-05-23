@@ -1,9 +1,46 @@
 import React, { useState, useMemo } from 'react';
 import { Asset, AppData, Session } from '../types';
 import { DataStore } from '../lib/dataStore';
-import { Monitor, Smartphone, Car, Package, Search, Plus, Edit2, Trash2, X, Download } from 'lucide-react';
+import { Monitor, Smartphone, Car, Package, Search, Plus, Edit2, Trash2, X, Download, Sparkles } from 'lucide-react';
 import ConfirmModal from './ConfirmModal';
 import Notification, { NotificationType } from './Notification';
+
+export const generateSerialNumber = (category: string, index?: number): string => {
+  let prefix = 'OTH';
+  const cat = (category || '').toLowerCase();
+  
+  if (cat.includes('laptop')) {
+    prefix = 'LAP';
+  } else if (cat.includes('desktop') || cat.includes('pc')) {
+    prefix = 'PC';
+  } else if (cat.includes('phone') || cat.includes('mobile')) {
+    prefix = 'MOB';
+  } else if (cat.includes('tablet')) {
+    prefix = 'TAB';
+  } else if (cat.includes('vehicle')) {
+    prefix = 'VEH';
+  } else if (cat.includes('printer')) {
+    prefix = 'PRN';
+  }
+
+  // Generate a clean 5-character capital alphanumeric string (excluding ambiguous characters like 0, O, 1, I, L)
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let rand = '';
+  for (let i = 0; i < 5; i++) {
+    rand += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  
+  const now = new Date();
+  const yearPart = now.getFullYear().toString().slice(-2);
+  const monthPart = (now.getMonth() + 1).toString().padStart(2, '0');
+  const timestampPart = `${yearPart}${monthPart}`;
+  
+  let sn = `${prefix}-${timestampPart}-${rand}`;
+  if (index !== undefined) {
+    sn += `-${index}`;
+  }
+  return sn;
+};
 
 interface AssetManagementProps {
   session: Session;
@@ -25,6 +62,12 @@ export const AssetManagement: React.FC<AssetManagementProps> = ({ session, data 
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [notification, setNotification] = useState<{ message: string; type: NotificationType } | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [count, setCount] = useState<number>(1);
+
+  const yearMonth = useMemo(() => {
+    const now = new Date();
+    return now.getFullYear().toString().slice(-2) + (now.getMonth() + 1).toString().padStart(2, '0');
+  }, []);
 
   // Security Context
   const isMasterAdmin = session.email === 'zioncommercialcreditampara@gmail.com';
@@ -107,11 +150,13 @@ export const AssetManagement: React.FC<AssetManagementProps> = ({ session, data 
     if (asset) {
       setEditingId(asset.id);
       setForm({ ...asset });
+      setCount(1);
     } else {
       setEditingId(null);
       setForm({
         name: '', category: 'Laptop', status: 'Good', branch: accessibleBranches[0]?.name || '', assignedTo: '', serialNo: '', purchaseDate: '', notes: ''
       });
+      setCount(1);
     }
     setIsModalOpen(true);
   };
@@ -125,23 +170,49 @@ export const AssetManagement: React.FC<AssetManagementProps> = ({ session, data 
 
     setIsSubmitting(true);
     try {
-      const id = editingId || `AST-${crypto.randomUUID()}`;
-      const payload: Asset = {
-        id,
-        name: form.name,
-        category: form.category as Asset['category'],
-        status: form.status as Asset['status'],
-        branch: form.branch,
-        serialNo: form.serialNo || '',
-        assignedTo: form.assignedTo || null,
-        purchaseDate: form.purchaseDate || '',
-        notes: form.notes || '',
-        addedBy: editingId ? (accessibleAssets.find(a => a.id === id)?.addedBy || session.empId) : session.empId,
-        createdAt: editingId ? (accessibleAssets.find(a => a.id === id)?.createdAt || new Date().toISOString()) : new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      };
-
-      await DataStore.saveAsset(payload);
+      if (editingId) {
+        const id = editingId;
+        const trimmedSerial = (form.serialNo || '').trim();
+        const payload: Asset = {
+          id,
+          name: form.name,
+          category: form.category as Asset['category'],
+          status: form.status as Asset['status'],
+          branch: form.branch,
+          serialNo: trimmedSerial || generateSerialNumber(form.category || 'Other'),
+          assignedTo: form.assignedTo || null,
+          purchaseDate: form.purchaseDate || '',
+          notes: form.notes || '',
+          addedBy: accessibleAssets.find(a => a.id === id)?.addedBy || session.empId,
+          createdAt: accessibleAssets.find(a => a.id === id)?.createdAt || new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        };
+        await DataStore.saveAsset(payload);
+      } else {
+        const assetsCount = count || 1;
+        const trimmedSerial = (form.serialNo || '').trim();
+        for (let i = 0; i < assetsCount; i++) {
+          const id = `AST-${crypto.randomUUID()}`;
+          const currentCountLabel = assetsCount > 1 ? ` - ${i + 1}` : '';
+          const payload: Asset = {
+            id,
+            name: `${form.name}${currentCountLabel}`,
+            category: form.category as Asset['category'],
+            status: form.status as Asset['status'],
+            branch: form.branch,
+            serialNo: trimmedSerial 
+              ? (assetsCount > 1 ? `${trimmedSerial}-${i + 1}` : trimmedSerial)
+              : generateSerialNumber(form.category || 'Other', assetsCount > 1 ? i + 1 : undefined),
+            assignedTo: form.assignedTo || null,
+            purchaseDate: form.purchaseDate || '',
+            notes: form.notes || '',
+            addedBy: session.empId,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+          };
+          await DataStore.saveAsset(payload);
+        }
+      }
       showNotification(`Asset ${editingId ? 'updated' : 'added'} successfully.`, 'success');
       setIsModalOpen(false);
     } catch (err: any) {
@@ -391,6 +462,24 @@ export const AssetManagement: React.FC<AssetManagementProps> = ({ session, data 
                     ))}
                   </select>
                 </div>
+                {!editingId && (
+                  <div>
+                    <label className="block text-sm font-medium text-text-secondary mb-2">Count / Quantity *</label>
+                    <input
+                      required
+                      type="number"
+                      min={1}
+                      max={100}
+                      value={count}
+                      onChange={e => {
+                        const val = parseInt(e.target.value);
+                        setCount(isNaN(val) ? 1 : val);
+                      }}
+                      className="form-control"
+                      placeholder="e.g. 1"
+                    />
+                  </div>
+                )}
                 <div>
                   <label className="block text-sm font-medium text-text-secondary mb-2">Branch *</label>
                   <select
@@ -435,13 +524,32 @@ export const AssetManagement: React.FC<AssetManagementProps> = ({ session, data 
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-text-secondary mb-2">Serial Number</label>
+                  <div className="flex justify-between items-center mb-2">
+                    <label className="block text-sm font-medium text-text-secondary">Serial Number</label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const generated = generateSerialNumber(form.category || 'Other');
+                        setForm(f => ({ ...f, serialNo: generated }));
+                      }}
+                      className="text-xs text-brand-accent hover:text-brand-accent/80 flex items-center gap-1 font-medium cursor-pointer"
+                      title="Generate asset serial number by category"
+                    >
+                      <Sparkles size={12} /> Auto Generate
+                    </button>
+                  </div>
                   <input
                     type="text"
-                    value={form.serialNo}
+                    value={form.serialNo || ''}
                     onChange={e => setForm(f => ({ ...f, serialNo: e.target.value }))}
-                    className="form-control"
-                    placeholder="e.g. SN-123456"
+                    className="form-control font-mono text-sm"
+                    placeholder={
+                      form.category === 'Laptop' ? `LAP-${yearMonth}-XXXXX (Leave blank for auto)` :
+                      form.category === 'Desktop' ? `PC-${yearMonth}-XXXXX (Leave blank for auto)` :
+                      form.category === 'Phone' ? `MOB-${yearMonth}-XXXXX (Leave blank for auto)` :
+                      form.category === 'Tablet' ? `TAB-${yearMonth}-XXXXX (Leave blank for auto)` :
+                      `${(form.category || 'OTH').slice(0, 3).toUpperCase()}-${yearMonth}-XXXXX (Leave blank for auto)`
+                    }
                   />
                 </div>
                 <div>

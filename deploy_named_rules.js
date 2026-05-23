@@ -10,7 +10,7 @@ async function deploy() {
 
   let token;
   try {
-    const tokenResponse = await fetch('http://metadata.google.internal/computeMetadata/v1/instance/service-account/default/token', {
+    const tokenResponse = await fetch('http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token', {
       headers: { 'Metadata-Flavor': 'Google' }
     });
     if (!tokenResponse.ok) {

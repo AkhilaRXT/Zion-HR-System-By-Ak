@@ -397,6 +397,23 @@ export default function App() {
       }, (err) => handleErr('own_paid_deductions', err));
       unsubs.push(unsubPaidOwn);
     }
+
+    // Everyone receives their own internal mail messages
+    const qMail = query(
+      collection(db, 'messages'),
+      where('participants', 'array-contains', session.empId),
+      limit(100)
+    );
+    const unsubMail = onSnapshot(qMail, (snap) => {
+      handleSuccess('internalMessages');
+      const msgs = snap.docs.map(d => ({ ...d.data(), id: d.id }) as any);
+      // Sort locally to avoid Firestore composite index requirement
+      msgs.sort((a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+      updatePart({ internalMessages: msgs });
+    }, (err) => {
+      handleErr('internalMessages', err);
+    });
+    unsubs.push(unsubMail);
   };
 
   startListeners();
@@ -617,7 +634,7 @@ export default function App() {
       case 'announcements': return <AnnouncementManagement session={session} data={appData} />;
       case 'assets': return <AssetManagement session={session} data={appData} />;
       case 'holidays': return <HolidayCalendar session={session} data={appData} onRefresh={refreshData} />;
-      case 'mail': return <InternalMail session={session} data={appData} />;
+      case 'mail': return <InternalMail session={session} data={appData} onUpdatePart={updatePart} />;
       case 'dc_collection': return <DCCollection session={session} data={appData} />;
       case 'reports': return <ReportCenter session={session} data={appData} />;
       case 'targets': return <TargetManagement session={session} data={appData} />;
@@ -685,6 +702,7 @@ export default function App() {
       <style>
         {`
           :root {
+            --color-brand-primary: ${primaryColor};
             --color-brand-accent: ${primaryColor};
             --color-brand-secondary: ${secondaryColor};
             --color-border-accent: ${accentColor};

@@ -21,6 +21,11 @@ async function check() {
   try {
     await signInAnonymously(auth);
     console.log("Logged in anonymously. UID:", auth.currentUser.uid);
+    console.log("Is anonymous:", auth.currentUser.isAnonymous);
+    const token = await auth.currentUser.getIdToken();
+    console.log("Token length:", token ? token.length : 0);
+    console.log("Waiting for Auth token sync to Firestore...");
+    await new Promise(resolve => setTimeout(resolve, 2000));
     
     const collections = [
       ['employees', 'EMP001'],
@@ -38,7 +43,8 @@ async function check() {
       ['holidays', 'HOL001'],
       ['customNets', 'NET001'],
       ['performanceAllowances', 'PERF001'],
-      ['own_performanceAllowances', 'PERF001']
+      ['own_performanceAllowances', 'PERF001'],
+      ['messages', 'test_unauth_write']
     ];
 
     for (const [name, id] of collections) {

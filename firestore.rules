@@ -52,6 +52,7 @@ service cloud.firestore {
       return isMasterAdmin() || (
         isAuthenticated() && 
         exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+        'role' in get(/databases/$(database)/documents/users/$(request.auth.uid)).data &&
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'
       );
     }
@@ -60,6 +61,7 @@ service cloud.firestore {
       return isAuthenticated() && empId != null && (
         isMasterAdmin() ||
         (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+         'empId' in get(/databases/$(database)/documents/users/$(request.auth.uid)).data &&
          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.empId == empId)
       );
     }
@@ -174,7 +176,7 @@ service cloud.firestore {
     }
 
     match /settings/{id} {
-      allow read: if false;
+      allow read: if true;
       allow write: if isAdmin();
     }
 
@@ -246,10 +248,36 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    function isMessageParticipant(data) {
+      return isAuthenticated() && (
+        isMasterAdmin() ||
+        (
+          exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+          'empId' in get(/databases/$(database)/documents/users/$(request.auth.uid)).data &&
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.empId in data.participants
+        )
+      );
+    }
+
+    function isValidMessage(data) {
+      return data.senderId is string &&
+        data.participants is list &&
+        data.participants.size() > 0 &&
+        data.participants.size() <= 100 &&
+        (isMasterAdmin() || (
+          exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+          'empId' in get(/databases/$(database)/documents/users/$(request.auth.uid)).data &&
+          data.senderId == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.empId
+        ));
+    }
+
     match /messages/{id} {
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated();
-      allow update: if isAuthenticated();
+      allow read: if isAuthenticated() && isMessageParticipant(resource.data);
+      allow create: if isAuthenticated() && isValidMessage(request.resource.data);
+      allow update: if isAuthenticated() && (
+        isMasterAdmin() ||
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['readBy'])
+      );
       allow delete: if isAdmin();
     }
 

@@ -188,6 +188,24 @@
         "type": { "type": "string", "enum": ["National", "Regional", "Company"] }
       },
       "required": ["id", "name", "date", "type"]
+    },
+    "InternalMessage": {
+      "title": "InternalMessage",
+      "description": "Internal mail message shared between system users",
+      "type": "object",
+      "properties": {
+        "senderId": { "type": "string" },
+        "senderName": { "type": "string" },
+        "to": { "type": "array", "items": { "type": "string" } },
+        "cc": { "type": "array", "items": { "type": "string" } },
+        "bcc": { "type": "array", "items": { "type": "string" } },
+        "subject": { "type": "string" },
+        "body": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "readBy": { "type": "array", "items": { "type": "string" } },
+        "participants": { "type": "array", "items": { "type": "string" } }
+      },
+      "required": ["senderId", "senderName", "to", "subject", "body", "timestamp", "participants"]
     }
   },
   "firestore": {
@@ -203,6 +221,7 @@
     "/systemReports/{id}": { "schema": "SystemReport", "description": "System reports and complaints" },
     "/branches/{id}": { "schema": "Branch", "description": "Company branches" },
     "/holidays/{id}": { "schema": "Holiday", "description": "Company holidays" },
-    "/customNets/{id}": { "schema": "CustomNet", "description": "Manual overrides for net salaries" }
+    "/customNets/{id}": { "schema": "CustomNet", "description": "Manual overrides for net salaries" },
+    "/messages/{id}": { "schema": "InternalMessage", "description": "Internal mail system messages" }
   }
 }

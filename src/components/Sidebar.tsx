@@ -73,6 +73,16 @@ export default function Sidebar({ session, data, activeRoute, onNavigate, onLogo
   const hasLeavePerm = isAdmin && (isMasterAdmin || session.permissions?.includes('leave'));
   const hasCashPerm = isAdmin && (isMasterAdmin || session.permissions?.includes('cash_requests'));
 
+  // Compute unread mail count from the globally synced messages
+  const myMessages = data.internalMessages || [];
+  const unreadMailCount = myMessages.filter(m => 
+    ((m.to && m.to.includes(session.empId)) || 
+     (m.cc && m.cc.includes(session.empId)) || 
+     (m.bcc && m.bcc.includes(session.empId))) &&
+    (!m.readBy || !m.readBy.includes(session.empId)) &&
+    m.senderId !== session.empId
+  ).length;
+
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: PieChart },
     { id: 'mail', label: 'Mail', icon: Mail },
@@ -172,6 +182,16 @@ export default function Sidebar({ session, data, activeRoute, onNavigate, onLogo
             >
               <item.icon className={cn("w-5 h-5", activeRoute === item.id ? "text-white" : "text-text-secondary group-hover:text-brand-accent")} />
               <span className="flex-1">{item.label}</span>
+              {item.id === 'mail' && unreadMailCount > 0 && (
+                <span className={cn(
+                  "px-2 py-0.5 text-[10px] rounded-full font-bold transition-all mr-1 animate-pulse shadow-sm",
+                  activeRoute === 'mail' 
+                    ? "bg-white text-brand-accent" 
+                    : "bg-red-500 text-white"
+                )}>
+                  {unreadMailCount}
+                </span>
+              )}
               {activeRoute === item.id && <ChevronRight className="w-3 h-3" />}
             </Link>
           ))}
