@@ -44,7 +44,7 @@ export const fileToBase64 = (file: File): Promise<string> => {
           ctx.drawImage(img, 0, 0, width, height);
           const base64 = canvas.toDataURL('image/jpeg', 0.6);
           
-          if (base64.length > 900000) {
+          if (base64.length > 100000) {
               // Even after compression it's large, we chunk it
               try {
                 const chunkedId = await saveChunked(base64, 'image/jpeg');
@@ -67,8 +67,8 @@ export const fileToBase64 = (file: File): Promise<string> => {
     reader.readAsDataURL(file);
     reader.onload = async () => {
       const base64 = reader.result as string;
-      if (base64.length < 900000) {
-        resolve(base64); // Fits comfortably in one document
+      if (base64.length < 100000) { // If it's very small (< ~75KB), store directly
+        resolve(base64);
       } else {
         try {
           const chunkedId = await saveChunked(base64, file.type);
@@ -84,7 +84,7 @@ export const fileToBase64 = (file: File): Promise<string> => {
 
 const saveChunked = async (base64: string, type: string): Promise<string> => {
    const id = 'file_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
-   const chunkSize = 800000;
+   const chunkSize = 500000;
    const chunks = Math.ceil(base64.length / chunkSize);
    
    // Write chunks
@@ -135,12 +135,28 @@ export const handleDownloadAttachment = async (attachment: string, defaultName: 
     else if (actualType === 'image/jpeg' || actualType === 'image/jpg') finalName += '.jpg';
     else finalName += '.pdf';
 
+    // Convert Data URI to Blob for reliable downloading/viewing of large files
+    const parts = urlToDownload.split(',');
+    const byteString = atob(parts[1]);
+    const mimeString = parts[0].split(':')[1].split(';')[0];
+    const ab = new ArrayBuffer(byteString.length);
+    const ia = new Uint8Array(ab);
+    for (let i = 0; i < byteString.length; i++) {
+        ia[i] = byteString.charCodeAt(i);
+    }
+    const blob = new Blob([ab], { type: mimeString });
+    const objectUrl = URL.createObjectURL(blob);
+
     const link = document.createElement('a');
-    link.href = urlToDownload;
+    link.href = objectUrl;
     link.download = finalName;
+    link.target = '_blank';
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    
+    // Clean up
+    setTimeout(() => URL.revokeObjectURL(objectUrl), 10000);
   } catch (err: any) {
      console.error("Error downloading file:", err);
      alert("Failed to download file. It may be corrupted or deleted.");
