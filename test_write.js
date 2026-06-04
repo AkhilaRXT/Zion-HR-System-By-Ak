@@ -13,30 +13,42 @@ const auth = getAuth(app);
 async function run() {
   try {
     const cred = await signInAnonymously(auth);
-    console.log("Logged in anonymously. UID:", cred.user.uid);
+    const uid = cred.user.uid;
+    console.log("Logged in anonymously. UID:", uid);
+
     try {
-      // settings/global should be readable by anyone
-      const snap = await getDoc(doc(db, 'settings', 'global'));
-      console.log("Read settings/global success! exists:", snap.exists());
+      // 1. Control write (systemReports)
+      const reportPath = doc(db, 'systemReports', 'test_write_report_' + Date.now());
+      await setDoc(reportPath, {
+        empId: 'EMP001',
+        empName: 'Test Employee',
+        subject: 'Diagnostic Report',
+        message: 'This is a diagnostic write test.',
+        timestamp: new Date().toISOString(),
+        status: 'Pending'
+      });
+      console.log("1. Write to systemReports SUCCESS!");
     } catch (err) {
-      console.error("Read settings/global failed:", err.message);
+      console.error("1. Write to systemReports failed:", err.message);
     }
 
     try {
-      // Let's try reading employees/EMP001
-      const snap = await getDoc(doc(db, 'employees', 'EMP001'));
-      console.log("Read employees/EMP001 success! exists:", snap.exists());
+      // 2. Target write (users/{uid})
+      const userPath = doc(db, 'users', uid);
+      await setDoc(userPath, {
+        empId: 'EMP001',
+        role: 'user',
+        username: 'test_user',
+        viewableBranches: []
+      });
+      console.log("2. Write to users/{uid} SUCCESS!");
+      
+      const snap = await getDoc(userPath);
+      console.log("Read users/{uid} success! exists:", snap.exists(), snap.data());
     } catch (err) {
-      console.error("Read employees/EMP001 failed:", err.message);
+      console.error("2. Write to users/{uid} failed:", err.message);
     }
 
-    try {
-      // Let's try reading credentials/admin or another username
-      const snap = await getDoc(doc(db, 'credentials', 'admin'));
-      console.log("Read credentials/admin success! exists:", snap.exists());
-    } catch (err) {
-      console.error("Read credentials/admin failed:", err.message);
-    }
   } catch (err) {
     console.error("Fatal run error:", err);
   }

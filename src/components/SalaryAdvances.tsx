@@ -30,7 +30,7 @@ export default function SalaryAdvances({ session, data }: SalaryAdvancesProps) {
 
   const [notification, setNotification] = useState<{ message: string, type: NotificationType } | null>(null);
   const [newAdvance, setNewAdvance] = useState({ amount: 0, reason: '', attachment: '' });
-  const [activeTab, setActiveTab] = useState<'Pending' | 'Approved' | 'Rejected' | 'All'>(hasPayrollPermission ? 'Pending' : 'All');
+  const [activeTab, setActiveTab] = useState<'Pending' | 'Approved' | 'Rejected' | 'All' | 'Fixed Loans'>(hasPayrollPermission ? 'Pending' : 'All');
   const [editingAdvance, setEditingAdvance] = useState<AdvanceRequest | null>(null);
   const formatDateForInput = (date: Date) => {
     const year = date.getFullYear();
@@ -104,7 +104,7 @@ export default function SalaryAdvances({ session, data }: SalaryAdvancesProps) {
     }
 
     const currentMonth = new Date().toLocaleString('default', { month: 'long', year: 'numeric' });
-    const advTotal = (data.advances || [])
+    const advTotal = (data.ownAdvances || data.advances || [])
       .filter(a => {
         const advanceDateStr = a.approvedDate || a.date;
         const [mStr, yStr] = currentMonth.split(' ');
@@ -253,14 +253,14 @@ export default function SalaryAdvances({ session, data }: SalaryAdvancesProps) {
     const petrolLKR = !alreadyPaidCmps.includes('Petrol') ? (emp.petrolLitres || 0) * fuelPrice : 0;
     
     // Ad-hoc bonuses for this month
-    const adhocTotal = (data.adhocBonuses || [])
+    const adhocTotal = (data.ownAdhocBonuses || data.adhocBonuses || [])
       .filter(b => b.empId === emp.id && b.month === currentMonth && !alreadyPaidCmps.includes('CustomBonus'))
       .reduce((s, b) => s + b.amount, 0);
 
     const totalEarnings = base + performance + travel + vehicle + attendance + overtime + petrolLKR + adhocTotal;
 
     // Deductions
-    const advTotal = (data.advances || [])
+    const advTotal = (data.ownAdvances || data.advances || [])
       .filter(a => {
         const advanceDateStr = a.approvedDate || a.date;
         const [mStr, yStr] = currentMonth.split(' ');
@@ -436,7 +436,7 @@ export default function SalaryAdvances({ session, data }: SalaryAdvancesProps) {
               </div>
               
               <div className="flex border-b border-border-accent">
-                {(['Pending', 'Approved', 'Rejected', 'All'] as const).map((tab) => (
+                {(hasPayrollPermission ? ['Pending', 'Approved', 'Rejected', 'All', 'Fixed Loans'] : ['Pending', 'Approved', 'Rejected', 'All'] as const).map((tab) => (
                   <button
                     key={tab}
                     onClick={() => setActiveTab(tab)}
@@ -454,6 +454,61 @@ export default function SalaryAdvances({ session, data }: SalaryAdvancesProps) {
                 ))}
               </div>
             </div>
+            
+            {activeTab === 'Fixed Loans' ? (
+              <table>
+                <thead>
+                  <tr>
+                    <th>Employee</th>
+                    <th>Branch</th>
+                    <th className="text-right">Monthly Installment</th>
+                    <th className="text-right">Months Deducted</th>
+                    <th className="text-right">Total Est. Collected</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(data.employees || [])
+                    .filter(e => canViewEmployee(e.id))
+                    .map(emp => {
+                      const monthlyStaffLoan = emp.staffLoan || 0;
+                      const oldMonths = (data.paidDeductions?.[emp.id] || []).filter(month => !data.paidComponents?.[emp.id]?.[month]);
+                      const newMonthsWithLoans = Object.keys(data.paidComponents?.[emp.id] || {}).filter(month => {
+                        return data.paidComponents![emp.id][month].includes('Loans');
+                      });
+                      
+                      const monthsDeducted = oldMonths.length + newMonthsWithLoans.length;
+                      
+                      return {
+                        emp,
+                        monthsDeducted,
+                        totalEstimatedCollected: monthsDeducted * monthlyStaffLoan
+                      };
+                    })
+                    .filter(s => s.monthsDeducted > 0 || (s.emp.staffLoan && s.emp.staffLoan > 0) || (s.emp.bikeInstallment && s.emp.bikeInstallment > 0))
+                    .sort((a, b) => b.totalEstimatedCollected - a.totalEstimatedCollected)
+                    .map(s => (
+                      <tr key={s.emp.id}>
+                        <td>
+                          <div className="font-semibold text-sm text-text-primary">{s.emp.name}</div>
+                          <div className="text-[10px] text-text-secondary font-medium mt-0.5 tracking-tight">{s.emp.id}</div>
+                        </td>
+                        <td>
+                           <span className="badge badge-surface">{s.emp.branch}</span>
+                        </td>
+                        <td className="text-right font-mono text-sm text-text-secondary">
+                          {s.emp.staffLoan > 0 ? `LKR ${s.emp.staffLoan.toLocaleString()}` : '-'}
+                        </td>
+                        <td className="text-right text-sm text-text-secondary">
+                          {s.monthsDeducted} {s.monthsDeducted === 1 ? 'Month' : 'Months'}
+                        </td>
+                        <td className="text-right font-mono text-sm font-bold text-brand-accent">
+                          LKR {s.totalEstimatedCollected.toLocaleString()}
+                        </td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
+            ) : (
             <table>
               <thead>
                 <tr>
@@ -506,7 +561,7 @@ export default function SalaryAdvances({ session, data }: SalaryAdvancesProps) {
                             )}
                           </div>
                           
-                          {a.isPaid && (
+                          {a.isPaid ? (
                             <div className="flex flex-col gap-0.5">
                               <span className="text-[9px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full uppercase tracking-tight">Settled</span>
                               {a.actionHistory?.find(h => h.action.includes('Settled')) && (
@@ -515,7 +570,13 @@ export default function SalaryAdvances({ session, data }: SalaryAdvancesProps) {
                                 </span>
                               )}
                             </div>
-                          )}
+                          ) : (a.paidAmount && a.paidAmount > 0) ? (
+                            <div className="flex flex-col gap-0.5 mt-1">
+                              <span className="text-[9px] font-bold text-orange-600 bg-orange-50 px-2 py-0.5 rounded-full uppercase tracking-tight border border-orange-100">
+                                Partial (LKR {a.paidAmount.toLocaleString()})
+                              </span>
+                            </div>
+                          ) : null}
                         </div>
                       </td>
                       {hasPayrollPermission && (
@@ -570,6 +631,7 @@ export default function SalaryAdvances({ session, data }: SalaryAdvancesProps) {
                 )}
               </tbody>
             </table>
+            )}
           </div>
         </div>
       </div>

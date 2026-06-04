@@ -91,6 +91,7 @@ export interface AdvanceRequest {
   status: 'Pending' | 'Approved' | 'Rejected';
   reason: string;
   isPaid?: boolean;
+  paidAmount?: number;
   attachment?: string;
   actionedBy?: string;
   actionHistory?: {
@@ -109,6 +110,7 @@ export interface CashRequest {
   date: string;
   status: 'Pending' | 'Approved' | 'Rejected';
   attachment?: string;
+  attachments?: string[];
   actionedBy?: string;
 }
 
@@ -335,6 +337,12 @@ export interface AppData {
   dcCollections: DCCollection[];
   systemReports: SystemReport[];
   performanceAllowances?: PerformanceAllowance[];
+  ownAttendance?: Attendance[];
+  ownLeaves?: LeaveRequest[];
+  ownAdvances?: AdvanceRequest[];
+  ownCashRequests?: CashRequest[];
+  ownTargets?: Target[];
+  ownAdhocBonuses?: AdhocBonus[];
 }
 
 export interface Session {

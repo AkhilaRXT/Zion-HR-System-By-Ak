@@ -30,9 +30,10 @@ interface DashboardProps {
   session: Session;
   data: AppData;
   onRefresh: () => void;
+  dbErrors?: Record<string, string>;
 }
 
-export default function Dashboard({ session, data, onRefresh }: DashboardProps) {
+export default function Dashboard({ session, data, onRefresh, dbErrors }: DashboardProps) {
   const navigate = useNavigate();
   const isAdmin = session.isAdmin;
   const today = getLocalIsoDate();
@@ -57,10 +58,13 @@ export default function Dashboard({ session, data, onRefresh }: DashboardProps) 
 
   const activeStaff = (data.employees || []).filter(e => {
     if (e.status === 'Dormant' || e.id === 'EMP003') return false;
-    if (!isAdmin) return true; // Standard employees see company-wide active staff for Milestones etc.
     if (session.email === "zioncommercialcreditampara@gmail.com") return true;
     if (isAdmin && (viewableBranches.length === 0 || viewableBranches.includes('ALL'))) return true;
     if (viewableBranches.includes('ALL')) return true;
+    // Branch Managers should only see their own branch staff
+    if (isBranchManager && !isAdmin) return viewableBranches.includes(e.branch);
+    // Standard members
+    if (!isAdmin) return true; // Standard employees see company-wide active staff for Milestones etc.
     return viewableBranches.includes(e.branch);
   });
   
@@ -70,6 +74,8 @@ export default function Dashboard({ session, data, onRefresh }: DashboardProps) 
   const presentToday = (data.attendance || [])
       .filter(a => a.date === today && (a.status === 'Present' || a.status === 'Late' || a.status === 'Half Day') && activeStaffIds.has(a.empId))
       .length;
+      
+  const uniqueDates = Array.from(new Set((data.attendance || []).map(a => a.date))).slice(0, 3).join(', ');
 
   const pendingLeavesCount = (data.leaves || []).filter(l => l.status === 'Pending' && activeStaffIds.has(l.empId)).length;
   const pendingAdvancesCount = (data.advances || []).filter(a => a.status === 'Pending' && activeStaffIds.has(a.empId)).length;
@@ -77,10 +83,10 @@ export default function Dashboard({ session, data, onRefresh }: DashboardProps) 
   const pendingCashRequestsCount = (data.cashRequests || []).filter(c => c.status === 'Pending' && activeStaffIds.has(c.empId)).length;
 
   // Member Stats
-  const myAttendance = (data.attendance || []).find(a => a.empId === currentEmpId && a.date === today);
+  const myAttendance = (data.ownAttendance || data.attendance || []).find(a => a.empId === currentEmpId && a.date === today);
   const isTodayHoliday = (data.holidays || []).some(h => h.date === today);
-  const myPendingLeaves = (data.leaves || []).filter(l => l.empId === currentEmpId && l.status === 'Pending').length;
-  const myApprovedAdvances = (data.advances || []).filter(a => a.empId === currentEmpId && a.status === 'Approved').length;
+  const myPendingLeaves = (data.ownLeaves || data.leaves || []).filter(l => l.empId === currentEmpId && l.status === 'Pending').length;
+  const myApprovedAdvances = (data.ownAdvances || data.advances || []).filter(a => a.empId === currentEmpId && a.status === 'Approved').length;
   
   const calculateDays = (from: string, to: string) => {
     if (!from || !to) return 0;
@@ -90,7 +96,7 @@ export default function Dashboard({ session, data, onRefresh }: DashboardProps) 
     return Math.round(diffTime / (1000 * 60 * 60 * 24)) + 1;
   };
 
-  const myApprovedLeaves = (data.leaves || []).filter(l => l.empId === currentEmpId && l.status === 'Approved');
+  const myApprovedLeaves = (data.ownLeaves || data.leaves || []).filter(l => l.empId === currentEmpId && l.status === 'Approved');
   const myAnnualTaken = myApprovedLeaves.filter(l => l.type === 'Annual').reduce((acc, l) => acc + calculateDays(l.from, l.to), 0);
   const myBalance = (data.settings?.leavePolicy?.annualTotal || 0) - myAnnualTaken;
 
@@ -434,7 +440,7 @@ export default function Dashboard({ session, data, onRefresh }: DashboardProps) 
             {canSeeCashRequests && <StatCard icon={Wallet} title="Pending Cash Requests" value={pendingCashRequestsCount} color={pendingCashRequestsCount > 0 ? "text-amber-500" : "text-brand-accent"} />}
             {!canSeeStaff && !canSeeAttendance && !canSeeLeaves && !canSeeAdvances && !canSeeCashRequests && !isBranchManager && (
               <div className="col-span-full p-12 bg-white border border-border-accent rounded-2xl text-center shadow-sm">
-                <p className="text-text-secondary font-medium text-sm">Welcome to the Admin Dashboard</p>
+                <p className="text-text-secondary font-medium text-sm">Welcome to the Admin Dashboard (T: {today} | DB: {uniqueDates} | Tot: {(data.attendance||[]).length})</p>
               </div>
             )}
           </>

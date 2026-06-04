@@ -206,6 +206,20 @@
         "participants": { "type": "array", "items": { "type": "string" } }
       },
       "required": ["senderId", "senderName", "to", "subject", "body", "timestamp", "participants"]
+    },
+    "User": {
+      "title": "User",
+      "description": "User security credentials session sync document",
+      "type": "object",
+      "properties": {
+        "empId": { "type": "string" },
+        "role": { "type": "string", "enum": ["admin", "user"] },
+        "username": { "type": "string" },
+        "passToken": { "type": "string" },
+        "email": { "type": "string" },
+        "viewableBranches": { "type": "array", "items": { "type": "string" } }
+      },
+      "required": ["empId", "role"]
     }
   },
   "firestore": {
@@ -222,6 +236,7 @@
     "/branches/{id}": { "schema": "Branch", "description": "Company branches" },
     "/holidays/{id}": { "schema": "Holiday", "description": "Company holidays" },
     "/customNets/{id}": { "schema": "CustomNet", "description": "Manual overrides for net salaries" },
-    "/messages/{id}": { "schema": "InternalMessage", "description": "Internal mail system messages" }
+    "/messages/{id}": { "schema": "InternalMessage", "description": "Internal mail system messages" },
+    "/users/{uid}": { "schema": "User", "description": "Active session RBAC definitions" }
   }
 }

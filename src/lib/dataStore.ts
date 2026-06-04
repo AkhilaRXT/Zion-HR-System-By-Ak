@@ -132,7 +132,13 @@ const initialData: AppData = {
   internalMessages: [],
   adhocBonuses: [],
   dcCollections: [],
-  systemReports: []
+  systemReports: [],
+  ownAttendance: [],
+  ownLeaves: [],
+  ownAdvances: [],
+  ownCashRequests: [],
+  ownTargets: [],
+  ownAdhocBonuses: []
 };
 
 export const DataStore = {
@@ -575,15 +581,24 @@ export const DataStore = {
     
     // Attempt to remount roles on every init (or at least if fresh) to ensure rules don't break on reload
     const session = this.getSession();
-    if (session && session.username && session.passToken && auth.currentUser) {
+    if (session && auth.currentUser) {
       try {
-        await setDoc(doc(db, 'users', auth.currentUser.uid), {
-          empId: session.empId,
-          role: session.isAdmin ? 'admin' : 'user',
-          username: session.username,
-          passToken: session.passToken,
-          viewableBranches: session.viewableBranches || []
-        }, { merge: true });
+        if (session.username) {
+          await setDoc(doc(db, 'users', auth.currentUser.uid), {
+            empId: session.empId,
+            role: session.isAdmin ? 'admin' : 'user',
+            username: session.username,
+            passToken: session.passToken || '',
+            viewableBranches: session.viewableBranches || []
+          }, { merge: true });
+        } else if (session.email) {
+          await setDoc(doc(db, 'users', auth.currentUser.uid), {
+            empId: session.empId,
+            role: session.isAdmin ? 'admin' : 'user',
+            email: session.email,
+            viewableBranches: session.viewableBranches || []
+          }, { merge: true });
+        }
       } catch (e) {
          console.warn('Could not restore users context', e);
       }
@@ -1483,7 +1498,7 @@ export const DataStore = {
     }
   },
 
-  async finalizePayroll(month: string, payments: { empId: string, net: number, notes?: string, components: string[] }[]) {
+  async finalizePayroll(month: string, payments: { empId: string, net: number, notes?: string, components: string[], advanceDeduction?: number }[]) {
     try {
       await this.ensureAuth();
       const currentSession = this.getSession();
@@ -1494,8 +1509,12 @@ export const DataStore = {
       const advancesSnap = await getDocs(advancesQuery);
       
       const advUpdatePromises: Promise<void>[] = [];
+      
+      // Group advances by empId to apply deductions sequentially
+      const pendingAdvancesByEmp: Record<string, any[]> = {};
+      
       advancesSnap.docs.forEach(d => {
-        const adv = d.data() as AdvanceRequest;
+        const adv = { ...d.data(), id: d.id, ref: d.ref } as any;
         const advanceDateStr = adv.approvedDate || adv.date;
         const [mStr, yStr] = month.split(' ');
         const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
@@ -1507,18 +1526,46 @@ export const DataStore = {
         const advMnth = parseInt(advMonthStr, 10) - 1; // 0-indexed
         const isPastOrCurrent = advYear < yearNum || (advYear === yearNum && advMnth <= monthIndex);
         
-        // Find if this employee is in the current payment run, AND if deductions were selected for them
-        const empPayment = payments.find(p => p.empId === adv.empId);
-        
-        if (isPastOrCurrent && !adv.isPaid && empPayment && empPayment.components.includes('Deductions')) {
-          const actor = currentSession?.name || 'System';
-          advUpdatePromises.push(updateDoc(d.ref, { 
-            isPaid: true, 
-            actionedBy: actor,
-            actionHistory: arrayUnion({ action: 'Settled via Payroll', by: actor, date: new Date().toISOString() })
-          }));
+        if (isPastOrCurrent && !adv.isPaid) {
+          if (!pendingAdvancesByEmp[adv.empId]) pendingAdvancesByEmp[adv.empId] = [];
+          pendingAdvancesByEmp[adv.empId].push(adv);
         }
       });
+      
+      const actor = currentSession?.name || 'System';
+
+      for (const p of payments) {
+          if (!p.components.includes('Deductions')) continue;
+          let remainingDeduction = p.advanceDeduction || 0;
+          if (remainingDeduction <= 0) continue;
+          
+          const empAdvances = pendingAdvancesByEmp[p.empId] || [];
+          // Sort by date (oldest first)
+          empAdvances.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+          
+          for (const adv of empAdvances) {
+              if (remainingDeduction <= 0) break;
+              
+              const currentPaid = adv.paidAmount || 0;
+              const advBalance = adv.amount - currentPaid;
+              
+              if (advBalance <= 0) continue;
+              
+              const deductFromThis = Math.min(advBalance, remainingDeduction);
+              const newPaidAmount = currentPaid + deductFromThis;
+              const isFullyPaid = newPaidAmount >= adv.amount;
+              
+              remainingDeduction -= deductFromThis;
+              
+              advUpdatePromises.push(updateDoc(adv.ref, { 
+                isPaid: isFullyPaid, 
+                paidAmount: newPaidAmount,
+                actionedBy: actor,
+                actionHistory: arrayUnion({ action: `Settled LKR ${deductFromThis} via Payroll`, by: actor, date: new Date().toISOString() })
+              }));
+          }
+      }
+      
       await Promise.all(advUpdatePromises);
 
       // 2. Add this month to the paidDeductions list using Transaction for idempotency

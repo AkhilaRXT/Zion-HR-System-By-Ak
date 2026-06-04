@@ -113,15 +113,24 @@ export default function App() {
       if (user) {
         // Attempt to remount roles on every init (or at least if fresh) to ensure rules don't break on reload
         const session = DataStore.getSession();
-        if (session && session.username && session.passToken) {
+        if (session) {
           try {
-            await setDoc(doc(db, 'users', user.uid), {
-              empId: session.empId,
-              role: session.isAdmin ? 'admin' : 'user',
-              username: session.username,
-              passToken: session.passToken,
-              viewableBranches: session.viewableBranches || []
-            }, { merge: true });
+            if (session.username) {
+              await setDoc(doc(db, 'users', user.uid), {
+                empId: session.empId,
+                role: session.isAdmin ? 'admin' : 'user',
+                username: session.username,
+                passToken: session.passToken || '',
+                viewableBranches: session.viewableBranches || []
+              }, { merge: true });
+            } else if (session.email) {
+              await setDoc(doc(db, 'users', user.uid), {
+                empId: session.empId,
+                role: session.isAdmin ? 'admin' : 'user',
+                email: session.email,
+                viewableBranches: session.viewableBranches || []
+              }, { merge: true });
+            }
           } catch (e) {
              console.warn('Could not restore users context', e);
           }
@@ -218,7 +227,8 @@ export default function App() {
         name === 'targets' || 
         name === 'own_targets' || 
         name === 'performanceAllowances' || 
-        name === 'own_performanceAllowances'
+        name === 'own_performanceAllowances' ||
+        name === 'internalMessages'
       ) return; // Silence non-admin or role-specific security rule denials
       setDbErrors(prev => ({ ...prev, [name]: `Permission Denied for ${name}` }));
     } else {
@@ -324,15 +334,27 @@ export default function App() {
       unsubs.push(unsubPaid);
 
     } else {
-      // Regular employees can only subscribe to their own employee document to comply with privacy rules
-      const unsubEmployees = onSnapshot(doc(db, 'employees', session.empId), (snap) => {
-        handleSuccess('employees');
-        if (snap.exists()) {
-          updatePart({ employees: [({ ...snap.data(), id: snap.id }) as Employee] });
-        } else {
-          updatePart({ employees: [] });
-        }
-      }, (err) => handleErr('employees', err));
+      let unsubEmployees: (() => void);
+      if (session.viewableBranches && session.viewableBranches.length > 0) {
+        // Fetch all employees for Branch Managers to ensure they can see their staff, 
+        // relying on frontend filtering in activeStaff
+        const q = query(collection(db, 'employees'), limit(1000));
+        
+        unsubEmployees = onSnapshot(q, (snap) => {
+          handleSuccess('employees');
+          updatePart({ employees: snap.docs.map(d => ({ ...d.data(), id: d.id }) as Employee) });
+        }, (err) => handleErr('employees', err));
+      } else {
+        // Regular employees can only subscribe to their own employee document to comply with privacy rules
+        unsubEmployees = onSnapshot(doc(db, 'employees', session.empId), (snap) => {
+          handleSuccess('employees');
+          if (snap.exists()) {
+            updatePart({ employees: [({ ...snap.data(), id: snap.id }) as Employee] });
+          } else {
+            updatePart({ employees: [] });
+          }
+        }, (err) => handleErr('employees', err));
+      }
       unsubs.push(unsubEmployees);
 
       // Branch Manager check dependencies - non-admins need branches
@@ -364,12 +386,12 @@ export default function App() {
         }, (err) => handleErr(`own_${coll}`, err));
       };
       
-      unsubs.push(syncOwn('leaves', 'leaves'));
-      unsubs.push(syncOwn('advances', 'advances'));
-      unsubs.push(syncOwn('cashRequests', 'cashRequests'));
-      unsubs.push(syncOwn('attendance', 'attendance'));
-      unsubs.push(syncOwn('adhocBonuses', 'adhocBonuses'));
-      unsubs.push(syncOwn('targets', 'targets'));
+      unsubs.push(syncOwn('leaves', 'ownLeaves'));
+      unsubs.push(syncOwn('advances', 'ownAdvances'));
+      unsubs.push(syncOwn('cashRequests', 'ownCashRequests'));
+      unsubs.push(syncOwn('attendance', 'ownAttendance'));
+      unsubs.push(syncOwn('adhocBonuses', 'ownAdhocBonuses'));
+      unsubs.push(syncOwn('targets', 'ownTargets'));
       unsubs.push(syncOwn('performanceAllowances', 'performanceAllowances'));
       
       if (session.viewableBranches && session.viewableBranches.length > 0) {
@@ -490,18 +512,26 @@ export default function App() {
       syncRouteCollection('attendance', 'attendance', todayAttQuery);
     }
 
-    if (!session?.isAdmin) return; // Following collections are STRICTLY for Admins
+    const hasLeavePerm = session?.isAdmin || isBranchManager || session?.permissions?.includes('leave');
+    const hasPayrollPerm = session?.isAdmin || isBranchManager || session?.permissions?.includes('payroll');
+    const hasCashRequestPerm = session?.isAdmin || isBranchManager || session?.permissions?.includes('cash_requests');
+    const hasStaffPerm = session?.isAdmin || isBranchManager || session?.permissions?.includes('staff');
 
-    if (route === 'leave') syncRouteCollection('leaves', 'leaves');
-    if (route === 'advances') syncRouteCollection('advances', 'advances');
-    if (route === 'payroll') syncRouteCollection('customNets', 'customNets');
-    if (route === 'targets') syncRouteCollection('targets', 'targets');
-    if (route === 'dc_collection') syncRouteCollection('dcCollections', 'dcCollections');
-
-    if (route === 'cash_requests') {
+    if (route === 'leave' && hasLeavePerm) syncRouteCollection('leaves', 'leaves');
+    if (route === 'advances' && hasPayrollPerm) syncRouteCollection('advances', 'advances');
+    if (route === 'cash_requests' && hasCashRequestPerm) {
       const q = query(collection(db, 'cashRequests'), orderBy('id', 'desc'), limit(500));
       syncRouteCollection('cashRequests', 'cashRequests', q);
     }
+    if (route === 'staff' && hasStaffPerm) {
+      syncRouteCollection('credentials', 'credentials');
+    }
+
+    if (!session?.isAdmin) return; // Following collections are STRICTLY for Admins only (payroll calculation, targets, dc_collection, audit)
+
+    if (route === 'payroll') syncRouteCollection('customNets', 'customNets');
+    if (route === 'targets') syncRouteCollection('targets', 'targets');
+    if (route === 'dc_collection') syncRouteCollection('dcCollections', 'dcCollections');
 
     if (route === 'payroll') {
       const receiptQuery = query(collection(db, 'payrollReceipts'), orderBy('timestamp', 'desc'), limit(150));
@@ -512,10 +542,6 @@ export default function App() {
 
       // Sychronize advances for payroll calculation
       syncRouteCollection('advances', 'advances');
-    }
-
-    if (route === 'staff') {
-      syncRouteCollection('credentials', 'credentials');
     }
 
     if (route === 'audit') {
@@ -604,9 +630,9 @@ export default function App() {
       if (isMasterAdmin) return true;
 
       // Branch Managers can access Attendance
+      const isBranchManager = session.viewableBranches && session.viewableBranches.length > 0;
       if (id === 'attendance') {
-        const managedBranches = (appData.branches || []).filter(b => b.managerId === session.empId);
-        if (managedBranches.length > 0) return true;
+        if (isBranchManager) return true;
       }
 
       // Regular members cannot see anything else
@@ -621,10 +647,10 @@ export default function App() {
       return false;
     };
 
-    if (!hasAccess(route)) return <Dashboard session={session} data={appData} onRefresh={refreshData} />;
+    if (!hasAccess(route)) return <Dashboard session={session} data={appData} onRefresh={refreshData} dbErrors={dbErrors} />;
 
     switch (route) {
-      case 'dashboard': return <Dashboard session={session} data={appData} onRefresh={refreshData} />;
+      case 'dashboard': return <Dashboard session={session} data={appData} onRefresh={refreshData} dbErrors={dbErrors} />;
       case 'staff': return <StaffManagement session={session} data={appData} onRefresh={refreshData} />;
       case 'attendance': return <AttendanceView session={session} data={appData} onRefresh={refreshData} />;
       case 'leave': return <LeaveManagement session={session} data={appData} onRefresh={refreshData} />;

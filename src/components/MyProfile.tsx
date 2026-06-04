@@ -74,7 +74,7 @@ export default function MyProfile({ session, data, onRefresh }: MyProfileProps) 
   });
 
   const myAttendance = last3Days.map(date => {
-    const rec = (data.attendance || []).find(a => a.empId === emp.id && a.date === date);
+    const rec = (data.ownAttendance || data.attendance || []).find(a => a.empId === emp.id && a.date === date);
     const isHoliday = (data.holidays || []).some(h => h.date === date);
     const status = rec ? rec.status : (isHoliday ? 'Holiday' : 'Absent');
     return { 
@@ -84,9 +84,9 @@ export default function MyProfile({ session, data, onRefresh }: MyProfileProps) 
       checkIn: rec?.checkIn || '--:--' 
     };
   });
-  const myLeaves = (data.leaves || []).filter(l => l.empId === emp.id).sort((a, b) => b.id - a.id);
-  const myAdvances = (data.advances || []).filter(a => a.empId === emp.id).sort((a, b) => b.id - a.id);
-  const myCashRequests = (data.cashRequests || []).filter(r => r.empId === emp.id).sort((a, b) => b.id - a.id);
+  const myLeaves = (data.ownLeaves || data.leaves || []).filter(l => l.empId === emp.id).sort((a, b) => b.id - a.id);
+  const myAdvances = (data.ownAdvances || data.advances || []).filter(a => a.empId === emp.id).sort((a, b) => b.id - a.id);
+  const myCashRequests = (data.ownCashRequests || data.cashRequests || []).filter(r => r.empId === emp.id).sort((a, b) => b.id - a.id);
   
   const pendingLeaves = myLeaves.filter(l => l.status === 'Pending');
   const pendingAdvances = myAdvances.filter(a => a.status === 'Pending');
@@ -99,7 +99,7 @@ export default function MyProfile({ session, data, onRefresh }: MyProfileProps) 
   ].sort((a, b) => b.id - a.id).slice(0, 5);
 
   const currentMonth = new Date().toLocaleString('default', { month: 'long', year: 'numeric' });
-  const advTotal = (data.advances || [])
+  const advTotal = (data.ownAdvances || data.advances || [])
     .filter(a => {
       const advanceDateStr = a.approvedDate || a.date;
       const [mStr, yStr] = currentMonth.split(' ');

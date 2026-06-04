@@ -73,15 +73,29 @@ export default function Sidebar({ session, data, activeRoute, onNavigate, onLogo
   const hasLeavePerm = isAdmin && (isMasterAdmin || session.permissions?.includes('leave'));
   const hasCashPerm = isAdmin && (isMasterAdmin || session.permissions?.includes('cash_requests'));
 
+  // Retrieve local overrides from localStorage for accurate badge counts
+  const localReadIds = new Set<string>();
+  const localUnreadIds = new Set<string>();
+  try {
+    const r = localStorage.getItem(`localReadIds_${session.empId}`);
+    if (r) JSON.parse(r).forEach((id: string) => localReadIds.add(id));
+    const u = localStorage.getItem(`localUnreadIds_${session.empId}`);
+    if (u) JSON.parse(u).forEach((id: string) => localUnreadIds.add(id));
+  } catch (e) {}
+
   // Compute unread mail count from the globally synced messages
   const myMessages = data.internalMessages || [];
-  const unreadMailCount = myMessages.filter(m => 
-    ((m.to && m.to.includes(session.empId)) || 
-     (m.cc && m.cc.includes(session.empId)) || 
-     (m.bcc && m.bcc.includes(session.empId))) &&
-    (!m.readBy || !m.readBy.includes(session.empId)) &&
-    m.senderId !== session.empId
-  ).length;
+  const unreadMailCount = myMessages.filter(m => {
+    const isRecipient = (m.to && m.to.includes(session.empId)) || 
+                        (m.cc && m.cc.includes(session.empId)) || 
+                        (m.bcc && m.bcc.includes(session.empId));
+    const isSender = m.senderId === session.empId;
+    
+    // Check local tracking first, then fallback to db state
+    const isRead = ((m.readBy && m.readBy.includes(session.empId)) || localReadIds.has(m.id)) && !localUnreadIds.has(m.id);
+    
+    return isRecipient && !isRead && !isSender;
+  }).length;
 
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: PieChart },

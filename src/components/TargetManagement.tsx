@@ -74,7 +74,7 @@ export default function TargetManagement({ session, data }: TargetManagementProp
     if (!activeEmpId) return null;
     
     // Calculate score for active month
-    const empTargets = (data.targets || []).filter(t => t.empId === activeEmpId && t.month === selectedMonth);
+    const empTargets = (data.ownTargets || data.targets || []).filter(t => t.empId === activeEmpId && t.month === selectedMonth);
     const totalTarget = empTargets.reduce((s, t) => s + t.targetCount, 0);
     const totalAchieved = empTargets.reduce((s, t) => s + t.achievedCount, 0);
     const overallScore = totalTarget > 0 ? Math.round((totalAchieved / totalTarget) * 100) : 0;
@@ -247,7 +247,7 @@ export default function TargetManagement({ session, data }: TargetManagementProp
 
   const getEmpName = (id: string) => (data.employees || []).find(e => e.id === id)?.name || id;
 
-  const filteredTargets = (data.targets || []).filter(t => 
+  const filteredTargets = (data.ownTargets || data.targets || []).filter(t => 
     (!isAdmin ? t.empId === session.empId : true) &&
     (getEmpName(t.empId).toLowerCase().includes(search.toLowerCase()) || t.category.toLowerCase().includes(search.toLowerCase()))
   ).sort((a,b) => b.id - a.id);

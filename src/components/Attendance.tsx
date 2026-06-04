@@ -20,6 +20,7 @@ export default function Attendance({ session, data, onRefresh }: AttendanceProps
   const [notification, setNotification] = useState<{ message: string, type: NotificationType } | null>(null);
   const todayStr = new Date().toISOString().split('T')[0];
   const [exportDate, setExportDate] = useState(todayStr);
+  const [searchTerm, setSearchTerm] = useState('');
   
   const viewableBranches = session.viewableBranches || [];
 
@@ -62,6 +63,12 @@ export default function Attendance({ session, data, onRefresh }: AttendanceProps
         return emp?.branch === branchFilter;
       });
 
+  const filteredAttendance = displayedAttendance.filter(a => {
+    const emp = (data.employees || []).find(e => e.id === a.empId);
+    const empName = emp?.name || a.empId;
+    return empName.toLowerCase().includes(searchTerm.toLowerCase()) || a.empId.toLowerCase().includes(searchTerm.toLowerCase());
+  });
+
   const showNotification = (message: string, type: NotificationType = 'success') => {
     setNotification({ message, type });
   };
@@ -70,8 +77,8 @@ export default function Attendance({ session, data, onRefresh }: AttendanceProps
     let sheetData: any[] = [];
     
     if (exportDate) {
-      // Export for a specific date: Include all employees
-      sheetData = displayedAttendance.map(a => {
+      // Export for a specific date: Include all matched employees
+      sheetData = filteredAttendance.map(a => {
         const emp = (data.employees || []).find(e => e.id === a.empId);
         return {
           Date: a.date,
@@ -88,12 +95,22 @@ export default function Attendance({ session, data, onRefresh }: AttendanceProps
         return;
       }
     } else {
-      // General export: Export all existing records only
-      if (sortedHistory.length === 0) {
+      // General export: Export all matched records
+      const exportSet = branchFilter === 'ALL' && searchTerm === '' 
+        ? sortedHistory 
+        : sortedHistory.filter(a => {
+            const emp = (data.employees || []).find(e => e.id === a.empId);
+            const empName = emp?.name || a.empId;
+            const matchesBranch = branchFilter === 'ALL' || emp?.branch === branchFilter;
+            const matchesSearch = empName.toLowerCase().includes(searchTerm.toLowerCase()) || a.empId.toLowerCase().includes(searchTerm.toLowerCase());
+            return matchesBranch && matchesSearch;
+          });
+
+      if (exportSet.length === 0) {
         showNotification(`No attendance records found to export`, 'error');
         return;
       }
-      sheetData = sortedHistory.map(a => {
+      sheetData = exportSet.map(a => {
         const emp = (data.employees || []).find(e => e.id === a.empId);
         return {
           Date: a.date,
@@ -147,7 +164,14 @@ export default function Attendance({ session, data, onRefresh }: AttendanceProps
           <h3 className="text-lg font-semibold text-text-primary">Attendance Log</h3>
           <p className="text-sm text-text-secondary mt-1">Full attendance records history</p>
         </div>
-        <div className="flex flex-col sm:flex-row gap-4 items-center w-full sm:w-auto">
+        <div className="flex flex-col sm:flex-row gap-4 items-stretch sm:items-center w-full sm:w-auto">
+          <input 
+            type="text" 
+            placeholder="Search employee..." 
+            className="form-control w-full sm:w-48"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
           {(isAdmin || viewableBranches.length > 0) && (
             <select
               className="form-control w-full sm:w-auto"
@@ -231,7 +255,7 @@ export default function Attendance({ session, data, onRefresh }: AttendanceProps
         )}
       </AnimatePresence>
 
-      <div className="table-container">
+      <div className="hidden md:block table-container">
         <table>
           <thead>
             <tr>
@@ -244,7 +268,7 @@ export default function Attendance({ session, data, onRefresh }: AttendanceProps
             </tr>
           </thead>
           <tbody>
-            {displayedAttendance.map(a => {
+            {filteredAttendance.map(a => {
               const emp = (data.employees || []).find(e => e.id === a.empId);
               const statusCls = 
                 a.status === 'Present' ? 'badge-success' : 
@@ -307,6 +331,97 @@ export default function Attendance({ session, data, onRefresh }: AttendanceProps
             })}
           </tbody>
         </table>
+      </div>
+
+      {/* Mobile Card list view */}
+      <div className="block md:hidden space-y-4">
+        {filteredAttendance.map(a => {
+          const emp = (data.employees || []).find(e => e.id === a.empId);
+          const statusCls = 
+            a.status === 'Present' ? 'badge-success' : 
+            a.status === 'Half Day' ? 'badge-warning' : 
+            a.status === 'Late' ? 'badge-info text-sky-850' : 
+            a.status === 'Leave' ? 'badge-info' : 
+            a.status === 'Holiday' ? 'badge-success bg-emerald-100 text-emerald-800 border-emerald-300' : 'badge-danger';
+          
+          const isRealRecord = a.id !== -1;
+          
+          return (
+            <div 
+              key={isRealRecord ? a.id : `absent-mobile-${a.empId}`}
+              className="glass-panel p-4 flex flex-col gap-3 border border-border/50 hover:border-border transition-all"
+            >
+              {/* Header: Employee Name & Date */}
+              <div className="flex justify-between items-start gap-2">
+                <div>
+                  <h4 className="font-semibold text-text-primary text-base">{emp?.name || a.empId}</h4>
+                  <div className="flex items-center gap-1.5 mt-1 text-xs text-text-secondary">
+                    <Calendar className="w-3.5 h-3.5 text-text-secondary/80" />
+                    <span className="font-mono">{a.date}</span>
+                  </div>
+                </div>
+                <span className={`badge ${statusCls} text-xs font-medium`}>{a.status}</span>
+              </div>
+
+              {/* Check-In and Check-Out Details */}
+              <div className="grid grid-cols-2 gap-4 bg-background/30 p-2.5 rounded-lg border border-border/20 text-xs">
+                <div>
+                  <span className="text-text-secondary block mb-0.5 font-medium">Check-In</span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-mono text-text-primary text-sm font-medium">{a.checkIn}</span>
+                    {a.checkInLocation && (
+                      <a href={`https://maps.google.com/?q=${a.checkInLocation}`} target="_blank" rel="noopener noreferrer" className="p-1 hover:bg-background/50 rounded transition-colors" title="View Location">
+                        <MapPin className="w-3.5 h-3.5 text-brand-accent" />
+                      </a>
+                    )}
+                  </div>
+                </div>
+                <div>
+                  <span className="text-text-secondary block mb-0.5 font-medium">Check-Out</span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-mono text-text-primary text-sm font-medium">{a.checkOut}</span>
+                    {a.checkOutLocation && (
+                      <a href={`https://maps.google.com/?q=${a.checkOutLocation}`} target="_blank" rel="noopener noreferrer" className="p-1 hover:bg-background/50 rounded transition-colors" title="View Location">
+                        <MapPin className="w-3.5 h-3.5 text-emerald-500" />
+                      </a>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Actions or No Record footer */}
+              {isAdmin && (
+                <div className="flex justify-end items-center border-t border-border/20 pt-2.5">
+                  {isRealRecord ? (
+                    <div className="flex gap-3">
+                      <button 
+                        onClick={() => setEditing(a)}
+                        className="btn btn-sm btn-outline flex items-center gap-1.5 py-1 px-3 text-xs"
+                      >
+                        <Edit3 className="w-3.5 h-3.5" />
+                        Edit
+                      </button>
+                      <button 
+                        onClick={() => setConfirmDelete(a.id)}
+                        className="btn btn-sm btn-danger flex items-center gap-1.5 py-1 px-3 text-xs bg-red-500 hover:bg-red-600 text-white border-none"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        Delete
+                      </button>
+                    </div>
+                  ) : (
+                    <span className="text-xs text-text-secondary italic">No record found (Generated)</span>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
+        {filteredAttendance.length === 0 && (
+          <div className="glass-panel p-8 text-center text-text-secondary">
+            No attendance records found for this selection.
+          </div>
+        )}
       </div>
 
       <ConfirmModal 

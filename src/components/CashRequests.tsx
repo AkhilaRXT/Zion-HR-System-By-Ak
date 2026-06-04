@@ -74,17 +74,17 @@ export default function CashRequests({ session, data }: CashRequestsProps) {
     amount: 0,
     category: 'Petty Cash',
     description: '',
-    attachment: ''
+    attachments: [] as string[]
   });
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
+    const files = Array.from(e.target.files || []);
+    if (files.length > 0) {
       try {
-        const base64 = await fileToBase64(file);
-        setNewRequest({ ...newRequest, attachment: base64 });
+        const base64Files = await Promise.all(files.map(f => fileToBase64(f)));
+        setNewRequest({ ...newRequest, attachments: [...newRequest.attachments, ...base64Files] });
       } catch (err: any) {
-        showNotification(err.message || 'Failed to process file', 'error');
+        showNotification(err.message || 'Failed to process files', 'error');
       }
     }
   };
@@ -104,13 +104,13 @@ export default function CashRequests({ session, data }: CashRequestsProps) {
       description: newRequest.description,
       date: new Date().toISOString().split('T')[0],
       status: 'Pending',
-      attachment: newRequest.attachment
+      attachments: newRequest.attachments
     };
 
     try {
       await DataStore.addCashRequest(request);
       showNotification('Cash request submitted successfully!');
-      setNewRequest({ amount: 0, category: 'Petty Cash', description: '', attachment: '' });
+      setNewRequest({ amount: 0, category: 'Petty Cash', description: '', attachments: [] });
       setSearchedRequests(prev => [request, ...prev]);
     } catch (err) {
       showNotification('Failed to submit cash request.', 'error');
@@ -210,13 +210,19 @@ export default function CashRequests({ session, data }: CashRequestsProps) {
               />
             </div>
             <div className="form-group">
-              <label className="text-xs font-medium text-text-secondary mb-2 block">Attachment (PDF max 1MB, Images auto-compressed)</label>
+              <label className="text-xs font-medium text-text-secondary mb-2 block">Attachments (PDF max 1MB, Images auto-compressed)</label>
               <input 
                 type="file" 
+                multiple
                 accept=".pdf,image/*"
                 className="form-control file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-xs file:font-medium file:bg-brand-accent file:text-white hover:file:bg-blue-700"
                 onChange={handleFileChange}
               />
+              {newRequest.attachments.length > 0 && (
+                <div className="text-[10px] text-text-secondary mt-1">
+                  {newRequest.attachments.length} file(s) attached
+                </div>
+              )}
             </div>
             <button type="submit" className="btn btn-primary w-full justify-center py-4">
               Submit Request
@@ -337,6 +343,12 @@ export default function CashRequests({ session, data }: CashRequestsProps) {
                               <Paperclip className="w-3 h-3" />
                             </a>
                           )}
+                          {r.attachments && r.attachments.length > 0 && r.attachments.map((att, idx) => (
+                            <a key={idx} href={att} download={`Cash_Request_${r.empId}_${idx + 1}.pdf`} className="text-brand-accent hover:text-blue-700 flex items-center gap-1" title={`View Attachment ${idx + 1}`}>
+                              <Paperclip className="w-3 h-3" />
+                              <span className="text-[10px]">{idx + 1}</span>
+                            </a>
+                          ))}
                         </div>
                       </td>
                       <td className="text-sm text-text-secondary">{r.category}</td>

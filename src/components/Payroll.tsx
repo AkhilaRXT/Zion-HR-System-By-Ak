@@ -90,7 +90,7 @@ export default function Payroll({ session, data, onRefresh }: PayrollProps) {
   const [editedTransactions, setEditedTransactions] = useState<{ empId: string; net: number; notes: string; components: string[] }[]>([]);
 
   const [customBonuses, setCustomBonuses] = useState<Record<string, number>>({});
-
+  const [customAdvancesState, setCustomAdvancesState] = useState<Record<string, number>>({});
   const [customNetsState, setCustomNetsState] = useState<Record<string, number>>({});
 
   React.useEffect(() => {
@@ -131,7 +131,7 @@ export default function Payroll({ session, data, onRefresh }: PayrollProps) {
   const [isProcessing, setIsProcessing] = useState(false);
   const handleExport = async () => {
     setIsProcessing(true);
-    const nets: { empId: string; net: number, notes: string, components: string[] }[] = [];
+    const nets: { empId: string; net: number, notes: string, components: string[], advanceDeduction?: number }[] = [];
     
     // Base list of what the user intends to pay
     const selectedCompsBase: string[] = [];
@@ -170,7 +170,7 @@ export default function Payroll({ session, data, onRefresh }: PayrollProps) {
 
           return a.empId === emp.id && a.status === 'Approved' && !a.isPaid && isPastOrCurrent;
         })
-        .reduce((s, a) => s + a.amount, 0);
+        .reduce((s, a) => s + (a.amount - (a.paidAmount || 0)), 0);
       
       const petrolLKR = (emp.petrolLitres || 0) * fuelPrice;
       const epf = (emp.hasEPF && payComponents.epf && !alreadyPaidCmps.includes('EPF')) ? (emp.baseSalary || 0) * (epfPercentage / 100) : 0;
@@ -202,8 +202,19 @@ export default function Payroll({ session, data, onRefresh }: PayrollProps) {
 
       const totalEarnings = Object.values(earnings).reduce((s, v) => s + v, 0);
 
+      const otherDeductions = 
+        ((payComponents.loans && !alreadyPaidCmps.includes('Loans')) ? (Number(emp.bikeInstallment) || 0) + (Number(emp.staffLoan) || 0) : 0) + 
+        ((!alreadyPaidCmps.includes('EPF')) ? epf : 0);
+      
+      const maxAvailableForAdvance = Math.max(0, totalEarnings - otherDeductions);
+      
+      let advDeduction = payComponents.deductions ? Math.min(advTotal, maxAvailableForAdvance) : 0;
+      if (customAdvancesState[emp.id] !== undefined) {
+         advDeduction = customAdvancesState[emp.id];
+      }
+
       const deductions = {
-        'Salary Advances': payComponents.deductions ? advTotal : 0,
+        'Salary Advances': advDeduction,
         'Bike Installment': (payComponents.loans && !alreadyPaidCmps.includes('Loans')) ? (Number(emp.bikeInstallment) || 0) : 0,
         'Staff Loan': (payComponents.loans && !alreadyPaidCmps.includes('Loans')) ? (Number(emp.staffLoan) || 0) : 0,
         [`EPF (${epfPercentage}%)`]: (!alreadyPaidCmps.includes('EPF')) ? epf : 0,
@@ -222,7 +233,7 @@ export default function Payroll({ session, data, onRefresh }: PayrollProps) {
       if (net > 0 || actuallyPayingCmps.length > 0 || isManualNet) {
         if (earnings['Ad-Hoc Bonus'] > 0) actuallyPayingCmps.push('CustomBonus');
         const finalNote = notesStr ? `${notesStr} (LKR ${net.toLocaleString()})` : `Payout (LKR ${net.toLocaleString()})`;
-        nets.push({ empId: emp.id, net, notes: finalNote, components: actuallyPayingCmps });
+        nets.push({ empId: emp.id, net, notes: finalNote, components: actuallyPayingCmps, advanceDeduction: advDeduction });
       }
 
       return {
@@ -545,6 +556,7 @@ export default function Payroll({ session, data, onRefresh }: PayrollProps) {
                     <th className="w-24 min-w-[95px]">EMP ID</th>
                     <th className="min-w-[150px]">Name</th>
                     <th className="w-32 min-w-[120px]">Gross</th>
+                    <th className="w-48 min-w-[170px]">Advance Ded.</th>
                     <th className="w-48 min-w-[170px]">Ad-Hoc Bonus</th>
                     <th className="w-52 min-w-[190px]">Net Salary</th>
                     <th className="w-16"></th>
@@ -569,7 +581,7 @@ export default function Payroll({ session, data, onRefresh }: PayrollProps) {
 
                         return a.empId === emp.id && a.status === 'Approved' && !a.isPaid && isPastOrCurrent;
                       })
-                      .reduce((s, a) => s + a.amount, 0);
+                      .reduce((s, a) => s + (a.amount - (a.paidAmount || 0)), 0);
                     
                     const petrolLKR = (emp.petrolLitres || 0) * fuelPrice;
                     const alreadyPaidCmps = (data.paidComponents?.[emp.id]?.[selectedMonth] || []);
@@ -645,9 +657,17 @@ export default function Payroll({ session, data, onRefresh }: PayrollProps) {
 
                     // Deductions are usually not held unless the entire salary is held and net is 0.
                     // We'll allow deductions as long as there are earnings to cover them.
-                    const advDeduction = payComponents.deductions ? advTotal : 0;
                     const loanDeduction = payComponents.loans && !alreadyPaidCmps.includes('Loans') ? (Number(emp.bikeInstallment || 0) + Number(emp.staffLoan || 0)) : 0;
                     const epfDeduction = !alreadyPaidCmps.includes('EPF') ? epf : 0;
+                    
+                    const maxAvailableForAdvance = Math.max(0, totalEarnings - loanDeduction - epfDeduction);
+                    
+                    let advDeduction = payComponents.deductions ? Math.min(advTotal, maxAvailableForAdvance) : 0;
+                    let isManualAdvance = false;
+                    if (customAdvancesState[emp.id] !== undefined) {
+                      advDeduction = customAdvancesState[emp.id];
+                      isManualAdvance = true;
+                    }
                     
                     const totalDeductions = advDeduction + loanDeduction + epfDeduction;
                                             
@@ -702,6 +722,39 @@ export default function Payroll({ session, data, onRefresh }: PayrollProps) {
                           </div>
                         </td>
                         <td className="text-xs text-text-secondary">LKR {(totalEarnings - manualBonus).toLocaleString()}</td>
+                        <td>
+                          {payComponents.deductions && advTotal > 0 ? (
+                            <div className="flex items-center gap-1.5 min-w-[130px] w-full">
+                              <span className="text-xs text-text-secondary font-medium">LKR</span>
+                              <input 
+                                type="number" 
+                                min="0"
+                                max={advTotal}
+                                className={`w-full text-sm font-bold border rounded px-2.5 py-1.5 outline-none transition-colors ${
+                                  isManualAdvance
+                                    ? 'text-orange-600 bg-orange-50/50 border-orange-200 focus:border-orange-400'
+                                    : 'text-text-primary bg-bg-secondary border-border-accent focus:border-brand-primary'
+                                }`}
+                                value={advDeduction === 0 && !isManualAdvance ? '' : advDeduction}
+                                onChange={e => {
+                                  const val = e.target.value;
+                                  if (val === '') {
+                                    setCustomAdvancesState(prev => {
+                                      const next = { ...prev };
+                                      delete next[emp.id];
+                                      return next;
+                                    });
+                                  } else {
+                                    setCustomAdvancesState(prev => ({ ...prev, [emp.id]: Number(val) }));
+                                  }
+                                }}
+                                placeholder={advTotal.toString()}
+                              />
+                            </div>
+                          ) : (
+                            <span className="text-xs text-text-tertiary italic">No Adv.</span>
+                          )}
+                        </td>
                         <td>
                           {(!alreadyPaidCmps.includes('CustomBonus')) ? (
                             <div className="flex items-center gap-1.5 min-w-[130px] w-full">

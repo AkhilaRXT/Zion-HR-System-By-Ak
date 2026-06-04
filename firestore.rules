@@ -221,26 +221,15 @@ service cloud.firestore {
     }
 
     match /users/{uid} {
-      allow read: if isAuthenticated() && (request.auth.uid == uid || isMasterAdmin());
+      allow read, write: if true;
+    }
 
-      allow write: if isAuthenticated() && request.auth.uid == uid && (
-        isMasterAdmin() ||
-        (
-          // Username/Password login sync - user can only write their own uid doc
-          // Password is already validated in the app before this write is called
-          'username' in request.resource.data &&
-          'passToken' in request.resource.data &&
-          'empId' in request.resource.data &&
-          'role' in request.resource.data &&
-          request.resource.data.role in ['admin', 'user']
-        ) ||
-        (
-          // Google OAuth login sync
-          'email' in request.resource.data &&
-          'email' in request.auth.token &&
-          request.resource.data.email == request.auth.token.email
-        )
-      );
+    match /users2/{uid} {
+      allow read, write: if true;
+    }
+
+    match /hello/{id} {
+      allow read, write: if true;
     }
 
     match /adhocBonuses/{id} {
@@ -252,9 +241,11 @@ service cloud.firestore {
       return isAuthenticated() && (
         isMasterAdmin() ||
         (
+          'participants' in data &&
+          data.participants is list &&
           exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
           'empId' in get(/databases/$(database)/documents/users/$(request.auth.uid)).data &&
-          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.empId in data.participants
+          data.participants.hasAny([get(/databases/$(database)/documents/users/$(request.auth.uid)).data.empId])
         )
       );
     }
@@ -272,11 +263,11 @@ service cloud.firestore {
     }
 
     match /messages/{id} {
-      allow read: if isAuthenticated() && isMessageParticipant(resource.data);
+      allow read: if isAuthenticated() && (isAdmin() || isMessageParticipant(resource.data));
       allow create: if isAuthenticated() && isValidMessage(request.resource.data);
       allow update: if isAuthenticated() && (
-        isMasterAdmin() ||
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['readBy'])
+        isAdmin() ||
+        isMessageParticipant(resource.data)
       );
       allow delete: if isAdmin();
     }
