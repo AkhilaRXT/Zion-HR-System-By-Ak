@@ -210,7 +210,7 @@ export default function CashRequests({ session, data }: CashRequestsProps) {
               />
             </div>
             <div className="form-group">
-              <label className="text-xs font-medium text-text-secondary mb-2 block">Attachments (PDF max 1MB, Images auto-compressed)</label>
+              <label className="text-xs font-medium text-text-secondary mb-2 block">Attachments (PDF max 3MB, Images auto-compressed)</label>
               <input 
                 type="file" 
                 multiple
@@ -339,12 +339,12 @@ export default function CashRequests({ session, data }: CashRequestsProps) {
                         <div className="text-xs text-text-secondary font-medium mt-1 flex items-center gap-2">
                           {r.description}
                           {r.attachment && (
-                            <a href={r.attachment} download={`Cash_Request_${r.empId}.${r.attachment.startsWith('data:image/png') ? 'png' : r.attachment.startsWith('data:image/jpeg') ? 'jpg' : 'pdf'}`} className="text-brand-accent hover:text-blue-700 flex items-center gap-1" title="View Attachment">
+                            <a href={r.attachment} target="_blank" rel="noopener noreferrer" download={`Cash_Request_${r.empId}.${r.attachment.startsWith('data:image/png') ? 'png' : r.attachment.startsWith('data:image/jpeg') ? 'jpg' : 'pdf'}`} className="text-brand-accent hover:text-blue-700 flex items-center gap-1" title="View Attachment">
                               <Paperclip className="w-3 h-3" />
                             </a>
                           )}
                           {r.attachments && r.attachments.length > 0 && r.attachments.map((att, idx) => (
-                            <a key={idx} href={att} download={`Cash_Request_${r.empId}_${idx + 1}.${att.startsWith('data:image/png') ? 'png' : att.startsWith('data:image/jpeg') ? 'jpg' : 'pdf'}`} className="text-brand-accent hover:text-blue-700 flex items-center gap-1" title={`View Attachment ${idx + 1}`}>
+                            <a key={idx} href={att} target="_blank" rel="noopener noreferrer" download={`Cash_Request_${r.empId}_${idx + 1}.${att.startsWith('data:image/png') ? 'png' : att.startsWith('data:image/jpeg') ? 'jpg' : 'pdf'}`} className="text-brand-accent hover:text-blue-700 flex items-center gap-1" title={`View Attachment ${idx + 1}`}>
                               <Paperclip className="w-3 h-3" />
                               <span className="text-[10px]">{idx + 1}</span>
                             </a>
