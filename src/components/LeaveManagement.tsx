@@ -443,7 +443,7 @@ export default function LeaveManagement({ session, data, onRefresh }: LeaveManag
                         </div>
                         {l.attachment && (
                           <div className="mt-3">
-                            <a href={l.attachment} download={`Leave_Request_${l.empId}.pdf`} className="text-xs font-bold text-brand-accent hover:underline flex items-center gap-1.5 bg-brand-accent/5 py-1 px-2 rounded-md w-fit">
+                            <a href={l.attachment} download={`Leave_Request_${l.empId}.${l.attachment.startsWith('data:image/png') ? 'png' : l.attachment.startsWith('data:image/jpeg') ? 'jpg' : 'pdf'}`} className="text-xs font-bold text-brand-accent hover:underline flex items-center gap-1.5 bg-brand-accent/5 py-1 px-2 rounded-md w-fit">
                               <Paperclip className="w-3 h-3" /> View Document
                             </a>
                           </div>
