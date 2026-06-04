@@ -4,7 +4,7 @@ import { DataStore } from '../lib/dataStore';
 import { HandCoins, Check, X, FileDown, Paperclip, Clock, Pencil, Search } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import Notification, { NotificationType } from './Notification';
-import { fileToBase64 } from '../lib/fileUtils';
+import { fileToBase64, handleDownloadAttachment } from '../lib/fileUtils';
 
 interface SalaryAdvancesProps {
   session: Session;
@@ -540,9 +540,9 @@ export default function SalaryAdvances({ session, data }: SalaryAdvancesProps) {
                         <div className="text-[10px] text-text-secondary font-medium mt-2 flex items-center gap-2">
                           {a.reason}
                           {a.attachment && (
-                            <a href={a.attachment} target="_blank" rel="noopener noreferrer" download={`Advance_${a.empId}.${a.attachment.startsWith('data:image/png') ? 'png' : a.attachment.startsWith('data:image/jpeg') ? 'jpg' : 'pdf'}`} className="text-brand-accent hover:underline flex items-center gap-1">
+                            <button onClick={() => handleDownloadAttachment(a.attachment!, `Advance_${a.empId}`)} className="text-brand-accent hover:underline flex items-center gap-1">
                               <Paperclip className="w-3 h-3" />
-                            </a>
+                            </button>
                           )}
                         </div>
                       </td>
