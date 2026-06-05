@@ -375,8 +375,8 @@ export const DataStore = {
 
       // Get managed branches dynamically
       let viewableBranches = cred.viewableBranches || [];
-      if (cred.isAdmin && viewableBranches.length === 0) {
-        viewableBranches = ['ALL'];
+      if (username.toLowerCase() === 'zioncommercialcreditampara@gmail.com' && !viewableBranches.includes('ALL')) {
+        viewableBranches.push('ALL');
       }
       try {
         const branchesSnap = await getDocs(collection(db, 'branches'));

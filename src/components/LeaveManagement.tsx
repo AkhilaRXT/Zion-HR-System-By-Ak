@@ -23,10 +23,15 @@ export default function LeaveManagement({ session, data, onRefresh }: LeaveManag
 
   const canViewEmployee = (empId: string) => {
     if (session.email === "zioncommercialcreditampara@gmail.com") return true;
-    if (session.isAdmin && (viewableBranches.length === 0 || viewableBranches.includes('ALL'))) return true;
     if (viewableBranches.includes('ALL')) return true;
-    const emp = (data.employees || []).find(e => e.id === empId);
-    return emp ? viewableBranches.includes(emp.branch) : false;
+    const emp = (data.employees || []).find((e: any) => e.id === empId);
+    if (!emp) return false;
+    if (viewableBranches.length > 0) return viewableBranches.includes(emp.branch);
+    if (session.isAdmin) {
+      const myEmp = (data.employees || []).find((e: any) => e.id === session.empId);
+      return myEmp?.branch === emp.branch;
+    }
+    return false;
   };
   
   const [notification, setNotification] = useState<{ message: string, type: NotificationType } | null>(null);
@@ -124,6 +129,7 @@ export default function LeaveManagement({ session, data, onRefresh }: LeaveManag
     sick: sickBalance
   };
 
+  const [isUploading, setIsUploading] = useState(false);
   const [newLeave, setNewLeave] = useState({
     type: 'Annual' as 'Annual' | 'Casual' | 'Sick',
     from: '',
@@ -135,11 +141,15 @@ export default function LeaveManagement({ session, data, onRefresh }: LeaveManag
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      setIsUploading(true);
       try {
         const base64 = await fileToBase64(file);
-        setNewLeave({ ...newLeave, attachment: base64 });
+        setNewLeave(prev => ({ ...prev, attachment: base64 }));
       } catch (err: any) {
         showNotification(err.message || 'Failed to process file', 'error');
+        e.target.value = '';
+      } finally {
+        setIsUploading(false);
       }
     }
   };
@@ -293,8 +303,8 @@ export default function LeaveManagement({ session, data, onRefresh }: LeaveManag
                 onChange={handleFileChange}
               />
             </div>
-            <button type="submit" className="btn btn-primary w-full justify-center py-4">
-              Submit Request
+            <button type="submit" className="btn btn-primary w-full justify-center py-4" disabled={isUploading}>
+              {isUploading ? 'Uploading...' : 'Submit Request'}
             </button>
           </form>
         </div>

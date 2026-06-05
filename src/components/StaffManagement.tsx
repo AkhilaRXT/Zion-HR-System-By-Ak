@@ -258,10 +258,15 @@ export default function StaffManagement({ session, data, onRefresh }: StaffManag
 
   const canViewEmployee = (empId: string) => {
     if (session.email === "zioncommercialcreditampara@gmail.com") return true;
-    if (session.isAdmin && (viewableBranches.length === 0 || viewableBranches.includes('ALL'))) return true;
     if (viewableBranches.includes('ALL')) return true;
-    const emp = (data.employees || []).find(e => e.id === empId);
-    return emp ? viewableBranches.includes(emp.branch) : false;
+    const emp = (data.employees || []).find((e: any) => e.id === empId);
+    if (!emp) return false;
+    if (viewableBranches.length > 0) return viewableBranches.includes(emp.branch);
+    if (session.isAdmin) {
+      const myEmp = (data.employees || []).find((e: any) => e.id === session.empId);
+      return myEmp?.branch === emp.branch;
+    }
+    return false;
   };
 
   const filteredEmployees = (data.employees || [])

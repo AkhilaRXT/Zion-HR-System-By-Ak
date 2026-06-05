@@ -21,10 +21,15 @@ export default function CashRequests({ session, data }: CashRequestsProps) {
 
   const canViewEmployee = (empId: string) => {
     if (session.email === "zioncommercialcreditampara@gmail.com") return true;
-    if (session.isAdmin && (viewableBranches.length === 0 || viewableBranches.includes('ALL'))) return true;
     if (viewableBranches.includes('ALL')) return true;
-    const emp = (data.employees || []).find(e => e.id === empId);
-    return emp ? viewableBranches.includes(emp.branch) : false;
+    const emp = (data.employees || []).find((e: any) => e.id === empId);
+    if (!emp) return false;
+    if (viewableBranches.length > 0) return viewableBranches.includes(emp.branch);
+    if (session.isAdmin) {
+      const myEmp = (data.employees || []).find((e: any) => e.id === session.empId);
+      return myEmp?.branch === emp.branch;
+    }
+    return false;
   };
   const [notification, setNotification] = useState<{ message: string, type: NotificationType } | null>(null);
 
@@ -70,6 +75,7 @@ export default function CashRequests({ session, data }: CashRequestsProps) {
     setNotification({ message, type });
   };
 
+  const [isUploading, setIsUploading] = useState(false);
   const [newRequest, setNewRequest] = useState({
     amount: 0,
     category: 'Petty Cash',
@@ -80,11 +86,15 @@ export default function CashRequests({ session, data }: CashRequestsProps) {
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
     if (files.length > 0) {
+      setIsUploading(true);
       try {
         const base64Files = await Promise.all(files.map(f => fileToBase64(f)));
-        setNewRequest({ ...newRequest, attachments: [...newRequest.attachments, ...base64Files] });
+        setNewRequest(prev => ({ ...prev, attachments: [...prev.attachments, ...base64Files] }));
       } catch (err: any) {
         showNotification(err.message || 'Failed to process files', 'error');
+        e.target.value = '';
+      } finally {
+        setIsUploading(false);
       }
     }
   };
@@ -224,8 +234,8 @@ export default function CashRequests({ session, data }: CashRequestsProps) {
                 </div>
               )}
             </div>
-            <button type="submit" className="btn btn-primary w-full justify-center py-4">
-              Submit Request
+            <button type="submit" className="btn btn-primary w-full justify-center py-4" disabled={isUploading}>
+              {isUploading ? 'Uploading...' : 'Submit Request'}
             </button>
           </form>
         </div>

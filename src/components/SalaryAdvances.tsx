@@ -22,13 +22,19 @@ export default function SalaryAdvances({ session, data }: SalaryAdvancesProps) {
 
   const canViewEmployee = (empId: string) => {
     if (session.email === "zioncommercialcreditampara@gmail.com") return true;
-    if (session.isAdmin && (viewableBranches.length === 0 || viewableBranches.includes('ALL'))) return true;
     if (viewableBranches.includes('ALL')) return true;
-    const emp = (data.employees || []).find(e => e.id === empId);
-    return emp ? viewableBranches.includes(emp.branch) : false;
+    const emp = (data.employees || []).find((e: any) => e.id === empId);
+    if (!emp) return false;
+    if (viewableBranches.length > 0) return viewableBranches.includes(emp.branch);
+    if (session.isAdmin) {
+      const myEmp = (data.employees || []).find((e: any) => e.id === session.empId);
+      return myEmp?.branch === emp.branch;
+    }
+    return false;
   };
 
   const [notification, setNotification] = useState<{ message: string, type: NotificationType } | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
   const [newAdvance, setNewAdvance] = useState({ amount: 0, reason: '', attachment: '' });
   const [activeTab, setActiveTab] = useState<'Pending' | 'Approved' | 'Rejected' | 'All' | 'Fixed Loans'>(hasPayrollPermission ? 'Pending' : 'All');
   const [editingAdvance, setEditingAdvance] = useState<AdvanceRequest | null>(null);
@@ -77,11 +83,15 @@ export default function SalaryAdvances({ session, data }: SalaryAdvancesProps) {
   const handleAdvanceFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      setIsUploading(true);
       try {
         const base64 = await fileToBase64(file);
-        setNewAdvance({ ...newAdvance, attachment: base64 });
+        setNewAdvance(prev => ({ ...prev, attachment: base64 }));
       } catch (err: any) {
         showNotification(err.message || 'Failed to process file', 'error');
+        e.target.value = '';
+      } finally {
+        setIsUploading(false);
       }
     }
   };
@@ -206,7 +216,13 @@ export default function SalaryAdvances({ session, data }: SalaryAdvancesProps) {
         const hasBranchMgrAccess = viewableBranches.length > 0;
         const matchesPermission = (hasPayrollPermission || hasBranchMgrAccess) ? canViewEmployee(a.empId) : a.empId === currentEmpId;
         const matchesDate = a.date >= dateRange.from && a.date <= dateRange.to;
-        const matchesStatus = activeTab === 'All' || a.status === activeTab;
+        const matchesStatus = (() => {
+          if (activeTab === 'All') return true;
+          if (activeTab === 'Settled') return a.status === 'Approved' && a.isPaid;
+          if (activeTab === 'Partial') return a.status === 'Approved' && !a.isPaid && a.paidAmount && a.paidAmount > 0;
+          if (activeTab === 'Approved') return a.status === 'Approved' && !a.isPaid && (!a.paidAmount || a.paidAmount === 0);
+          return a.status === activeTab;
+        })();
         const emp = (data.employees || []).find(e => e.id === a.empId);
         const matchesBranch = branchFilter === 'ALL' || emp?.branch === branchFilter;
         return matchesPermission && matchesDate && matchesStatus && matchesBranch;
@@ -292,7 +308,13 @@ export default function SalaryAdvances({ session, data }: SalaryAdvancesProps) {
         const hasBranchMgrAccess = viewableBranches.length > 0;
         const matchesPermission = (hasPayrollPermission || hasBranchMgrAccess) ? canViewEmployee(a.empId) : a.empId === currentEmpId;
         const matchesDate = a.date >= dateRange.from && a.date <= dateRange.to;
-        const matchesStatus = activeTab === 'All' || a.status === activeTab;
+        const matchesStatus = (() => {
+          if (activeTab === 'All') return true;
+          if (activeTab === 'Settled') return a.status === 'Approved' && a.isPaid;
+          if (activeTab === 'Partial') return a.status === 'Approved' && !a.isPaid && a.paidAmount && a.paidAmount > 0;
+          if (activeTab === 'Approved') return a.status === 'Approved' && !a.isPaid && (!a.paidAmount || a.paidAmount === 0);
+          return a.status === activeTab;
+        })();
         
         const emp = (data.employees || []).find(e => e.id === a.empId);
         const matchesBranch = branchFilter === 'ALL' || emp?.branch === branchFilter;
@@ -352,7 +374,9 @@ export default function SalaryAdvances({ session, data }: SalaryAdvancesProps) {
                   onChange={handleAdvanceFileChange}
                 />
               </div>
-              <button type="submit" className="btn btn-primary w-full justify-center py-4">Submit Request</button>
+              <button type="submit" className="btn btn-primary w-full justify-center py-4" disabled={isUploading}>
+                {isUploading ? 'Uploading...' : 'Submit Request'}
+              </button>
             </form>
           </div>
         </div>
@@ -435,8 +459,8 @@ export default function SalaryAdvances({ session, data }: SalaryAdvancesProps) {
                 </div>
               </div>
               
-              <div className="flex border-b border-border-accent">
-                {(hasPayrollPermission ? ['Pending', 'Approved', 'Rejected', 'All', 'Fixed Loans'] : ['Pending', 'Approved', 'Rejected', 'All'] as const).map((tab) => (
+              <div className="flex border-b border-border-accent flex-wrap">
+                {(hasPayrollPermission ? ['Pending', 'Approved', 'Partial', 'Settled', 'Rejected', 'All', 'Fixed Loans'] : ['Pending', 'Approved', 'Partial', 'Settled', 'Rejected', 'All'] as const).map((tab) => (
                   <button
                     key={tab}
                     onClick={() => setActiveTab(tab)}

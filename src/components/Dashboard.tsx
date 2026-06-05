@@ -50,22 +50,26 @@ export default function Dashboard({ session, data, onRefresh, dbErrors }: Dashbo
   const viewableBranches = session.viewableBranches || [];
   const canViewEmployee = (empId: string) => {
     if (session.email === "zioncommercialcreditampara@gmail.com") return true;
-    if (isAdmin && (viewableBranches.length === 0 || viewableBranches.includes('ALL'))) return true;
     if (viewableBranches.includes('ALL')) return true;
     const emp = (data.employees || []).find(e => e.id === empId);
-    return emp ? viewableBranches.includes(emp.branch) : false;
+    if (!emp) return false;
+    if (viewableBranches.length > 0) return viewableBranches.includes(emp.branch);
+    if (isAdmin) {
+      const myEmp = (data.employees || []).find(e => e.id === session.empId);
+      return myEmp?.branch === emp.branch;
+    }
+    return false;
   };
 
   const activeStaff = (data.employees || []).filter(e => {
     if (e.status === 'Dormant' || e.id === 'EMP003') return false;
     if (session.email === "zioncommercialcreditampara@gmail.com") return true;
-    if (isAdmin && (viewableBranches.length === 0 || viewableBranches.includes('ALL'))) return true;
     if (viewableBranches.includes('ALL')) return true;
-    // Branch Managers should only see their own branch staff
-    if (isBranchManager && !isAdmin) return viewableBranches.includes(e.branch);
-    // Standard members
+    if (viewableBranches.length > 0) return viewableBranches.includes(e.branch);
     if (!isAdmin) return true; // Standard employees see company-wide active staff for Milestones etc.
-    return viewableBranches.includes(e.branch);
+    // If Admin but no viewableBranches specified, default to their own branch
+    const myEmp = (data.employees || []).find(me => me.id === session.empId);
+    return myEmp?.branch === e.branch;
   });
   
   const totalStaff = activeStaff.length;
@@ -103,6 +107,10 @@ export default function Dashboard({ session, data, onRefresh, dbErrors }: Dashbo
   const [selectedEmpId, setSelectedEmpId] = useState((data.employees || [])[0]?.id || '');
   const [empSearch, setEmpSearch] = useState('');
 
+  const displayEmployees = canSeeAttendance 
+    ? activeStaff
+    : (data.employees || []).filter(e => e.id === currentEmpId);
+
   const [notification, setNotification] = useState<{message: string, type: NotificationType} | null>(null);
 
   const showNotification = (message: string, type: NotificationType = 'success') => {
@@ -133,20 +141,13 @@ export default function Dashboard({ session, data, onRefresh, dbErrors }: Dashbo
     })
     .slice(0, 5);
 
-  // Sync selection with search results
-  useEffect(() => {
-    const validStaff = (data.employees || []).filter(e => e.status !== 'Dormant' && e.id !== 'EMP003');
-    const filtered = validStaff.filter(e => 
-      e.name.toLowerCase().includes(empSearch.toLowerCase()) || 
-      e.id.toLowerCase().includes(empSearch.toLowerCase())
-    );
-    if (filtered.length > 0) {
-      const isStillInList = filtered.some(e => e.id === selectedEmpId);
-      if (!isStillInList) {
-        setSelectedEmpId(filtered[0].id);
-      }
-    }
-  }, [empSearch, data.employees, selectedEmpId]);
+  const filteredSelectOptions = displayEmployees.filter(e => 
+    e.name.toLowerCase().includes(empSearch.toLowerCase()) || 
+    e.id.toLowerCase().includes(empSearch.toLowerCase())
+  );
+  const resolvedEmpId = filteredSelectOptions.some(e => e.id === selectedEmpId)
+    ? selectedEmpId
+    : (filteredSelectOptions[0]?.id || currentEmpId);
 
   const [refreshKey, setRefreshKey] = useState(0);
   const [editingAttendance, setEditingAttendance] = useState<Attendance | null>(null);
@@ -223,7 +224,7 @@ export default function Dashboard({ session, data, onRefresh, dbErrors }: Dashbo
   };
 
   const handleRegisterBiometrics = async () => {
-    const empIdToUse = canSeeAttendance ? selectedEmpId : currentEmpId;
+    const empIdToUse = canSeeAttendance ? resolvedEmpId : currentEmpId;
 
     if (hasBiometricRegistered(empIdToUse)) {
       showNotification('This employee already has a device registered. Please contact Master Admin to reset it.', 'warning');
@@ -333,7 +334,7 @@ export default function Dashboard({ session, data, onRefresh, dbErrors }: Dashbo
   };
 
   const handleCheckIn = async () => {
-    const empIdToUse = canSeeAttendance ? selectedEmpId : currentEmpId;
+    const empIdToUse = canSeeAttendance ? resolvedEmpId : currentEmpId;
 
     const isVerified = await verifyBiometrics(empIdToUse);
     if (!isVerified) {
@@ -360,7 +361,7 @@ export default function Dashboard({ session, data, onRefresh, dbErrors }: Dashbo
   };
 
   const handleAdminCheckIn = async () => {
-    const empIdToUse = canSeeAttendance ? selectedEmpId : currentEmpId;
+    const empIdToUse = canSeeAttendance ? resolvedEmpId : currentEmpId;
     const now = new Date();
     const compareTime = now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
     const displayTime = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
@@ -379,8 +380,9 @@ export default function Dashboard({ session, data, onRefresh, dbErrors }: Dashbo
   };
 
   const handleAdminCheckOut = async () => {
-    const empIdToUse = canSeeAttendance ? selectedEmpId : currentEmpId;
-    const rec = (data.attendance || []).find(a => a.empId === empIdToUse && a.date === today);
+    const empIdToUse = canSeeAttendance ? resolvedEmpId : currentEmpId;
+    const allAtt = canSeeAttendance ? (data.attendance || []) : (data.ownAttendance || []);
+    const rec = allAtt.find(a => a.empId === empIdToUse && a.date === today);
     if (!rec) {
       showNotification(`Employee hasn't checked in yet!`, 'warning');
       return;
@@ -398,8 +400,9 @@ export default function Dashboard({ session, data, onRefresh, dbErrors }: Dashbo
   };
 
   const handleCheckOut = async () => {
-    const empIdToUse = canSeeAttendance ? selectedEmpId : currentEmpId;
-    const rec = (data.attendance || []).find(a => a.empId === empIdToUse && a.date === today);
+    const empIdToUse = canSeeAttendance ? resolvedEmpId : currentEmpId;
+    const allAtt = canSeeAttendance ? (data.attendance || []) : (data.ownAttendance || []);
+    const rec = allAtt.find(a => a.empId === empIdToUse && a.date === today);
     if (!rec) {
       showNotification(`Employee hasn't checked in yet!`, 'warning');
       return;
@@ -423,10 +426,8 @@ export default function Dashboard({ session, data, onRefresh, dbErrors }: Dashbo
     }
   };
 
-  const todayAttendance = (data.attendance || []).filter(a => a.date === today);
-  const displayEmployees = canSeeAttendance 
-    ? activeStaff
-    : (data.employees || []).filter(e => e.id === currentEmpId);
+  const rawAttendance = canSeeAttendance ? (data.attendance || []) : (data.ownAttendance || []);
+  const todayAttendance = rawAttendance.filter(a => a.date === today);
 
   return (
     <div className="space-y-8">
@@ -458,7 +459,12 @@ export default function Dashboard({ session, data, onRefresh, dbErrors }: Dashbo
               value={myAttendance ? myAttendance.checkIn : '--:--'} 
               color="text-brand-primary"
             />
-            <StatCard icon={MailWarning} title="My Pending Leaves" value={myPendingLeaves} color="text-brand-accent" />
+            <StatCard 
+              icon={LogOut} 
+              title="Clock Out Time" 
+              value={myAttendance ? myAttendance.checkOut : '--:--'} 
+              color="text-emerald-500"
+            />
             <StatCard icon={TrendingUp} title="Leave Balance" value={myBalance} />
           </>
         )}
@@ -586,7 +592,7 @@ export default function Dashboard({ session, data, onRefresh, dbErrors }: Dashbo
                 />
                 <select 
                   className="form-control"
-                  value={selectedEmpId}
+                  value={resolvedEmpId}
                   onChange={(e) => setSelectedEmpId(e.target.value)}
                 >
                   {displayEmployees
@@ -627,7 +633,7 @@ export default function Dashboard({ session, data, onRefresh, dbErrors }: Dashbo
                 </button>
               </div>
             )}
-            {!hasBiometricRegistered(canSeeAttendance ? selectedEmpId : currentEmpId) && (
+            {!hasBiometricRegistered(canSeeAttendance ? resolvedEmpId : currentEmpId) && (
               <button onClick={handleRegisterBiometrics} className="btn btn-outline border-dashed gap-2">
                 <Fingerprint className="w-4 h-4" />
                 Register Biometrics

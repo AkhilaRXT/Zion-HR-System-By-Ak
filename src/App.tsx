@@ -292,7 +292,7 @@ export default function App() {
       unsubs.push(syncCoreCollection('announcements', 'announcements'));
       
       const isMasterAdmin = session.email === "zioncommercialcreditampara@gmail.com";
-      const isAdminWithAll = session.isAdmin && (!session.viewableBranches || session.viewableBranches.includes('ALL') || session.viewableBranches.length === 0);
+      const isAdminWithAll = session.isAdmin && (session.viewableBranches?.includes('ALL') || false);
 
       if (isMasterAdmin || isAdminWithAll) {
         unsubs.push(onSnapshot(query(collection(db, 'assets'), limit(1000)), (snap) => {

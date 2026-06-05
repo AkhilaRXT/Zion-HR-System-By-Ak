@@ -46,12 +46,16 @@ export default function TargetManagement({ session, data }: TargetManagementProp
 
   const accessibleEmployees = useMemo(() => {
     if (isMasterAdmin) return (data.employees || []).filter(e => e.status !== 'Dormant');
-    if (isAdmin && (viewableBranches.includes('ALL') || viewableBranches.length === 0))
+    if (isAdmin && viewableBranches.includes('ALL'))
       return (data.employees || []).filter(e => e.status !== 'Dormant');
-    if (isAdmin)
+    if (isAdmin && viewableBranches.length > 0)
       return (data.employees || []).filter(e => e.status !== 'Dormant' && viewableBranches.includes(e.branch));
+    if (isAdmin) {
+      const myEmp = (data.employees || []).find(e => e.id === session.empId);
+      return (data.employees || []).filter(e => e.status !== 'Dormant' && e.branch === myEmp?.branch);
+    }
     return [];
-  }, [data.employees, isMasterAdmin, isAdmin, viewableBranches]);
+  }, [data.employees, isMasterAdmin, isAdmin, viewableBranches, session.empId]);
 
   const calcScore = (empId: string, month: string) => {
     const empTargets = (data.targets || []).filter(t => t.empId === empId && t.month === month);

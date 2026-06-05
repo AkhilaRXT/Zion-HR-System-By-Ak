@@ -81,8 +81,12 @@ export const AssetManagement: React.FC<AssetManagementProps> = ({ session, data 
   // Step 1: Branch Access Restriction
   const accessibleAssets = useMemo(() => {
     if (isMasterAdmin) return assets;
-    if (isAdmin && (viewableBranches.includes('ALL') || viewableBranches.length === 0)) return assets;
-    if (isAdmin) return assets.filter(a => viewableBranches.includes(a.branch));
+    if (isAdmin && viewableBranches.includes('ALL')) return assets;
+    if (isAdmin && viewableBranches.length > 0) return assets.filter(a => viewableBranches.includes(a.branch));
+    if (isAdmin) {
+      const myEmp = employees.find(e => e.id === session.empId);
+      return assets.filter(a => a.branch === myEmp?.branch);
+    }
     return assets.filter(a => a.assignedTo === session.empId);
   }, [assets, isMasterAdmin, isAdmin, viewableBranches, session.empId]);
 
@@ -104,8 +108,12 @@ export const AssetManagement: React.FC<AssetManagementProps> = ({ session, data 
   // Restricted Branches for dropdowns
   const accessibleBranches = useMemo(() => {
     if (isMasterAdmin) return branches;
-    if (isAdmin && (viewableBranches.includes('ALL') || viewableBranches.length === 0)) return branches;
-    if (isAdmin) return branches.filter(b => viewableBranches.includes(b.name));
+    if (isAdmin && viewableBranches.includes('ALL')) return branches;
+    if (isAdmin && viewableBranches.length > 0) return branches.filter(b => viewableBranches.includes(b.name));
+    if (isAdmin) {
+      const myEmp = employees.find(e => e.id === session.empId);
+      return branches.filter(b => b.name === myEmp?.branch);
+    }
     return [];
   }, [branches, isMasterAdmin, isAdmin, viewableBranches]);
 
