@@ -44,6 +44,19 @@ export default function TargetManagement({ session, data }: TargetManagementProp
   const isMasterAdmin = session.email === 'zioncommercialcreditampara@gmail.com';
   const viewableBranches = session.viewableBranches || [];
 
+  const canViewEmployee = (empId: string) => {
+    if (session.email === "zioncommercialcreditampara@gmail.com") return true;
+    if (viewableBranches.includes('ALL')) return true;
+    const emp = (data.employees || []).find((e: any) => e.id === empId);
+    if (!emp) return false;
+    if (viewableBranches.length > 0) return viewableBranches.includes(emp.branch);
+    if (session.isAdmin) {
+      const myEmp = (data.employees || []).find((e: any) => e.id === session.empId);
+      return myEmp?.branch === emp.branch;
+    }
+    return false;
+  };
+
   const accessibleEmployees = useMemo(() => {
     if (isMasterAdmin) return (data.employees || []).filter(e => e.status !== 'Dormant');
     if (isAdmin && viewableBranches.includes('ALL'))
@@ -251,10 +264,10 @@ export default function TargetManagement({ session, data }: TargetManagementProp
 
   const getEmpName = (id: string) => (data.employees || []).find(e => e.id === id)?.name || id;
 
-  const filteredTargets = (data.ownTargets || data.targets || []).filter(t => 
-    (!isAdmin ? t.empId === session.empId : true) &&
+  const filteredTargets = (isAdmin ? (data.targets || []) : (data.ownTargets || data.targets || [])).filter(t => 
+    (!isAdmin ? t.empId === session.empId : canViewEmployee(t.empId)) &&
     (getEmpName(t.empId).toLowerCase().includes(search.toLowerCase()) || t.category.toLowerCase().includes(search.toLowerCase()))
-  ).sort((a,b) => b.id - a.id);
+  ).sort((a,b) => Number(b.id) - Number(a.id));
 
   return (
     <div className="p-8">
