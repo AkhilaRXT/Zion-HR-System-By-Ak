@@ -25,45 +25,68 @@ const getBase64 = (file: File): Promise<string> => {
         // If it is an image, compress it
         if (file.type.startsWith('image/')) {
             const reader = new FileReader();
-            reader.readAsDataURL(file);
             reader.onload = (event) => {
-                const img = new Image();
-                img.src = event.target?.result as string;
-                img.onload = () => {
-                    const canvas = document.createElement('canvas');
-                    let width = img.width;
-                    let height = img.height;
-                    const MAX_DIM = 1024;
-                    if (width > MAX_DIM || height > MAX_DIM) {
-                        if (width > height) {
-                            height = Math.round((height * MAX_DIM) / width);
-                            width = MAX_DIM;
-                        } else {
-                            width = Math.round((width * MAX_DIM) / height);
-                            height = MAX_DIM;
-                        }
+                try {
+                    const result = event.target?.result;
+                    if (!result) {
+                        reject(new Error('FileReader result is empty'));
+                        return;
                     }
-                    canvas.width = width;
-                    canvas.height = height;
-                    const ctx = canvas.getContext('2d');
-                    if (!ctx) return reject(new Error('Failed to get 2D canvas context'));
-                    ctx.drawImage(img, 0, 0, width, height);
-                    resolve(canvas.toDataURL('image/jpeg', 0.6));
-                };
-                img.onerror = () => reject(new Error('Failed to load image for compression'));
+                    const img = new Image();
+                    img.onload = () => {
+                        try {
+                            const canvas = document.createElement('canvas');
+                            let width = img.width;
+                            let height = img.height;
+                            const MAX_DIM = 1024;
+                            if (width > MAX_DIM || height > MAX_DIM) {
+                                if (width > height) {
+                                    height = Math.round((height * MAX_DIM) / width);
+                                    width = MAX_DIM;
+                                } else {
+                                    width = Math.round((width * MAX_DIM) / height);
+                                    height = MAX_DIM;
+                                }
+                            }
+                            canvas.width = width;
+                            canvas.height = height;
+                            const ctx = canvas.getContext('2d');
+                            if (!ctx) {
+                                reject(new Error('Failed to get 2D canvas context'));
+                                return;
+                            }
+                            ctx.drawImage(img, 0, 0, width, height);
+                            resolve(canvas.toDataURL('image/jpeg', 0.6));
+                        } catch (err) {
+                            reject(err);
+                        }
+                    };
+                    img.onerror = () => reject(new Error('Failed to load image for compression'));
+                    img.src = result as string; // Set src AFTER assigning onload and onerror
+                } catch (readerOnloadErr) {
+                    reject(readerOnloadErr);
+                }
             };
             reader.onerror = error => reject(error);
+            reader.readAsDataURL(file);
         } else {
             const reader = new FileReader();
-            reader.readAsDataURL(file);
-            reader.onload = () => resolve(reader.result as string);
+            reader.onload = () => {
+                if (reader.result) {
+                    resolve(reader.result as string);
+                } else {
+                    reject(new Error('FileReader result is empty'));
+                }
+            };
             reader.onerror = error => reject(error);
+            reader.readAsDataURL(file);
         }
     });
 };
 
 export const fileToBase64 = (file: File): Promise<string> => {
   return new Promise(async (resolve, reject) => {
+    let base64 = '';
     try {
       if (file.size > 5 * 1024 * 1024) {
         reject(new Error('File size must be less than 5 MB'));
@@ -71,18 +94,27 @@ export const fileToBase64 = (file: File): Promise<string> => {
       }
 
       // Convert and compress (if image)
-      const base64 = await getBase64(file);
+      base64 = await getBase64(file);
 
       if (!storage) {
         throw new Error("Storage service is not available, falling back to Firestore");
       }
 
-      const id = 'file_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7) + '_' + file.name.replace(/[^a-zA-Z0-9.]/g, '');
+      const cleanName = file.name ? file.name.replace(/[^a-zA-Z0-9.]/g, '') : 'file';
+      const id = 'file_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7) + '_' + cleanName;
       const storageRef = ref(storage, 'attachments/' + id);
 
-      await uploadString(storageRef, base64, 'data_url');
-      const downloadURL = await getDownloadURL(storageRef);
-      
+      // Wrap Storage upload in a 5-second timeout so it falls back to Firestore chunks safely if Storage hangs
+      const uploadPromise = (async () => {
+        await uploadString(storageRef, base64, 'data_url');
+        return await getDownloadURL(storageRef);
+      })();
+
+      const timeoutPromise = new Promise<string>((_, rej) =>
+        setTimeout(() => rej(new Error('Firebase Storage upload timed out')), 5000)
+      );
+
+      const downloadURL = await Promise.race([uploadPromise, timeoutPromise]);
       resolve(downloadURL);
     } catch (err: any) {
       console.warn("Storage upload failed, falling back to Firestore chunks:", err);
@@ -92,11 +124,11 @@ export const fileToBase64 = (file: File): Promise<string> => {
           return;
       }
       try {
-          const base64 = await getBase64(file);
-          if (base64.length < 800000) {
-             resolve(base64);
+          const finalBase64 = base64 || await getBase64(file);
+          if (finalBase64.length < 800000) {
+             resolve(finalBase64);
           } else {
-             const chunkedId = await saveChunked(base64, file.type);
+             const chunkedId = await saveChunked(finalBase64, file.type);
              resolve(chunkedId);
           }
       } catch(fallbackErr: any) {
