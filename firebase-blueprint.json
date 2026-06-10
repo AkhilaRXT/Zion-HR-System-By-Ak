@@ -81,7 +81,8 @@
         "date": { "type": "string", "format": "date" },
         "status": { "type": "string", "enum": ["Pending", "Approved", "Rejected"] },
         "reason": { "type": "string" },
-        "isPaid": { "type": "boolean" }
+        "isPaid": { "type": "boolean" },
+        "deductFrom": { "type": "string", "enum": ["Basic", "Petrol", "Traveling", "Vehicle"] }
       },
       "required": ["empId", "amount", "date", "status"]
     },

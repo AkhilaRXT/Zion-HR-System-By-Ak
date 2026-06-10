@@ -88,7 +88,7 @@ export default function CashRequests({ session, data }: CashRequestsProps) {
     if (files.length > 0) {
       setIsUploading(true);
       try {
-        const base64Files = await Promise.all(files.map(f => fileToBase64(f)));
+        const base64Files = await Promise.all(files.map(f => fileToBase64(f as File)));
         setNewRequest(prev => ({ ...prev, attachments: [...prev.attachments, ...base64Files] }));
       } catch (err: any) {
         showNotification(err.message || 'Failed to process files', 'error');

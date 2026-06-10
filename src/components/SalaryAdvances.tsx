@@ -35,7 +35,7 @@ export default function SalaryAdvances({ session, data }: SalaryAdvancesProps) {
 
   const [notification, setNotification] = useState<{ message: string, type: NotificationType } | null>(null);
   const [isUploading, setIsUploading] = useState(false);
-  const [newAdvance, setNewAdvance] = useState({ amount: 0, reason: '', attachment: '' });
+  const [newAdvance, setNewAdvance] = useState({ amount: 0, reason: '', attachment: '', deductFrom: 'Basic' as 'Basic' | 'Petrol' | 'Traveling' | 'Vehicle' });
   const [activeTab, setActiveTab] = useState<'Pending' | 'Approved' | 'Rejected' | 'All' | 'Fixed Loans'>(hasPayrollPermission ? 'Pending' : 'All');
   const [editingAdvance, setEditingAdvance] = useState<AdvanceRequest | null>(null);
   const formatDateForInput = (date: Date) => {
@@ -161,12 +161,13 @@ export default function SalaryAdvances({ session, data }: SalaryAdvancesProps) {
       date: new Date().toISOString().split('T')[0],
       status: 'Pending',
       reason: newAdvance.reason,
-      attachment: newAdvance.attachment
+      attachment: newAdvance.attachment,
+      deductFrom: newAdvance.deductFrom || 'Basic'
     };
     try {
       await DataStore.addAdvanceRequest(request);
       showNotification('Salary advance requested successfully!');
-      setNewAdvance({ amount: 0, reason: '', attachment: '' });
+      setNewAdvance({ amount: 0, reason: '', attachment: '', deductFrom: 'Basic' });
       setSearchedAdvances(prev => [request, ...prev]);
     } catch (err) {
       showNotification('Failed to request advance.', 'error');
@@ -192,7 +193,8 @@ export default function SalaryAdvances({ session, data }: SalaryAdvancesProps) {
         amount: editingAdvance.amount,
         date: editingAdvance.date,
         status: editingAdvance.status,
-        isPaid: editingAdvance.isPaid || false
+        isPaid: editingAdvance.isPaid || false,
+        deductFrom: editingAdvance.deductFrom || 'Basic'
       };
       
       if (editingAdvance.approvedDate) {
@@ -356,6 +358,20 @@ export default function SalaryAdvances({ session, data }: SalaryAdvancesProps) {
                   type="number" className="form-control" required min="1"
                   value={newAdvance.amount || ''} onChange={e => setNewAdvance({...newAdvance, amount: Number(e.target.value)})}
                 />
+              </div>
+              <div className="form-group">
+                <label className="text-xs font-medium text-text-secondary mb-2 block tracking-wider uppercase">Deduct From</label>
+                <select
+                  className="form-control"
+                  required
+                  value={newAdvance.deductFrom}
+                  onChange={e => setNewAdvance({...newAdvance, deductFrom: e.target.value as any})}
+                >
+                  <option value="Basic">Basic Salary</option>
+                  <option value="Petrol">Petrol</option>
+                  <option value="Traveling">Traveling</option>
+                  <option value="Vehicle">Vehicle Allowance</option>
+                </select>
               </div>
               <div className="form-group">
                 <label className="text-xs font-medium text-text-secondary mb-2 block tracking-wider uppercase">Reason</label>
@@ -561,8 +577,11 @@ export default function SalaryAdvances({ session, data }: SalaryAdvancesProps) {
                             </span>
                           </div>
                         )}
-                        <div className="text-[10px] text-text-secondary font-medium mt-2 flex items-center gap-2">
-                          {a.reason}
+                        <div className="text-[10px] text-text-secondary font-medium mt-2 flex flex-wrap items-center gap-2">
+                          <span className="px-1.5 py-0.5 text-[9px] font-semibold bg-indigo-50 text-indigo-700 rounded border border-indigo-100 uppercase tracking-tight">
+                            Deduct from: {a.deductFrom || 'Basic'}
+                          </span>
+                          <span>{a.reason}</span>
                           {a.attachment && (
                             <button onClick={() => handleDownloadAttachment(a.attachment!, `Advance_${a.empId}`)} className="text-brand-accent hover:underline flex items-center gap-1">
                               <Paperclip className="w-3 h-3" />
@@ -718,6 +737,22 @@ export default function SalaryAdvances({ session, data }: SalaryAdvancesProps) {
                   className="w-full px-4 py-2 bg-background-secondary border border-border-primary rounded-xl focus:ring-2 focus:ring-indigo-500 transition-all outline-none"
                   required
                 />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-text-secondary uppercase tracking-wider mb-1.5">
+                  Deduct From
+                </label>
+                <select
+                  value={editingAdvance.deductFrom || 'Basic'}
+                  onChange={(e) => setEditingAdvance({ ...editingAdvance, deductFrom: e.target.value as any })}
+                  className="w-full px-4 py-2 bg-background-secondary border border-border-primary rounded-xl focus:ring-2 focus:ring-indigo-500 transition-all outline-none"
+                >
+                  <option value="Basic">Basic Salary</option>
+                  <option value="Petrol">Petrol</option>
+                  <option value="Traveling">Traveling</option>
+                  <option value="Vehicle">Vehicle Allowance</option>
+                </select>
               </div>
 
               <div>

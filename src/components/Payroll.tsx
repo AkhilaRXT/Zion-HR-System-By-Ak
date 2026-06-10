@@ -571,7 +571,7 @@ export default function Payroll({ session, data, onRefresh }: PayrollProps) {
                 {(data.employees || [])
                   .filter(e => e.status !== 'Dormant' && e.id !== 'EMP003' && canViewEmployee(e.id))
                   .map(emp => {
-                    const advTotal = (data.advances || [])
+                    const empAdvances = (data.advances || [])
                       .filter(a => {
                         const advanceDateStr = a.approvedDate || a.date;
                         const [mStr, yStr] = selectedMonth.split(' ');
@@ -585,8 +585,8 @@ export default function Payroll({ session, data, onRefresh }: PayrollProps) {
                         const isPastOrCurrent = advYear < yearNum || (advYear === yearNum && advMnth <= monthIndex);
 
                         return a.empId === emp.id && a.status === 'Approved' && !a.isPaid && isPastOrCurrent;
-                      })
-                      .reduce((s, a) => s + (a.amount - (a.paidAmount || 0)), 0);
+                      });
+                    const advTotal = empAdvances.reduce((s, a) => s + (a.amount - (a.paidAmount || 0)), 0);
                     
                     const petrolLKR = (emp.petrolLitres || 0) * fuelPrice;
                     const alreadyPaidCmps = (data.paidComponents?.[emp.id]?.[selectedMonth] || []);
@@ -725,6 +725,15 @@ export default function Payroll({ session, data, onRefresh }: PayrollProps) {
                               </span>
                             )}
                           </div>
+                          {empAdvances.length > 0 && (
+                            <div className="mt-2 flex flex-wrap gap-1.5">
+                              {empAdvances.map(a => (
+                                <span key={a.id} className="text-[9px] px-2 py-0.5 font-bold rounded bg-amber-50 text-amber-700 border border-amber-200 uppercase tracking-wide" title={a.reason}>
+                                  Deduct LKR {(a.amount - (a.paidAmount || 0)).toLocaleString()} from {a.deductFrom || 'Basic'}
+                                </span>
+                              ))}
+                            </div>
+                          )}
                         </td>
                         <td className="text-xs text-text-secondary">LKR {(totalEarnings - manualBonus).toLocaleString()}</td>
                         <td>

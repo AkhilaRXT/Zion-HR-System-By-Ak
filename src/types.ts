@@ -94,6 +94,7 @@ export interface AdvanceRequest {
   paidAmount?: number;
   attachment?: string;
   actionedBy?: string;
+  deductFrom?: 'Basic' | 'Petrol' | 'Traveling' | 'Vehicle';
   actionHistory?: {
     action: string;
     by: string;
