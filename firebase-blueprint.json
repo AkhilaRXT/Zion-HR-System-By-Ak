@@ -82,7 +82,7 @@
         "status": { "type": "string", "enum": ["Pending", "Approved", "Rejected"] },
         "reason": { "type": "string" },
         "isPaid": { "type": "boolean" },
-        "deductFrom": { "type": "string", "enum": ["Basic", "Petrol", "Traveling", "Vehicle"] }
+        "deductFrom": { "type": "string", "enum": ["Basic", "Petrol", "Traveling", "Vehicle", "Performance"] }
       },
       "required": ["empId", "amount", "date", "status"]
     },

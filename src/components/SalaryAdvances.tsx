@@ -35,7 +35,7 @@ export default function SalaryAdvances({ session, data }: SalaryAdvancesProps) {
 
   const [notification, setNotification] = useState<{ message: string, type: NotificationType } | null>(null);
   const [isUploading, setIsUploading] = useState(false);
-  const [newAdvance, setNewAdvance] = useState({ amount: 0, reason: '', attachment: '', deductFrom: 'Basic' as 'Basic' | 'Petrol' | 'Traveling' | 'Vehicle' });
+  const [newAdvance, setNewAdvance] = useState({ amount: 0, reason: '', attachment: '', deductFrom: 'Basic' as 'Basic' | 'Petrol' | 'Traveling' | 'Vehicle' | 'Performance' });
   const [activeTab, setActiveTab] = useState<'Pending' | 'Approved' | 'Rejected' | 'All' | 'Fixed Loans'>(hasPayrollPermission ? 'Pending' : 'All');
   const [editingAdvance, setEditingAdvance] = useState<AdvanceRequest | null>(null);
   const formatDateForInput = (date: Date) => {
@@ -371,6 +371,7 @@ export default function SalaryAdvances({ session, data }: SalaryAdvancesProps) {
                   <option value="Petrol">Petrol</option>
                   <option value="Traveling">Traveling</option>
                   <option value="Vehicle">Vehicle Allowance</option>
+                  <option value="Performance">Performance Allowance</option>
                 </select>
               </div>
               <div className="form-group">
@@ -752,6 +753,7 @@ export default function SalaryAdvances({ session, data }: SalaryAdvancesProps) {
                   <option value="Petrol">Petrol</option>
                   <option value="Traveling">Traveling</option>
                   <option value="Vehicle">Vehicle Allowance</option>
+                  <option value="Performance">Performance Allowance</option>
                 </select>
               </div>
 
