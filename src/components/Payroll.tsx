@@ -15,6 +15,26 @@ interface PayrollProps {
   onRefresh: () => void;
 }
 
+const isAdvanceComponentIncluded = (a: any, payComps: any) => {
+  const deductFrom = a.deductFrom || 'Basic';
+  if (deductFrom === 'Basic' || deductFrom === 'Basic Salary') {
+    return !!payComps.baseSalary;
+  }
+  if (deductFrom === 'Petrol') {
+    return !!payComps.petrolAllowance;
+  }
+  if (deductFrom === 'Traveling') {
+    return !!payComps.travelingAllowance;
+  }
+  if (deductFrom === 'Vehicle') {
+    return !!payComps.vehicleAllowance;
+  }
+  if (deductFrom === 'Performance') {
+    return !!payComps.performanceAllowance;
+  }
+  return false;
+};
+
 export default function Payroll({ session, data, onRefresh }: PayrollProps) {
   const isAdmin = session.isAdmin;
   const isMasterAdmin = session.email === "zioncommercialcreditampara@gmail.com";
@@ -173,7 +193,7 @@ export default function Payroll({ session, data, onRefresh }: PayrollProps) {
           const advMnth = parseInt(advMonthStr, 10) - 1; // 0-indexed
           const isPastOrCurrent = advYear < yearNum || (advYear === yearNum && advMnth <= monthIndex);
 
-          return a.empId === emp.id && a.status === 'Approved' && !a.isPaid && isPastOrCurrent;
+          return a.empId === emp.id && a.status === 'Approved' && !a.isPaid && isPastOrCurrent && isAdvanceComponentIncluded(a, payComponents);
         })
         .reduce((s, a) => s + (a.amount - (a.paidAmount || 0)), 0);
       
@@ -584,7 +604,7 @@ export default function Payroll({ session, data, onRefresh }: PayrollProps) {
                         const advMnth = parseInt(advMonthStr, 10) - 1; // 0-indexed
                         const isPastOrCurrent = advYear < yearNum || (advYear === yearNum && advMnth <= monthIndex);
 
-                        return a.empId === emp.id && a.status === 'Approved' && !a.isPaid && isPastOrCurrent;
+                        return a.empId === emp.id && a.status === 'Approved' && !a.isPaid && isPastOrCurrent && isAdvanceComponentIncluded(a, payComponents);
                       });
                     const advTotal = empAdvances.reduce((s, a) => s + (a.amount - (a.paidAmount || 0)), 0);
                     

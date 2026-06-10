@@ -1539,7 +1539,25 @@ export const DataStore = {
           let remainingDeduction = p.advanceDeduction || 0;
           if (remainingDeduction <= 0) continue;
           
-          const empAdvances = pendingAdvancesByEmp[p.empId] || [];
+          const empAdvances = (pendingAdvancesByEmp[p.empId] || []).filter(adv => {
+              const deductFrom = adv.deductFrom || 'Basic';
+              if (deductFrom === 'Basic' || deductFrom === 'Basic Salary') {
+                  return p.components.includes('Basic');
+              }
+              if (deductFrom === 'Petrol') {
+                  return p.components.includes('Petrol');
+              }
+              if (deductFrom === 'Traveling') {
+                  return p.components.includes('Travel');
+              }
+              if (deductFrom === 'Vehicle') {
+                  return p.components.includes('Vehicle');
+              }
+              if (deductFrom === 'Performance') {
+                  return p.components.includes('Bonus');
+              }
+              return false;
+          });
           // Sort by date (oldest first)
           empAdvances.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
           
