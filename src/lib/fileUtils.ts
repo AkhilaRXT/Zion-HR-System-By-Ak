@@ -88,6 +88,11 @@ export const fileToBase64 = (file: File): Promise<string> => {
   return new Promise(async (resolve, reject) => {
     let base64 = '';
     try {
+      if (!file.type.match(/^image\/(jpeg|png|webp|gif)$/) && file.type !== 'application/pdf') {
+        reject(new Error('Invalid file type. Only images and PDF files are allowed.'));
+        return;
+      }
+
       if (file.size > 5 * 1024 * 1024) {
         reject(new Error('File size must be less than 5 MB'));
         return;

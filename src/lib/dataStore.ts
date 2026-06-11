@@ -143,11 +143,7 @@ const initialData: AppData = {
 
 export const DataStore = {
   async init() {
-    const danglingSession = sessionStorage.getItem(AUTH_KEY);
-    if (danglingSession) {
-      localStorage.setItem(AUTH_KEY, danglingSession);
-      sessionStorage.removeItem(AUTH_KEY);
-    }
+    // Init the storage if needed
     try {
       // Basic check for settings
       const settingsDoc = await getDoc(doc(db, 'settings', 'global'));
@@ -518,12 +514,12 @@ export const DataStore = {
   },
 
   getSession(): Session | null {
-    const raw = localStorage.getItem(AUTH_KEY);
+    const raw = sessionStorage.getItem(AUTH_KEY);
     return raw ? JSON.parse(raw) : null;
   },
 
   setSession(session: Session) {
-    localStorage.setItem(AUTH_KEY, JSON.stringify(session));
+    sessionStorage.setItem(AUTH_KEY, JSON.stringify(session));
   },
 
   async logout() {
@@ -531,7 +527,7 @@ export const DataStore = {
     if (session) {
       await this.logAction('Logout', `User ${session.name} (${session.empId}) logged out.`, 'Auth');
     }
-    localStorage.removeItem(AUTH_KEY);
+    sessionStorage.removeItem(AUTH_KEY);
     auth.signOut().catch(console.error);
   },
 

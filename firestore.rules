@@ -129,17 +129,17 @@ service cloud.firestore {
     }
 
     match /targets/{id} {
-      allow read: if true;
+      allow read: if isAuthenticated();
       allow write: if isAdmin();
     }
 
     match /performanceAllowances/{id} {
-      allow read: if true;
+      allow read: if isAuthenticated();
       allow write: if isAdmin();
     }
 
     match /announcements/{id} {
-      allow read: if true;
+      allow read: if isAuthenticated();
       allow write: if isAdmin();
     }
 
@@ -176,7 +176,7 @@ service cloud.firestore {
     }
 
     match /settings/{id} {
-      allow read: if true;
+      allow read: if isAuthenticated();
       allow write: if isAdmin();
     }
 
@@ -202,16 +202,16 @@ service cloud.firestore {
     }
 
     match /test/{id} {
-      allow read: if true;
+      allow read: if false;
     }
     
     match /branches/{id} {
-      allow read: if true;
+      allow read: if isAuthenticated();
       allow write: if isAdmin();
     }
 
     match /holidays/{id} {
-      allow read: if true;
+      allow read: if isAuthenticated();
       allow write: if isAdmin();
     }
 
@@ -221,15 +221,16 @@ service cloud.firestore {
     }
 
     match /users/{uid} {
-      allow read, write: if true;
+      allow read: if isAuthenticated();
+      allow write: if request.auth.uid == uid || isAdmin();
     }
 
     match /users2/{uid} {
-      allow read, write: if true;
+      allow read, write: if false;
     }
 
     match /hello/{id} {
-      allow read, write: if true;
+      allow read, write: if false;
     }
 
     match /adhocBonuses/{id} {
