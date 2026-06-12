@@ -4,7 +4,7 @@ import { ref, uploadString, getDownloadURL, uploadBytes } from 'firebase/storage
 
 const saveChunked = async (base64: string, type: string): Promise<string> => {
    const id = 'file_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
-   const chunkSize = 800000; // 800KB chunks
+   const chunkSize = 200000; // 200KB chunks to avoid rules evaluation limit
    const chunks = Math.ceil(base64.length / chunkSize);
    
    const batch = writeBatch(db);
@@ -15,7 +15,12 @@ const saveChunked = async (base64: string, type: string): Promise<string> => {
    }
    
    batch.set(doc(db, 'fileChunks', id), { chunks, type });
-   await batch.commit();
+   try {
+     await batch.commit();
+   } catch (error) {
+     const { handleFirestoreError, OperationType } = await import('./dataStore');
+     handleFirestoreError(error, OperationType.WRITE, `fileChunks/${id}`);
+   }
    
    return `chunked:${id}`;
 };
@@ -38,7 +43,7 @@ const getBase64 = (file: File): Promise<string> => {
                             const canvas = document.createElement('canvas');
                             let width = img.width;
                             let height = img.height;
-                            const MAX_DIM = 1024;
+                            const MAX_DIM = 600;
                             if (width > MAX_DIM || height > MAX_DIM) {
                                 if (width > height) {
                                     height = Math.round((height * MAX_DIM) / width);
@@ -54,9 +59,9 @@ const getBase64 = (file: File): Promise<string> => {
                             if (!ctx) {
                                 reject(new Error('Failed to get 2D canvas context'));
                                 return;
-                            }
+                              }
                             ctx.drawImage(img, 0, 0, width, height);
-                            resolve(canvas.toDataURL('image/jpeg', 0.6));
+                            resolve(canvas.toDataURL('image/jpeg', 0.4));
                         } catch (err) {
                             reject(err);
                         }
@@ -84,13 +89,85 @@ const getBase64 = (file: File): Promise<string> => {
     });
 };
 
+const uploadToGoogleDrive = async (file: File, accessToken: string): Promise<string> => {
+  const metadata = {
+    name: file.name,
+    mimeType: file.type,
+  };
+
+  const formData = new FormData();
+  formData.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+  formData.append('file', file);
+
+  const uploadResponse = await fetch(
+    'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,webViewLink,webContentLink',
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: formData,
+    }
+  );
+
+  if (!uploadResponse.ok) {
+    const errText = await uploadResponse.text();
+    throw new Error('Google Drive upload failed: ' + errText);
+  }
+
+  const result = await uploadResponse.json();
+  const fileId = result.id;
+
+  // Set reader permission for anyone with the link so company managers can view/download
+  try {
+    const permissionResponse = await fetch(
+      `https://www.googleapis.com/drive/v3/files/${fileId}/permissions`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          role: 'reader',
+          type: 'anyone',
+        }),
+      }
+    );
+    if (!permissionResponse.ok) {
+      console.warn('Failed to set public view permission on Google Drive file:', await permissionResponse.text());
+    }
+  } catch (permissionErr) {
+    console.warn('Error setting Google Drive file permissions:', permissionErr);
+  }
+
+  return result.webViewLink || `https://drive.google.com/file/d/${fileId}/view`;
+};
+
 export const fileToBase64 = (file: File): Promise<string> => {
   return new Promise(async (resolve, reject) => {
     let base64 = '';
     try {
+      // Ensure we have active and synchronized database credentials before proceeding with files
+      const { DataStore, retrieveGoogleAccessToken } = await import('./dataStore');
+      await DataStore.ensureAuth();
+
       if (!file.type.match(/^image\/(jpeg|png|webp|gif)$/) && file.type !== 'application/pdf') {
         reject(new Error('Invalid file type. Only images and PDF files are allowed.'));
         return;
+      }
+
+      const gDriveToken = await retrieveGoogleAccessToken();
+      if (gDriveToken) {
+        try {
+          console.log('[Google Drive] Uploading attachment directly to Google Drive...');
+          const gDriveUrl = await uploadToGoogleDrive(file, gDriveToken);
+          console.log('[Google Drive] File uploaded successfully:', gDriveUrl);
+          resolve(gDriveUrl);
+          return;
+        } catch (driveErr: any) {
+          console.warn('[Google Drive] Upload failed, falling back to standard pathways:', driveErr);
+        }
       }
 
       if (file.size > 5 * 1024 * 1024) {
@@ -122,22 +199,18 @@ export const fileToBase64 = (file: File): Promise<string> => {
       const downloadURL = await Promise.race([uploadPromise, timeoutPromise]);
       resolve(downloadURL);
     } catch (err: any) {
-      console.warn("Storage upload failed, falling back to Firestore chunks:", err);
-      // Fallback
-      if (file.size > 3 * 1024 * 1024) {
-          reject(new Error('Firebase Storage failed to upload and file is too large for Firestore fallback. Please ensure Storage is enabled.'));
-          return;
-      }
+      console.warn("Storage upload failed, falling back to inline or chunked Firestore storage:", err);
       try {
           const finalBase64 = base64 || await getBase64(file);
-          if (finalBase64.length < 800000) {
-             resolve(finalBase64);
+          if (finalBase64.length < 950000) {
+              resolve(finalBase64);
           } else {
-             const chunkedId = await saveChunked(finalBase64, file.type);
-             resolve(chunkedId);
+              console.log('[Fallback] File exceeds 950KB base64 length limit, uploading as chunked Firestore documents...');
+              const chunkedId = await saveChunked(finalBase64, file.type);
+              resolve(chunkedId);
           }
       } catch(fallbackErr: any) {
-          reject(new Error('Storage and chunking both failed: ' + fallbackErr.message));
+          reject(new Error('File processing failed: ' + fallbackErr.message));
       }
     }
   });

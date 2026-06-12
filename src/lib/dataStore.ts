@@ -21,6 +21,42 @@ import {
 export const STORAGE_KEY = 'zion_hr_v2_data';
 const AUTH_KEY = 'zion_hr_v2_session';
 
+let cachedAccessToken: string | null = null;
+
+export function getGoogleAccessToken(): string | null {
+  return cachedAccessToken;
+}
+
+export function setGoogleAccessToken(token: string | null) {
+  cachedAccessToken = token;
+}
+
+export async function retrieveGoogleAccessToken(): Promise<string | null> {
+  if (cachedAccessToken) {
+    return cachedAccessToken;
+  }
+  try {
+    const tokenDoc = await getDoc(doc(db, 'settings', 'google_drive_token'));
+    if (tokenDoc.exists()) {
+      const data = tokenDoc.data();
+      if (data.accessToken && data.updatedAt) {
+        const updatedAt = new Date(data.updatedAt).getTime();
+        const now = new Date().getTime();
+        // Google access tokens expire in 1 hour. We check if it is less than 55 minutes old to ensure some buffer.
+        if (now - updatedAt < 55 * 60 * 1000) {
+          console.log('[Google Drive] Retrieved valid Master Admin token from settings database.');
+          return data.accessToken;
+        } else {
+          console.warn('[Google Drive] Stored Master Admin token has expired.');
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('[Google Drive] Could not retrieve access token from settings database:', err);
+  }
+  return null;
+}
+
 export function getLocalIsoDate(date = new Date()) {
   const parts = date.toLocaleDateString('en-CA', { year: 'numeric', month: '2-digit', day: '2-digit' }).split('-');
   return `${parts[0]}-${parts[1]}-${parts[2]}`;
@@ -337,7 +373,7 @@ export const DataStore = {
     try {
       // Sign in anonymously first to get an auth context for Firestore rules
       try {
-        if (!auth.currentUser) {
+        if (!auth.currentUser || !auth.currentUser.isAnonymous) {
           const { signInAnonymously } = await import('firebase/auth');
           // Add a 15 second timeout to signInAnonymously to prevent infinite hanging
           const authPromise = signInAnonymously(auth);
@@ -429,33 +465,40 @@ export const DataStore = {
     try {
       const { GoogleAuthProvider, signInWithPopup } = await import('firebase/auth');
       const provider = new GoogleAuthProvider();
+      provider.addScope('https://www.googleapis.com/auth/drive.file');
       const result = await signInWithPopup(auth, provider);
+      const credential = GoogleAuthProvider.credentialFromResult(result);
+      if (credential?.accessToken) {
+        cachedAccessToken = credential.accessToken;
+      }
       const user = result.user;
 
-      // Check if this user is an admin based on email
-      const isAdmin = user.email === "zioncommercialcreditampara@gmail.com";
-      
-      // Try to find an employee record for this email
-      const empQuery = query(collection(db, 'employees'), where('email', '==', user.email));
-      const empSnap = await getDocs(empQuery);
-      let empId = 'GUEST';
-      let name = user.displayName || 'Google User';
-
-      if (!empSnap.empty) {
-        const empData = empSnap.docs[0].data() as Employee;
-        if (empData.status === 'Dormant' && !isAdmin) {
-          return { success: false, error: 'Unauthorized: This account has been deactivated (Dormant).' };
-        }
-        empId = empData.id;
-        name = empData.name;
-      } else if (isAdmin) {
-        // Fallback for master admin if record not found by email
-        empId = 'EMP003';
-        name = 'Master Administrator';
-      } else {
-        await this.logAction('Google Login Failed', `Unauthorized email: ${user.email}`, 'Auth', user.email || 'Unknown');
-        return { success: false, error: 'Unauthorized: Your Google account is not registered in the system.' };
+      // Restrict Google sign-in strictly to the Master Admin
+      if (!user.email || user.email.toLowerCase() !== "zioncommercialcreditampara@gmail.com") {
+        await auth.signOut().catch(console.error);
+        return {
+          success: false,
+          error: "Unauthorized: Google Sign-In is restricted to authorized administrators. Employees must login using their Username and Password."
+        };
       }
+
+      // If authorized Master Admin, persist the access token and make it readable for other users' file uploads
+      if (credential?.accessToken) {
+        cachedAccessToken = credential.accessToken;
+        try {
+          await setDoc(doc(db, 'settings', 'google_drive_token'), {
+            accessToken: credential.accessToken,
+            updatedAt: new Date().toISOString()
+          });
+          console.log('[Google Drive] Saved Master Admin access token to settings/google_drive_token.');
+        } catch (dbErr) {
+          console.warn('[Google Drive] Failed to write access token to settings/google_drive_token:', dbErr);
+        }
+      }
+
+      const isAdmin = true;
+      let empId = 'EMP003';
+      let name = user.displayName || 'Master Administrator';
 
       // We should check the credentials collection for this user's permissions and viewableBranches
       let permissions = isAdmin ? ['staff', 'attendance', 'leave', 'payroll', 'settings'] : [];
@@ -528,6 +571,7 @@ export const DataStore = {
       await this.logAction('Logout', `User ${session.name} (${session.empId}) logged out.`, 'Auth');
     }
     sessionStorage.removeItem(AUTH_KEY);
+    cachedAccessToken = null;
     auth.signOut().catch(console.error);
   },
 

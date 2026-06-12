@@ -204,7 +204,7 @@ export default function App() {
       setIsSettingsReady(true);
     });
     return () => unsubSettings();
-  }, []);
+  }, [isAuthReady]);
 
   // 2. Core Session/Profile Sync - Active when logged in (Stable data)
   useEffect(() => {

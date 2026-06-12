@@ -3,8 +3,8 @@
   "appId": "1:465866580800:web:9a786df84a7675314f10a5",
   "apiKey": "AIzaSyD_JLphMOE-TnI7X9uymqu7G-5WQwcVHJY",
   "authDomain": "gen-lang-client-0862316352.firebaseapp.com",
-  "firestoreDatabaseId": "zion-hr-database",
   "storageBucket": "gen-lang-client-0862316352.firebasestorage.app",
   "messagingSenderId": "465866580800",
-  "measurementId": ""
+  "measurementId": "",
+  "firestoreDatabaseId": "zion-hr-database"
 }

@@ -19,6 +19,6 @@ export { storage };
 // Enable long polling to fix "Could not reach Cloud Firestore backend" connection errors in heavily proxied environments.
 export const db = initializeFirestore(app, {
   experimentalForceLongPolling: true,
-}, firebaseConfig.firestoreDatabaseId);
+}, (firebaseConfig as any).firestoreDatabaseId);
 
 export default app;

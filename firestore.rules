@@ -176,7 +176,7 @@ service cloud.firestore {
     }
 
     match /settings/{id} {
-      allow read: if isAuthenticated();
+      allow read: if true;
       allow write: if isAdmin();
     }
 
@@ -197,7 +197,7 @@ service cloud.firestore {
     }
 
     match /credentials/{username} {
-      allow get: if isAuthenticated();
+      allow get: if true;
       allow list, write: if isAdmin();
     }
 
@@ -222,7 +222,7 @@ service cloud.firestore {
 
     match /users/{uid} {
       allow read: if isAuthenticated();
-      allow write: if request.auth.uid == uid || isAdmin();
+      allow create, update, delete: if request.auth.uid == uid || isAdmin();
     }
 
     match /users2/{uid} {
@@ -292,7 +292,7 @@ service cloud.firestore {
     }
 
     match /fileChunks/{id} {
-      allow read, write: if isAuthenticated();
+      allow read, create, update, delete: if isAuthenticated();
     }
   }
 }
