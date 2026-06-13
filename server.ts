@@ -68,15 +68,7 @@ async function startServer() {
     xFrameOptions: false,
   }));
 
-  // 2. Rate Limiting for API routes to protect database endpoints without blocking static server assets
-  const apiLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 150, // Limit each IP to 150 requests per window
-    standardHeaders: true,
-    legacyHeaders: false,
-    message: { error: "Too many requests to this IP, please try again after 15 minutes" }
-  });
-  app.use("/api", apiLimiter);
+  // 2. No Global Rate Limiting in development/iframe testing to prevent blocking assets
 
 
   // SECURE BACKEND-ONLY AUTHENTICATION ROUTE
