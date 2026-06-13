@@ -33,7 +33,7 @@ export interface Employee {
 export interface UserCredential {
   empId: string;
   username: string;
-  password?: string;
+  passwordHash?: string;
   isAdmin: boolean;
   permissions?: string[];
   viewableBranches?: string[];
@@ -354,5 +354,4 @@ export interface Session {
   permissions?: string[];
   viewableBranches?: string[];
   username?: string;
-  passToken?: string;
 }

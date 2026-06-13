@@ -107,6 +107,11 @@ export default function StaffManagement({ session, data, onRefresh }: StaffManag
     e.preventDefault();
     const id = newEmp.empNo || `EMP${String((data.employees || []).length + 1).padStart(3, '0')}`;
     
+    if (!newEmp.password || newEmp.password.trim() === '') {
+      showNotification('Password is required when creating a new employee.', 'error');
+      return;
+    }
+
     const employee: Employee = {
       id,
       name: newEmp.name,
@@ -141,7 +146,7 @@ export default function StaffManagement({ session, data, onRefresh }: StaffManag
     const cred = {
       empId: id,
       username: (newEmp.username || id.toLowerCase()).trim(),
-      password: (newEmp.password || 'pass123').trim(),
+      password: newEmp.password.trim(),
       isAdmin: newEmp.isSystemAdmin,
       permissions: newEmp.isSystemAdmin ? newEmp.permissions : [],
       viewableBranches: newEmp.isSystemAdmin ? newEmp.viewableBranches : []
@@ -244,7 +249,7 @@ export default function StaffManagement({ session, data, onRefresh }: StaffManag
     setIsEditing({
       ...emp,
       username: cred?.username || '',
-      password: cred?.password || '',
+      password: '',
       isSystemAdmin: cred?.isAdmin || false,
       permissions: cred?.permissions || [],
       viewableBranches: cred?.viewableBranches || [],
@@ -991,7 +996,7 @@ export default function StaffManagement({ session, data, onRefresh }: StaffManag
                     />
                   </div>
                   <div className="form-group">
-                    <label className="text-[10px] uppercase tracking-[2px] text-text-secondary mb-2 block">Password</label>
+                    <label className="text-[10px] uppercase tracking-[2px] text-text-secondary mb-2 block">New Password (leave blank to keep)</label>
                     <input 
                       type="text" className="form-control" 
                       value={isEditing.password || ''} onChange={e => setIsEditing({...isEditing, password: e.target.value})}

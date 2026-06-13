@@ -120,7 +120,6 @@ export default function App() {
                 empId: session.empId,
                 role: session.isAdmin ? 'admin' : 'user',
                 username: session.username,
-                passToken: session.passToken || '',
                 viewableBranches: session.viewableBranches || []
               }, { merge: true });
             } else if (session.email) {

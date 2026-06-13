@@ -29,6 +29,7 @@ async function check() {
     
     const collections = [
       ['employees', 'EMP001'],
+      ['credentials', 'test'],
       ['attendance', 'ATT001'],
       ['leaves', 'LV001'],
       ['advances', 'ADV001'],

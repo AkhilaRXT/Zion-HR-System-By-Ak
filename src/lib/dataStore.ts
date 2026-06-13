@@ -1,3 +1,4 @@
+import bcrypt from 'bcryptjs';
 import { AppData, Employee, Session, AppSettings, Attendance, LeaveRequest, AdvanceRequest, AuditLog, UserCredential, CashRequest, SystemReport, Branch, Holiday, Asset, PerformanceAllowance } from '../types';
 import { db, auth } from './firebase';
 import { 
@@ -375,89 +376,65 @@ export const DataStore = {
       try {
         if (!auth.currentUser || !auth.currentUser.isAnonymous) {
           const { signInAnonymously } = await import('firebase/auth');
-          // Add a 15 second timeout to signInAnonymously to prevent infinite hanging
           const authPromise = signInAnonymously(auth);
-          const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Auth request timed out. Please check your internet connection and try again.')), 15000));
+          const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Auth request timed out.')), 15000));
           await Promise.race([authPromise, timeoutPromise]);
         }
       } catch (authErr: any) {
         console.warn('Anonymous Auth error:', authErr);
-        if (authErr.code === 'auth/admin-restricted-operation' || authErr.code === 'auth/operation-not-allowed') {
-          return { 
-            success: false, 
-            error: 'System Error: Please enable "Anonymous" provider in Firebase Authentication to allow Username/Password login.' 
-          };
-        } else if (authErr.message && authErr.message.includes('timed out')) {
-           return { success: false, error: authErr.message };
-        }
       }
 
-      // Add a timeout to reading credentials to prevent hanging if quota is fully blocked
-      const credDocPromise = getDoc(doc(db, 'credentials', username.toLowerCase()));
-      const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Database request timed out. Please check your internet connection or try again later.')), 20000));
-      const credDoc = await Promise.race([credDocPromise, timeoutPromise]) as any;
-
-      if (!credDoc.exists()) {
-        return { success: false, error: 'Invalid username or password.' };
-      }
-      const cred = credDoc.data() as UserCredential;
-      if (cred.password !== password) {
-        return { success: false, error: 'Invalid username or password.' };
+      const currentUser = auth.currentUser;
+      if (!currentUser) {
+        return { success: false, error: 'Connection error: Client could not connect securely to Firebase Auth.' };
       }
 
-      // Get managed branches dynamically
-      let viewableBranches = cred.viewableBranches || [];
-      if (username.toLowerCase() === 'zioncommercialcreditampara@gmail.com' && !viewableBranches.includes('ALL')) {
-        viewableBranches.push('ALL');
-      }
-      try {
-        const branchesSnap = await getDocs(collection(db, 'branches'));
-        const managed = branchesSnap.docs.map(d => d.data()).filter(b => b.managerId === cred.empId).map(b => b.name);
-        if (managed.length > 0) {
-          viewableBranches = [...new Set([...viewableBranches, ...managed])];
-        }
-      } catch (e) {
-        console.warn('Failed to fetch branches during login', e);
-      }
+      // Secure backend authentication fetch with cache-busting query to bypass rigid browser/proxy caches
+      const loginPromise = fetch(`/api/auth/login?t=${Date.now()}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          username,
+          password,
+          uid: currentUser.uid
+        })
+      });
 
-      // Sync to users collection for rules (with password token for backend validation)
-      // This MUST happen before we fetch the protected employee profile so isOwner() is true
-      try {
-        await setDoc(doc(db, 'users', auth.currentUser!.uid), {
-          empId: cred.empId,
-          role: cred.isAdmin ? 'admin' : 'user',
-          username: username.toLowerCase(),
-          passToken: password,
-          viewableBranches: viewableBranches
-        });
-      } catch (e) {
-        console.warn('Failed to sync user doc:', e);
-      }
-
-      const empDoc = await getDoc(doc(db, 'employees', cred.empId));
-      const emp = empDoc.exists() ? empDoc.data() as Employee : null;
-
-      if (emp && emp.status === 'Dormant') {
-        return { success: false, error: 'Unauthorized: This account has been deactivated (Dormant).' };
+      const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Auth request timed out on server.')), 20000));
+      const response = await Promise.race([loginPromise, timeoutPromise]) as Response;
+      
+      const contentType = response.headers.get("content-type") || "";
+      let data: any = {};
+      
+      if (contentType.includes("application/json")) {
+        data = await response.json();
+      } else {
+        const text = await response.text();
+        console.warn("Received non-JSON response from server during login:", text.substring(0, 500));
+        return {
+          success: false,
+          error: "⚠️ Backend update detected! Please hard-refresh this webpage (press Ctrl + F5, or Cmd + Shift + R) to force your browser to load the new backend server connection. If you are using a shared/deployed preview, please reload the page."
+        };
       }
 
-      const session: Session = { 
-        empId: cred.empId, 
-        name: emp ? emp.name : 'Unknown', 
-        email: emp?.email || undefined,
-        isAdmin: cred.isAdmin,
-        permissions: cred.permissions || [],
-        viewableBranches: viewableBranches,
-        username: username.toLowerCase(),
-        passToken: password
+      if (!response.ok) {
+        return { success: false, error: data.error || 'Invalid username or password.' };
+      }
+
+      const session: Session = {
+        ...data.session,
+        username: username.toLowerCase()
       };
 
-      await this.logAction('Login Success', `User ${username} logged in successfully via credentials.`, 'Auth', `${session.name} (${session.empId})`);
+      await this.logAction('Login Success', `User ${username} logged in successfully via server-side credentials check.`, 'Auth', `${session.name} (${session.empId})`);
       return { success: true, session };
-    } catch (error) {
-      await this.logAction('Login Failed', `Username: ${username}`, 'Auth');
-      handleFirestoreError(error, OperationType.GET, `credentials/${username}`);
-      return { success: false, error: 'An error occurred during login.' };
+    } catch (error: any) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      console.error('Login action failed:', error);
+      await this.logAction('Login Failed', `Username: ${username}. Error: ${errorMsg}`, 'Auth');
+      return { success: false, error: `An error occurred during login verification: ${errorMsg}` };
     }
   },
 
@@ -628,7 +605,6 @@ export const DataStore = {
             empId: session.empId,
             role: session.isAdmin ? 'admin' : 'user',
             username: session.username,
-            passToken: session.passToken || '',
             viewableBranches: session.viewableBranches || []
           }, { merge: true });
         } else if (session.email) {
@@ -652,7 +628,12 @@ export const DataStore = {
       await setDoc(doc(db, 'directory', emp.id), { id: emp.id, name: emp.name });
       
       if (cred && cred.username) {
-        await setDoc(doc(db, 'credentials', cred.username.toLowerCase()), cred);
+        let finalCred = { ...cred };
+        if (finalCred.password) {
+           finalCred.passwordHash = bcrypt.hashSync(finalCred.password, 10);
+           delete finalCred.password;
+        }
+        await setDoc(doc(db, 'credentials', cred.username.toLowerCase()), finalCred);
       }
       
       const settingsDoc = await getDoc(doc(db, 'settings', 'global'));
@@ -804,6 +785,12 @@ export const DataStore = {
       }
 
       if (credUpdates) {
+        let finalCredUpdates = { ...credUpdates } as any;
+        if (finalCredUpdates.password) {
+           finalCredUpdates.passwordHash = bcrypt.hashSync(finalCredUpdates.password, 10);
+           delete finalCredUpdates.password;
+        }
+
         // Find the username for this employee to update credentials
         const credQuery = query(collection(db, 'credentials'), where('empId', '==', empId));
         const credSnap = await getDocs(credQuery);
@@ -813,24 +800,24 @@ export const DataStore = {
           const oldData = credDoc.data() as UserCredential;
           const oldDocId = credDoc.id;
           
-          if (credUpdates.username && credUpdates.username.toLowerCase() !== oldDocId.toLowerCase()) {
+          if (finalCredUpdates.username && finalCredUpdates.username.toLowerCase() !== oldDocId.toLowerCase()) {
             // Username changed, need to recreate document since ID cannot be changed
-            const newDocId = credUpdates.username.toLowerCase();
-            await setDoc(doc(db, 'credentials', newDocId), { ...oldData, ...credUpdates, empId });
+            const newDocId = finalCredUpdates.username.toLowerCase();
+            await setDoc(doc(db, 'credentials', newDocId), { ...oldData, ...finalCredUpdates, empId });
             await deleteDoc(credDoc.ref);
           } else {
             // Update in place
-            await updateDoc(credDoc.ref, credUpdates);
+            await updateDoc(credDoc.ref, finalCredUpdates);
           }
-        } else if (credUpdates.username && credUpdates.password) {
+        } else if (finalCredUpdates.username && finalCredUpdates.passwordHash) {
           // Creating credentials for an existing employee who didn't have them
-          const newDocId = credUpdates.username.toLowerCase();
+          const newDocId = finalCredUpdates.username.toLowerCase();
           await setDoc(doc(db, 'credentials', newDocId), { 
             empId,
-            username: credUpdates.username,
-            password: credUpdates.password,
-            isAdmin: credUpdates.isAdmin || false,
-            permissions: credUpdates.permissions || []
+            username: finalCredUpdates.username,
+            passwordHash: finalCredUpdates.passwordHash,
+            isAdmin: finalCredUpdates.isAdmin || false,
+            permissions: finalCredUpdates.permissions || []
           });
         }
       }
