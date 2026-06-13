@@ -56,9 +56,6 @@ async function startServer() {
   const app = express();
   const PORT = 3000;
 
-  // Trust reverse proxy headers (e.g. Cloud Run, Nginx, load balancers)
-  app.set('trust proxy', 1);
-
   // Support parsing JSON request bodies
   app.use(express.json());
 
