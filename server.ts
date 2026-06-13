@@ -56,6 +56,9 @@ async function startServer() {
   const app = express();
   const PORT = 3000;
 
+  // Trust reverse proxy headers (e.g. Cloud Run, Nginx, load balancers)
+  app.set('trust proxy', 1);
+
   // Support parsing JSON request bodies
   app.use(express.json());
 
@@ -68,7 +71,15 @@ async function startServer() {
     xFrameOptions: false,
   }));
 
-  // 2. No Global Rate Limiting in development/iframe testing to prevent blocking assets
+  // 2. Rate Limiting for API routes to protect database endpoints without blocking static server assets
+  const apiLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 150, // Limit each IP to 150 requests per window
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: "Too many requests to this IP, please try again after 15 minutes" }
+  });
+  app.use("/api", apiLimiter);
 
 
   // SECURE BACKEND-ONLY AUTHENTICATION ROUTE
