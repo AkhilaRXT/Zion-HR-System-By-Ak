@@ -413,9 +413,12 @@ export const DataStore = {
       } else {
         const text = await response.text();
         console.warn("Received non-JSON response from server during login:", text.substring(0, 500));
+        
+        let customMessage = "⚠️ Connection Error: Unable to reach the authentication server. Please ensure the backend API is active and try again.";
+        
         return {
           success: false,
-          error: "⚠️ Backend update detected! Please hard-refresh this webpage (press Ctrl + F5, or Cmd + Shift + R) to force your browser to load the new backend server connection. If you are using a shared/deployed preview, please reload the page."
+          error: customMessage
         };
       }
 
