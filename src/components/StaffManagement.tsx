@@ -720,7 +720,9 @@ export default function StaffManagement({ session, data, onRefresh }: StaffManag
                           { id: 'leave', label: 'Leave Management' },
                           { id: 'payroll', label: 'Payroll' },
                           { id: 'cash_requests', label: 'Cash Requests' },
-                          { id: 'Dc Resipt Edit', label: 'DC Receipt Edit' }
+                          { id: 'Dc Resipt Edit', label: 'DC Receipt Edit' },
+                          { id: 'customerTracking', label: 'Customer Tracking' },
+                          { id: 'customerTrackingEdit', label: 'Customer Tracking Edit' }
                         ].map(perm => (
                           <label key={perm.id} className="flex items-center gap-2 cursor-pointer group">
                             <input 
@@ -1324,6 +1326,54 @@ export default function StaffManagement({ session, data, onRefresh }: StaffManag
                               </span>
                             </label>
                           ))}
+                        </div>
+                      </div>
+
+                      <div className="space-y-4 pt-4 border-t border-border-accent/30 mt-4">
+                        <h4 className="text-[10px] uppercase tracking-[2px] text-text-secondary block">Customer Tracking</h4>
+                        <div className="grid grid-cols-2 gap-4">
+                           <label className="flex items-center gap-2 cursor-pointer group">
+                              <input 
+                                type="checkbox" 
+                                className="w-3 h-3 accent-brand-accent"
+                                checked={isEditing.permissions?.includes('customerTracking')}
+                                onChange={() => {
+                                  const current = isEditing.permissions || [];
+                                  let next = [...current];
+                                  if (current.includes('customerTracking')) {
+                                     next = next.filter(p => p !== 'customerTracking' && p !== 'customerTrackingEdit');
+                                  } else {
+                                     next.push('customerTracking');
+                                  }
+                                  setIsEditing({...isEditing, permissions: next});
+                                }}
+                              />
+                              <span className="text-[9px] uppercase tracking-[1px] text-text-secondary group-hover:text-text-primary transition-colors">
+                                Customer Tracking
+                              </span>
+                           </label>
+                           
+                           <label className="flex items-center gap-2 cursor-pointer group">
+                              <input 
+                                type="checkbox" 
+                                className="w-3 h-3 accent-brand-accent"
+                                checked={isEditing.permissions?.includes('customerTrackingEdit')}
+                                onChange={() => {
+                                  const current = isEditing.permissions || [];
+                                  let next = [...current];
+                                  if (current.includes('customerTrackingEdit')) {
+                                     next = next.filter(p => p !== 'customerTrackingEdit');
+                                  } else {
+                                     if (!next.includes('customerTracking')) next.push('customerTracking');
+                                     next.push('customerTrackingEdit');
+                                  }
+                                  setIsEditing({...isEditing, permissions: next});
+                                }}
+                              />
+                              <span className="text-[9px] uppercase tracking-[1px] text-text-secondary group-hover:text-text-primary transition-colors">
+                                Customer Tracking Edit
+                              </span>
+                           </label>
                         </div>
                       </div>
 

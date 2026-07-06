@@ -188,7 +188,8 @@ async function startServer() {
         empId: cred.empId,
         role: cred.isAdmin ? 'admin' : 'user',
         username: usernameClean,
-        viewableBranches: viewableBranches
+        viewableBranches: viewableBranches,
+        permissions: cred.permissions || []
       }, { merge: true });
 
       // 4. Return valid auth session
@@ -198,7 +199,7 @@ async function startServer() {
         name: emp ? emp.name : (cred.username || "Employee"),
         email: emp ? emp.email : undefined,
         isAdmin: cred.isAdmin || false,
-        permissions: cred.permissions || (cred.isAdmin ? ['staff', 'attendance', 'leave', 'payroll', 'settings'] : []),
+        permissions: cred.permissions || (cred.isAdmin ? ['staff', 'attendance', 'leave', 'payroll', 'settings', 'customerTracking', 'customerTrackingEdit'] : []),
         viewableBranches
       };
 

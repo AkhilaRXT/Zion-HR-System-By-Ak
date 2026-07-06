@@ -113,6 +113,8 @@ export interface CashRequest {
   attachment?: string;
   attachments?: string[];
   actionedBy?: string;
+  approvedDate?: string;
+  rejectedDate?: string;
 }
 
 export interface LeaveBalances {
@@ -311,11 +313,29 @@ export interface PerformanceAllowance {
   notes?: string;
 }
 
+export interface Customer {
+  id: string;
+  customerName: string;
+  location: {
+    lat: number;
+    lng: number;
+  };
+  housePhotoURL: string | null;
+  placedBy: string;
+  placedByName: string;
+  placedAt: string;
+  verified: boolean;
+  verifiedBy: string | null;
+  verifiedAt: string | null;
+  status: 'pending' | 'verified';
+}
+
 export interface AppData {
   branches?: Branch[];
   holidays?: Holiday[];
   employees: Employee[];
   credentials: UserCredential[];
+  customers?: Customer[];
   attendance: Attendance[];
   leaves: LeaveRequest[];
   targets: Target[];

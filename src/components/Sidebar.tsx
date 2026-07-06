@@ -68,7 +68,7 @@ export default function Sidebar({ session, data, activeRoute, onNavigate, onLogo
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const isAdmin = session.isAdmin;
 
-  const isMasterAdmin = session.email === "zioncommercialcreditampara@gmail.com";
+  const isMasterAdmin = session.email?.toLowerCase() === "zioncommercialcreditampara@gmail.com" || session.username?.toLowerCase() === "admin";
   const hasPayrollPerm = isAdmin && (isMasterAdmin || session.permissions?.includes('payroll'));
   const hasLeavePerm = isAdmin && (isMasterAdmin || session.permissions?.includes('leave'));
   const hasCashPerm = isAdmin && (isMasterAdmin || session.permissions?.includes('cash_requests'));
@@ -111,6 +111,7 @@ export default function Sidebar({ session, data, activeRoute, onNavigate, onLogo
     { id: 'cash_requests', label: hasCashPerm ? 'Cash Requests' : 'My Cash Requests', icon: FileText },
     { id: 'announcements', label: 'Announcements', icon: Megaphone },
     { id: 'assets', label: 'Asset Management', icon: Layers },
+    { id: 'tracking', label: 'Customer Tracking', icon: MapPin },
     { id: 'reports', label: 'Report Center', icon: AlertCircle },
     ...(isMasterAdmin ? [{ id: 'branches', label: 'Branches', icon: MapPin }] : []),
     { id: 'audit', label: 'Audit Logs', icon: History },
@@ -126,7 +127,7 @@ export default function Sidebar({ session, data, activeRoute, onNavigate, onLogo
     }
 
     // Always accessible for everyone
-    if (id === 'dashboard' || id === 'mail' || id === 'myprofile' || id === 'leave' || id === 'advances' || id === 'cash_requests' || id === 'dc_collection' || id === 'reports' || id === 'holidays' || id === 'assets' || id === 'targets' || id === 'announcements') return true;
+    if (id === 'dashboard' || id === 'mail' || id === 'myprofile' || id === 'leave' || id === 'advances' || id === 'cash_requests' || id === 'dc_collection' || id === 'reports' || id === 'holidays' || id === 'assets' || id === 'targets' || id === 'announcements' || id === 'tracking') return true;
     
     // Payroll requires specific permission or Master
     if (id === 'payroll') return hasPayrollPerm;

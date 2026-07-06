@@ -89,7 +89,7 @@ const getBase64 = (file: File): Promise<string> => {
     });
 };
 
-const uploadToGoogleDrive = async (file: File, accessToken: string): Promise<string> => {
+export const uploadToGoogleDrive = async (file: File, accessToken: string): Promise<string> => {
   const metadata = {
     name: file.name,
     mimeType: file.type,
@@ -157,12 +157,44 @@ export const fileToBase64 = (file: File): Promise<string> => {
         return;
       }
 
+      if (file.size > 30 * 1024 * 1024) {
+        reject(new Error('File size must be less than 30 MB.'));
+        return;
+      }
+
       const gDriveToken = await retrieveGoogleAccessToken();
+      const isPdfValue = file.type === 'application/pdf';
+      const isPdfLargerThan800KB = isPdfValue && file.size > 800 * 1024;
+      const isDriveRequired = (file.size > 4 * 1024 * 1024) || isPdfLargerThan800KB;
+
+      if (isDriveRequired) {
+        if (!gDriveToken) {
+          const reason = isPdfLargerThan800KB 
+            ? 'The PDF file is larger than 800KB, which requires Google Account storage. '
+            : 'The file is larger than 4MB, which requires Google Account storage. ';
+          reject(new Error(
+            reason + 'Please ask the administrator (zioncommercialcreditampara@gmail.com) to renew Google authorization by clicking "Sign in with Google" on the login screen to permit large file uploads.'
+          ));
+          return;
+        }
+
+        try {
+          console.log('[Google Drive] Uploading target attachment directly to Google Drive...');
+          const gDriveUrl = await uploadToGoogleDrive(file, gDriveToken);
+          console.log('[Google Drive] File uploaded successfully to zioncommercialcreditampara@gmail.com:', gDriveUrl);
+          resolve(gDriveUrl);
+          return;
+        } catch (driveErr: any) {
+          reject(new Error('Google Drive upload failed: ' + driveErr.message));
+          return;
+        }
+      }
+
       if (gDriveToken) {
         try {
           console.log('[Google Drive] Uploading attachment directly to Google Drive...');
           const gDriveUrl = await uploadToGoogleDrive(file, gDriveToken);
-          console.log('[Google Drive] File uploaded successfully:', gDriveUrl);
+          console.log('[Google Drive] File uploaded successfully to zioncommercialcreditampara@gmail.com:', gDriveUrl);
           resolve(gDriveUrl);
           return;
         } catch (driveErr: any) {
@@ -170,8 +202,13 @@ export const fileToBase64 = (file: File): Promise<string> => {
         }
       }
 
-      if (file.size > 5 * 1024 * 1024) {
-        reject(new Error('File size must be less than 5 MB'));
+      if (isPdfLargerThan800KB) {
+        reject(new Error('PDF files larger than 800KB must be uploaded to Google Drive. Local storage is not permitted for large PDFs.'));
+        return;
+      }
+
+      if (file.size > 4 * 1024 * 1024) {
+        reject(new Error('File size must be less than 4 MB for local database storage'));
         return;
       }
 

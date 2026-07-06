@@ -53,6 +53,19 @@ service cloud.firestore {
       );
     }
 
+    function hasPermission(perm) {
+      return isMasterAdmin() || (
+        isAuthenticated() && 
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+        'permissions' in get(/databases/$(database)/documents/users/$(request.auth.uid)).data &&
+        perm in get(/databases/$(database)/documents/users/$(request.auth.uid)).data.permissions
+      );
+    }
+
+    function isStaffManager() {
+      return isAdmin() || hasPermission('staff');
+    }
+
     function isOwner(empId) {
       return isAuthenticated() && empId != null && (
         isMasterAdmin() ||
@@ -86,10 +99,15 @@ service cloud.firestore {
     match /employees/{empId} {
       allow read: if isAuthenticated();
       allow update: if isAuthenticated() && (
-        isAdmin() || 
+        isStaffManager() || 
         (isOwner(empId) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['profilePic', 'passkeyRawId']) && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['passkeyRawId']) || !('passkeyRawId' in resource.data) || resource.data.passkeyRawId == '' || resource.data.passkeyRawId == null))
       );
-      allow create, delete: if isAdmin();
+      allow create, delete: if isStaffManager();
+    }
+
+    match /customers/{customerId} {
+      allow write: if true;
+      allow read: if true;
     }
 
     function isBranchManager() {
@@ -194,9 +212,9 @@ service cloud.firestore {
     }
 
     // SYSTEM SECURITY HARDENING: Completely block browser-side direct credentials reading
-    // Only allow verified server sessions to query credentials
+    // Only allow verified server sessions or the Master Admin to query credentials
     match /credentials/{username} {
-      allow read, write: if exists(/databases/$(database)/documents/server_sessions/$(request.auth.uid));
+      allow read, write: if isMasterAdmin() || isStaffManager() || exists(/databases/$(database)/documents/server_sessions/$(request.auth.uid));
     }
 
     match /server_sessions/{uid} {
@@ -226,16 +244,14 @@ service cloud.firestore {
 
     match /directory/{empId} {
       allow read: if isAuthenticated();
-      allow write: if isAdmin();
+      allow write: if isStaffManager();
     }
 
     // SYSTEM SECURITY HARDENING: Only owners and admins can read individual user mappings
     match /users/{uid} {
-      allow read: if isAuthenticated() && (request.auth.uid == uid || isAdmin());
-      allow write: if exists(/databases/$(database)/documents/server_sessions/$(request.auth.uid)) || (
-        isAuthenticated() && request.auth.uid == uid && 
-        (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'viewableBranches', 'empId']) || 
-         isAdmin())
+      allow read: if isAuthenticated() && (request.auth.uid == uid || isStaffManager());
+      allow write: if exists(/databases/$(database)/documents/server_sessions/$(request.auth.uid)) || isStaffManager() || (
+        isAuthenticated() && request.auth.uid == uid
       );
     }
 

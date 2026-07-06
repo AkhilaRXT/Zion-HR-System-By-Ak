@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { DataStore, STORAGE_KEY, getLocalIsoDate } from './lib/dataStore';
 import { Session, AppData, Employee, Attendance, LeaveRequest, AdvanceRequest, Target, AuditLog, AppSettings, CashRequest, UserCredential, AdhocBonus } from './types';
 import { db, auth } from './lib/firebase';
-import { collection, onSnapshot, doc, query, limit, orderBy, where, QuerySnapshot, DocumentData, setDoc, getDocs } from 'firebase/firestore';
+import { collection, onSnapshot, doc, query, limit, orderBy, where, QuerySnapshot, DocumentData, setDoc, getDocs, getDoc } from 'firebase/firestore';
 import Login from './components/Login';
 import Sidebar from './components/Sidebar';
 import Dashboard from './components/Dashboard';
@@ -24,6 +24,7 @@ import ReportCenter from './components/ReportCenter';
 import BranchManagement from './components/BranchManagement';
 import HolidayCalendar from './components/HolidayCalendar';
 import DataMigration from './components/DataMigration';
+import CustomerTracking from './components/CustomerTracking';
 import { AssetManagement } from './components/AssetManagement';
 import { Clock, Menu, Loader2 } from 'lucide-react';
 import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
@@ -75,11 +76,11 @@ export default function App() {
   useEffect(() => {
     if (isLoading) {
       const timer = setTimeout(() => {
-        console.warn('Loading fallback triggered after 4s. Database may be unresponsive.');
+        console.warn('Loading fallback triggered after 6s. Settings might be unresponsive.');
         setIsLoading(false);
-        setIsAuthReady(true);
+        // Do NOT force isAuthReady(true) here, it causes permission errors!
         setIsSettingsReady(true);
-      }, 4000);
+      }, 6000);
       return () => clearTimeout(timer);
     }
   }, [isLoading]);
@@ -115,20 +116,26 @@ export default function App() {
         const session = DataStore.getSession();
         if (session) {
           try {
-            if (session.username) {
-              await setDoc(doc(db, 'users', user.uid), {
-                empId: session.empId,
-                role: session.isAdmin ? 'admin' : 'user',
-                username: session.username,
-                viewableBranches: session.viewableBranches || []
-              }, { merge: true });
-            } else if (session.email) {
-              await setDoc(doc(db, 'users', user.uid), {
-                empId: session.empId,
-                role: session.isAdmin ? 'admin' : 'user',
-                email: session.email,
-                viewableBranches: session.viewableBranches || []
-              }, { merge: true });
+            const userDocRef = doc(db, 'users', user.uid);
+            const existing = await getDoc(userDocRef);
+            if (!existing.exists()) {
+              if (session.username) {
+                await setDoc(userDocRef, {
+                  empId: session.empId,
+                  role: session.isAdmin ? 'admin' : 'user',
+                  username: session.username,
+                  viewableBranches: session.viewableBranches || [],
+                  permissions: session.permissions || []
+                }, { merge: true });
+              } else if (session.email) {
+                await setDoc(userDocRef, {
+                  empId: session.empId,
+                  role: session.isAdmin ? 'admin' : 'user',
+                  email: session.email,
+                  viewableBranches: session.viewableBranches || [],
+                  permissions: session.permissions || []
+                }, { merge: true });
+              }
             }
           } catch (e) {
              console.warn('Could not restore users context', e);
@@ -290,7 +297,7 @@ export default function App() {
       unsubs.push(syncCoreCollection('performanceAllowances', 'performanceAllowances'));
       unsubs.push(syncCoreCollection('announcements', 'announcements'));
       
-      const isMasterAdmin = session.email === "zioncommercialcreditampara@gmail.com";
+      const isMasterAdmin = session.email?.toLowerCase() === "zioncommercialcreditampara@gmail.com" || session.username?.toLowerCase() === "admin";
       const isAdminWithAll = session.isAdmin && (session.viewableBranches?.includes('ALL') || false);
 
       if (isMasterAdmin || isAdminWithAll) {
@@ -616,7 +623,7 @@ export default function App() {
   const renderView = () => {
     // Basic permission check for rendering
     const hasAccess = (id: string) => {
-      const isMasterAdmin = session.email === "zioncommercialcreditampara@gmail.com";
+      const isMasterAdmin = session.email?.toLowerCase() === "zioncommercialcreditampara@gmail.com" || session.username?.toLowerCase() === "admin";
       
       // Specifically protect settings
       if (id === 'settings') {
@@ -624,7 +631,7 @@ export default function App() {
       }
 
       // Always accessible for everyone
-      if (id === 'dashboard' || id === 'myprofile' || id === 'leave' || id === 'payroll' || id === 'advances' || id === 'cash_requests' || id === 'mail' || id === 'dc_collection' || id === 'reports' || id === 'holidays' || id === 'assets' || id === 'targets' || id === 'announcements') return true;
+      if (id === 'dashboard' || id === 'myprofile' || id === 'leave' || id === 'payroll' || id === 'advances' || id === 'cash_requests' || id === 'mail' || id === 'dc_collection' || id === 'reports' || id === 'holidays' || id === 'assets' || id === 'targets' || id === 'announcements' || id === 'tracking') return true;
       
       if (isMasterAdmin) return true;
 
@@ -658,6 +665,7 @@ export default function App() {
       case 'cash_requests': return <CashRequests session={session} data={appData} />;
       case 'announcements': return <AnnouncementManagement session={session} data={appData} />;
       case 'assets': return <AssetManagement session={session} data={appData} />;
+      case 'tracking': return <CustomerTracking session={session} employees={appData.employees} settings={appData.settings} />;
       case 'holidays': return <HolidayCalendar session={session} data={appData} onRefresh={refreshData} />;
       case 'mail': return <InternalMail session={session} data={appData} onUpdatePart={updatePart} />;
       case 'dc_collection': return <DCCollection session={session} data={appData} />;
@@ -683,6 +691,7 @@ export default function App() {
       case 'cash_requests': return 'Cash Requests';
       case 'announcements': return 'Announcement Management';
       case 'assets': return 'Asset Management';
+      case 'tracking': return 'Customer Tracking';
       case 'holidays': return 'Holiday Calendar';
       case 'mail': return 'Internal Mail';
       case 'dc_collection': return 'DC Collection';

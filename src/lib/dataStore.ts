@@ -478,10 +478,18 @@ export const DataStore = {
 
       const isAdmin = true;
       let empId = 'EMP003';
-      let name = user.displayName || 'Master Administrator';
+      let name = 'Master Administrator';
+      try {
+        const empDoc = await getDoc(doc(db, 'employees', empId));
+        if (empDoc.exists()) {
+          name = empDoc.data().name || name;
+        }
+      } catch (e) {
+        console.warn('Failed to fetch employee for Master Admin', e);
+      }
 
       // We should check the credentials collection for this user's permissions and viewableBranches
-      let permissions = isAdmin ? ['staff', 'attendance', 'leave', 'payroll', 'settings'] : [];
+      let permissions = isAdmin ? ['staff', 'attendance', 'leave', 'payroll', 'settings', 'customerTracking', 'customerTrackingEdit'] : [];
       let viewableBranches = isAdmin ? ['ALL'] : [];
 
       try {
@@ -603,23 +611,28 @@ export const DataStore = {
     const session = this.getSession();
     if (session && auth.currentUser) {
       try {
-        if (session.username) {
-          await setDoc(doc(db, 'users', auth.currentUser.uid), {
-            empId: session.empId,
-            role: session.isAdmin ? 'admin' : 'user',
-            username: session.username,
-            viewableBranches: session.viewableBranches || []
-          }, { merge: true });
-        } else if (session.email) {
-          await setDoc(doc(db, 'users', auth.currentUser.uid), {
-            empId: session.empId,
-            role: session.isAdmin ? 'admin' : 'user',
-            email: session.email,
-            viewableBranches: session.viewableBranches || []
-          }, { merge: true });
+        const userDocRef = doc(db, 'users', auth.currentUser.uid);
+        const existing = await getDoc(userDocRef);
+        if (!existing.exists()) {
+          if (session.username) {
+            await setDoc(userDocRef, {
+              empId: session.empId,
+              role: session.isAdmin ? 'admin' : 'user',
+              username: session.username,
+              viewableBranches: session.viewableBranches || []
+            }, { merge: true });
+          } else if (session.email) {
+            await setDoc(userDocRef, {
+              empId: session.empId,
+              role: session.isAdmin ? 'admin' : 'user',
+              email: session.email,
+              viewableBranches: session.viewableBranches || []
+            }, { merge: true });
+          }
         }
-      } catch (e) {
+      } catch (e: any) {
          console.warn('Could not restore users context', e);
+         console.error('ensureAuth Firestore Error:', e.code, e.message);
       }
     }
   },
@@ -1368,7 +1381,15 @@ export const DataStore = {
       const cashDoc = await getDoc(cashRef);
       const cashData = cashDoc.data() as CashRequest;
       
-      const updates = actionedBy ? { status, actionedBy } : { status };
+      const now = new Date().toISOString().split('T')[0];
+      const updates: any = actionedBy ? { status, actionedBy } : { status };
+      
+      if (status === 'Approved') {
+        updates.approvedDate = now;
+      } else if (status === 'Rejected') {
+        updates.rejectedDate = now;
+      }
+      
       await updateDoc(cashRef, updates);
       await this.logAction('Cash Decision', `${status} cash request for ${cashData.empId} (LKR ${cashData.amount.toLocaleString()})`, 'Cash');
     } catch (error) {

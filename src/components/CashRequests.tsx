@@ -368,6 +368,12 @@ export default function CashRequests({ session, data }: CashRequestsProps) {
                         {r.actionedBy && r.status !== 'Pending' && (
                           <div className="text-[10px] text-text-secondary mt-1">by {r.actionedBy}</div>
                         )}
+                        {r.status === 'Approved' && r.approvedDate && (
+                          <div className="text-[10px] text-text-secondary mt-0.5">on {r.approvedDate}</div>
+                        )}
+                        {r.status === 'Rejected' && r.rejectedDate && (
+                          <div className="text-[10px] text-text-secondary mt-0.5">on {r.rejectedDate}</div>
+                        )}
                       </td>
                       {canManageCash && (
                         <td>
